@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use std::collections::HashMap;
 use std::io::Read;
-use std::net::UdpSocket;
+use std::net::{IpAddr, Ipv4Addr, UdpSocket};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -119,8 +119,10 @@ struct SyncReply {
 struct PairCode {
     code: String,
     issued: Instant,
-    failures: u32,
-    locked_until: Option<Instant>,
+    /// Wrong guesses against the current code, from anyone.
+    misses: u32,
+    /// Per-address wrong guesses and lockout, so one noisy device can't block everyone.
+    by_addr: HashMap<IpAddr, (u32, Option<Instant>)>,
 }
 
 pub struct SyncState {
@@ -136,7 +138,7 @@ impl SyncState {
         Self {
             name,
             hosting,
-            code: Mutex::new(PairCode { code: new_code(), issued: Instant::now(), failures: 0, locked_until: None }),
+            code: Mutex::new(PairCode { code: new_code(), issued: Instant::now(), misses: 0, by_addr: HashMap::new() }),
             seen: Mutex::new(HashMap::new()),
         }
     }
@@ -151,34 +153,42 @@ impl SyncState {
         c.code.clone()
     }
 
-    /// Checks a pairing attempt. After a few wrong codes the code is replaced and pairing
-    /// pauses for a while, so working through all million codes is not practical.
-    fn try_code(&self, attempt: &str) -> Result<()> {
+    /// Checks a pairing attempt. Each code gets only a few wrong guesses (from anyone)
+    /// before it is replaced, so working through a million codes is not practical; an
+    /// address that keeps guessing is paused on its own, without blocking other devices.
+    fn try_code(&self, attempt: &str, from: IpAddr) -> Result<()> {
         use subtle::ConstantTimeEq;
         let current = self.code();
         let mut c = self.code.lock().unwrap();
-        if c.locked_until.is_some_and(|t| Instant::now() < t) {
+        let now = Instant::now();
+        c.by_addr.retain(|_, (_, until)| until.is_none_or(|t| now < t));
+        if c.by_addr.get(&from).is_some_and(|(_, until)| until.is_some()) {
             return Err(anyhow!("locked"));
         }
         if bool::from(attempt.trim().as_bytes().ct_eq(current.as_bytes())) {
-            c.failures = 0;
+            c.by_addr.remove(&from);
             return Ok(());
         }
-        c.failures += 1;
-        if c.failures >= MAX_PAIR_FAILURES {
+        let entry = c.by_addr.entry(from).or_insert((0, None));
+        entry.0 += 1;
+        if entry.0 >= MAX_PAIR_FAILURES {
+            entry.1 = Some(now + PAIR_LOCKOUT);
+        }
+        c.misses += 1;
+        if c.misses >= MAX_PAIR_FAILURES {
             c.code = new_code();
-            c.issued = Instant::now();
-            c.failures = 0;
-            c.locked_until = Some(Instant::now() + PAIR_LOCKOUT);
+            c.issued = now;
+            c.misses = 0;
         }
         Err(anyhow!("wrong code"))
     }
 
-    /// True the first time a nonce is seen inside the allowed clock window.
-    fn fresh_nonce(&self, nonce: &str, now: i64) -> bool {
+    /// True the first time a nonce is seen. Entries are kept for as long as a request
+    /// signed at `time` could still be accepted, so a replay can never outlive its record.
+    fn fresh_nonce(&self, nonce: &str, time: i64, now: i64) -> bool {
         let mut seen = self.seen.lock().unwrap();
-        seen.retain(|_, t| now - *t < 2 * MAX_SKEW_MS);
-        seen.insert(nonce.to_string(), now).is_none()
+        seen.retain(|_, t| (now - *t).abs() <= MAX_SKEW_MS);
+        seen.insert(nonce.to_string(), time).is_none()
     }
 }
 
@@ -276,7 +286,8 @@ pub fn serve(db: Arc<Mutex<Db>>, state: Arc<SyncState>, on_change: impl Fn() + S
                     nonce: header("X-Tend-Nonce"),
                     sig: header("X-Tend-Sig"),
                 };
-                let (status, out, changed, reply_sig) = handle(&db, &state, req.url(), &body, &signed);
+                let from = req.remote_addr().map_or(IpAddr::V4(Ipv4Addr::UNSPECIFIED), |a| a.ip());
+                let (status, out, changed, reply_sig) = handle(&db, &state, req.url(), &body, &signed, from);
                 if changed {
                     on_change();
                 }
@@ -313,6 +324,7 @@ fn handle(
     url: &str,
     body: &str,
     signed: &SignedRequest,
+    from: IpAddr,
 ) -> (u16, String, bool, Option<String>) {
     let db = db.lock().unwrap();
     let result: Result<(String, bool, Option<String>)> = (|| match url {
@@ -329,7 +341,7 @@ fn handle(
         )),
         "/pair" => {
             let req: PairRequest = serde_json::from_str(body)?;
-            state.try_code(&req.code)?;
+            state.try_code(&req.code, from)?;
             let tok = token();
             db.conn.execute(
                 "INSERT INTO peers(id,name,host,port,token,is_client) VALUES(?1,?2,'',0,?3,1)
@@ -358,7 +370,7 @@ fn handle(
             if (now - time).abs() > MAX_SKEW_MS
                 || signed.nonce.len() < 16
                 || !verify(&tok, &["req", &signed.time, &signed.nonce, body], &signed.sig)
-                || !state.fresh_nonce(&signed.nonce, now)
+                || !state.fresh_nonce(&signed.nonce, time, now)
             {
                 return Err(unauthorised());
             }
@@ -525,22 +537,13 @@ pub fn sync_all(db: &Mutex<Db>) -> SyncOutcome {
         let attempt = sync_one(db, &host, port, &tok, pull_rev, push_rev);
         let attempt = match attempt {
             Err(_) => {
-                // The host may have a new IP — look for it and retry once. Discovery replies
-                // are unauthenticated, so the new address is only kept once a signed sync
-                // there succeeds (a stranger can't sign the reply).
+                // The host may have a new IP: look for it and retry once. Discovery replies are
+                // unauthenticated and a signed reply can't tell a relay from the real host, so
+                // the address is used for this sync only and never stored; a stranger can't
+                // become a lasting middleman. Pairing again saves a new address.
                 let own = db.lock().unwrap().device.clone();
                 match discover(&own).into_iter().find(|h| h.device_id == id) {
-                    Some(h) => {
-                        let retry = sync_one(db, &h.host, h.port, &tok, pull_rev, push_rev);
-                        if retry.is_ok() {
-                            let _ = db
-                                .lock()
-                                .unwrap()
-                                .conn
-                                .execute("UPDATE peers SET host=?1, port=?2 WHERE id=?3", params![h.host, h.port, id]);
-                        }
-                        retry
-                    }
+                    Some(h) => sync_one(db, &h.host, h.port, &tok, pull_rev, push_rev),
                     None => attempt,
                 }
             }
@@ -697,14 +700,18 @@ mod tests {
     #[test]
     fn pairing_locks_after_repeated_wrong_codes() {
         let state = SyncState::new("Desk".into(), true);
+        let noisy: IpAddr = "10.0.0.9".parse().unwrap();
+        let other: IpAddr = "10.0.0.2".parse().unwrap();
         let first = state.code();
         let wrong = if first == "000000" { "000001" } else { "000000" };
         for _ in 0..MAX_PAIR_FAILURES {
-            assert!(state.try_code(wrong).is_err());
+            assert!(state.try_code(wrong, noisy).is_err());
         }
-        // The code changed and even the right one is refused until the pause ends.
+        // The guessed-at code was replaced, and the guessing address is paused...
         let next = state.code();
         assert_ne!(first, next);
-        assert_eq!(state.try_code(&next).unwrap_err().to_string(), "locked");
+        assert_eq!(state.try_code(&next, noisy).unwrap_err().to_string(), "locked");
+        // ...but everyone else can still pair with the new code.
+        assert!(state.try_code(&next, other).is_ok());
     }
 }
