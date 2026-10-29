@@ -1,11 +1,20 @@
 //! Local-network sync. Any device can host (desktop does by default); others pair with a
 //! 6-digit code and then exchange "changes since rev N" with last-writer-wins merging.
 //! Discovery is a UDP broadcast so the phone can find the desktop when its IP changes.
+//!
+//! The pairing token never travels after pairing: each /sync request is signed with an
+//! HMAC over a timestamp, a one-time nonce and the body, and the host signs its reply the
+//! same way. A device answering discovery under a paired host's id therefore learns
+//! nothing reusable, and its replies are rejected. Pairing codes lock after a few misses.
 
 use anyhow::{Result, anyhow};
+use hmac::{Hmac, Mac};
 use rand::Rng;
 use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
+use sha2::Sha256;
+use std::collections::HashMap;
+use std::io::Read;
 use std::net::UdpSocket;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -16,6 +25,42 @@ use crate::model::{LedgerEntry, Reminder};
 pub const HTTP_PORT: u16 = 47821;
 pub const UDP_PORT: u16 = 47822;
 const DISCOVER: &[u8] = b"TEND_DISCOVER";
+/// Wrong pairing codes allowed before the code is replaced and pairing pauses.
+const MAX_PAIR_FAILURES: u32 = 5;
+const PAIR_LOCKOUT: Duration = Duration::from_secs(300);
+/// How far a signed request's clock may be from ours.
+const MAX_SKEW_MS: i64 = 5 * 60 * 1000;
+const MAX_SYNC_BODY: u64 = 16 * 1024 * 1024;
+const MAX_SMALL_BODY: u64 = 4 * 1024;
+
+type HmacSha256 = Hmac<Sha256>;
+
+fn mac_over(token: &str, parts: &[&str]) -> HmacSha256 {
+    let mut mac = HmacSha256::new_from_slice(token.as_bytes()).expect("any key length works");
+    for p in parts {
+        mac.update(p.as_bytes());
+        mac.update(b"\n");
+    }
+    mac
+}
+
+fn sign(token: &str, parts: &[&str]) -> String {
+    mac_over(token, parts).finalize().into_bytes().iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// Constant-time check of a hex signature.
+fn verify(token: &str, parts: &[&str], sig: &str) -> bool {
+    let bytes: Option<Vec<u8>> = (0..sig.len())
+        .step_by(2)
+        .map(|i| sig.get(i..i + 2).and_then(|h| u8::from_str_radix(h, 16).ok()))
+        .collect();
+    bytes.is_some_and(|b| mac_over(token, parts).verify_slice(&b).is_ok())
+}
+
+fn nonce() -> String {
+    let mut rng = rand::rng();
+    (0..16).map(|_| format!("{:02x}", rng.random::<u8>())).collect()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -71,25 +116,78 @@ struct SyncReply {
     ledger: Vec<LedgerEntry>,
 }
 
+struct PairCode {
+    code: String,
+    issued: Instant,
+    failures: u32,
+    locked_until: Option<Instant>,
+}
+
 pub struct SyncState {
     pub name: String,
     pub hosting: bool,
-    code: Mutex<(String, Instant)>,
+    code: Mutex<PairCode>,
+    /// Nonces of recently accepted /sync requests, so a captured request can't be replayed.
+    seen: Mutex<HashMap<String, i64>>,
 }
 
 impl SyncState {
     pub fn new(name: String, hosting: bool) -> Self {
-        Self { name, hosting, code: Mutex::new((new_code(), Instant::now())) }
+        Self {
+            name,
+            hosting,
+            code: Mutex::new(PairCode { code: new_code(), issued: Instant::now(), failures: 0, locked_until: None }),
+            seen: Mutex::new(HashMap::new()),
+        }
     }
 
     /// Current pairing code; rotates every 10 minutes.
     pub fn code(&self) -> String {
         let mut c = self.code.lock().unwrap();
-        if c.1.elapsed() > Duration::from_secs(600) {
-            *c = (new_code(), Instant::now());
+        if c.issued.elapsed() > Duration::from_secs(600) {
+            c.code = new_code();
+            c.issued = Instant::now();
         }
-        c.0.clone()
+        c.code.clone()
     }
+
+    /// Checks a pairing attempt. After a few wrong codes the code is replaced and pairing
+    /// pauses for a while, so working through all million codes is not practical.
+    fn try_code(&self, attempt: &str) -> Result<()> {
+        use subtle::ConstantTimeEq;
+        let current = self.code();
+        let mut c = self.code.lock().unwrap();
+        if c.locked_until.is_some_and(|t| Instant::now() < t) {
+            return Err(anyhow!("locked"));
+        }
+        if bool::from(attempt.trim().as_bytes().ct_eq(current.as_bytes())) {
+            c.failures = 0;
+            return Ok(());
+        }
+        c.failures += 1;
+        if c.failures >= MAX_PAIR_FAILURES {
+            c.code = new_code();
+            c.issued = Instant::now();
+            c.failures = 0;
+            c.locked_until = Some(Instant::now() + PAIR_LOCKOUT);
+        }
+        Err(anyhow!("wrong code"))
+    }
+
+    /// True the first time a nonce is seen inside the allowed clock window.
+    fn fresh_nonce(&self, nonce: &str, now: i64) -> bool {
+        let mut seen = self.seen.lock().unwrap();
+        seen.retain(|_, t| now - *t < 2 * MAX_SKEW_MS);
+        seen.insert(nonce.to_string(), now).is_none()
+    }
+}
+
+/// Signature headers on a /sync request.
+struct SignedRequest {
+    device: String,
+    time: String,
+    nonce: String,
+    sig: String,
 }
 
 fn new_code() -> String {
@@ -152,22 +250,41 @@ pub fn serve(db: Arc<Mutex<Db>>, state: Arc<SyncState>, on_change: impl Fn() + S
                 }
             };
             for mut req in server.incoming_requests() {
+                let json =
+                    tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap();
+                let limit = if req.url() == "/sync" { MAX_SYNC_BODY } else { MAX_SMALL_BODY };
                 let mut body = String::new();
-                let _ = req.as_reader().read_to_string(&mut body);
-                let auth = req
-                    .headers()
-                    .iter()
-                    .find(|h| h.field.equiv("Authorization"))
-                    .map(|h| h.value.as_str().trim_start_matches("Bearer ").to_string());
-                let (status, out, changed) = handle(&db, &state, req.url(), &body, auth.as_deref());
+                let too_big = req.body_length().is_some_and(|n| n as u64 > limit)
+                    || req.as_reader().take(limit + 1).read_to_string(&mut body).is_err()
+                    || body.len() as u64 > limit;
+                if too_big {
+                    let _ = req.respond(
+                        tiny_http::Response::from_string(r#"{"error":"too large"}"#).with_status_code(413).with_header(json),
+                    );
+                    continue;
+                }
+                let header = |name: &'static str| {
+                    req.headers()
+                        .iter()
+                        .find(|h| h.field.equiv(name))
+                        .map(|h| h.value.as_str().to_string())
+                        .unwrap_or_default()
+                };
+                let signed = SignedRequest {
+                    device: header("X-Tend-Device"),
+                    time: header("X-Tend-Time"),
+                    nonce: header("X-Tend-Nonce"),
+                    sig: header("X-Tend-Sig"),
+                };
+                let (status, out, changed, reply_sig) = handle(&db, &state, req.url(), &body, &signed);
                 if changed {
                     on_change();
                 }
-                let header =
-                    tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap();
-                let _ = req.respond(
-                    tiny_http::Response::from_string(out).with_status_code(status).with_header(header),
-                );
+                let mut response = tiny_http::Response::from_string(out).with_status_code(status).with_header(json);
+                if let Some(sig) = reply_sig {
+                    response = response.with_header(tiny_http::Header::from_bytes(&b"X-Tend-Sig"[..], sig.as_bytes()).unwrap());
+                }
+                let _ = req.respond(response);
             }
         });
     }
@@ -195,10 +312,10 @@ fn handle(
     state: &SyncState,
     url: &str,
     body: &str,
-    auth: Option<&str>,
-) -> (u16, String, bool) {
+    signed: &SignedRequest,
+) -> (u16, String, bool, Option<String>) {
     let db = db.lock().unwrap();
-    let result: Result<(String, bool)> = (|| match url {
+    let result: Result<(String, bool, Option<String>)> = (|| match url {
         "/hello" => Ok((
             serde_json::to_string(&Hello {
                 app: "tend".into(),
@@ -208,12 +325,11 @@ fn handle(
                 host: String::new(),
             })?,
             false,
+            None,
         )),
         "/pair" => {
             let req: PairRequest = serde_json::from_str(body)?;
-            if req.code.trim() != state.code() {
-                return Err(anyhow!("wrong code"));
-            }
+            state.try_code(&req.code)?;
             let tok = token();
             db.conn.execute(
                 "INSERT INTO peers(id,name,host,port,token,is_client) VALUES(?1,?2,'',0,?3,1)
@@ -227,15 +343,26 @@ fn handle(
                     name: state.name.clone(),
                 })?,
                 false,
+                None,
             ))
         }
         "/sync" => {
-            let tok = auth.ok_or_else(|| anyhow!("unauthorised"))?;
-            let peer: Option<String> = db
+            let unauthorised = || anyhow!("unauthorised");
+            let tok: String = db
                 .conn
-                .query_row("SELECT id FROM peers WHERE token=?1 AND is_client=1", [tok], |r| r.get(0))
-                .optional()?;
-            let peer = peer.ok_or_else(|| anyhow!("unauthorised"))?;
+                .query_row("SELECT token FROM peers WHERE id=?1 AND is_client=1", [&signed.device], |r| r.get(0))
+                .optional()?
+                .ok_or_else(unauthorised)?;
+            let now = now_ms();
+            let time: i64 = signed.time.parse().map_err(|_| unauthorised())?;
+            if (now - time).abs() > MAX_SKEW_MS
+                || signed.nonce.len() < 16
+                || !verify(&tok, &["req", &signed.time, &signed.nonce, body], &signed.sig)
+                || !state.fresh_nonce(&signed.nonce, now)
+            {
+                return Err(unauthorised());
+            }
+            let peer = signed.device.clone();
             let req: SyncBody = serde_json::from_str(body)?;
             let changed = db.apply_remote(&req.reminders, &req.ledger)?;
             db.conn
@@ -245,15 +372,21 @@ fn handle(
                 reminders: db.reminders_since(req.since)?,
                 ledger: db.ledger_since(req.since)?,
             };
-            Ok((serde_json::to_string(&reply)?, changed > 0))
+            let out = serde_json::to_string(&reply)?;
+            let sig = sign(&tok, &["res", &signed.nonce, &out]);
+            Ok((out, changed > 0, Some(sig)))
         }
         _ => Err(anyhow!("not found")),
     })();
     match result {
-        Ok((s, changed)) => (200, s, changed),
+        Ok((s, changed, sig)) => (200, s, changed, sig),
         Err(e) => {
-            let code = if e.to_string() == "unauthorised" || e.to_string() == "wrong code" { 401 } else { 400 };
-            (code, serde_json::json!({ "error": e.to_string() }).to_string(), false)
+            let code = match e.to_string().as_str() {
+                "unauthorised" | "wrong code" => 401,
+                "locked" => 429,
+                _ => 400,
+            };
+            (code, serde_json::json!({ "error": e.to_string() }).to_string(), false, None)
         }
     }
 }
@@ -342,6 +475,9 @@ pub fn pair(db: &Mutex<Db>, my_name: &str, host: &str, port: u16, code: &str) ->
     if res.status() == 401 {
         return Err(anyhow!("That code didn't match — check the code on the other device"));
     }
+    if res.status() == 429 {
+        return Err(anyhow!("Too many wrong codes. Wait five minutes, then use the new code shown on the computer"));
+    }
     let reply: PairResponse = res.body_mut().read_json().map_err(|e| anyhow!("Bad reply: {e}"))?;
     let db = db.lock().unwrap();
     db.conn.execute(
@@ -389,16 +525,21 @@ pub fn sync_all(db: &Mutex<Db>) -> SyncOutcome {
         let attempt = sync_one(db, &host, port, &tok, pull_rev, push_rev);
         let attempt = match attempt {
             Err(_) => {
-                // The host may have a new IP — look for it and retry once.
+                // The host may have a new IP — look for it and retry once. Discovery replies
+                // are unauthenticated, so the new address is only kept once a signed sync
+                // there succeeds (a stranger can't sign the reply).
                 let own = db.lock().unwrap().device.clone();
                 match discover(&own).into_iter().find(|h| h.device_id == id) {
                     Some(h) => {
-                        let _ = db
-                            .lock()
-                            .unwrap()
-                            .conn
-                            .execute("UPDATE peers SET host=?1, port=?2 WHERE id=?3", params![h.host, h.port, id]);
-                        sync_one(db, &h.host, h.port, &tok, pull_rev, push_rev)
+                        let retry = sync_one(db, &h.host, h.port, &tok, pull_rev, push_rev);
+                        if retry.is_ok() {
+                            let _ = db
+                                .lock()
+                                .unwrap()
+                                .conn
+                                .execute("UPDATE peers SET host=?1, port=?2 WHERE id=?3", params![h.host, h.port, id]);
+                        }
+                        retry
                     }
                     None => attempt,
                 }
@@ -421,18 +562,26 @@ pub fn sync_all(db: &Mutex<Db>) -> SyncOutcome {
 }
 
 fn sync_one(db: &Mutex<Db>, host: &str, port: u16, tok: &str, pull_rev: i64, push_rev: i64) -> Result<(usize, i64, i64)> {
-    let (body, mark) = {
+    let (body, mark, device) = {
         let db = db.lock().unwrap();
         let mark = db.max_rev()?;
         (
             SyncBody { since: pull_rev, reminders: db.reminders_since(push_rev)?, ledger: db.ledger_since(push_rev)? },
             mark,
+            db.device.clone(),
         )
     };
+    let body = serde_json::to_string(&body)?;
+    let time = now_ms().to_string();
+    let nonce = nonce();
     let mut res = agent()
         .post(&format!("http://{host}:{port}/sync"))
-        .header("Authorization", &format!("Bearer {tok}"))
-        .send_json(&body)
+        .header("Content-Type", "application/json")
+        .header("X-Tend-Device", &device)
+        .header("X-Tend-Time", &time)
+        .header("X-Tend-Nonce", &nonce)
+        .header("X-Tend-Sig", &sign(tok, &["req", &time, &nonce, &body]))
+        .send(&body)
         .map_err(|e| anyhow!("unreachable ({e})"))?;
     if res.status() == 401 {
         return Err(anyhow!("this device was unpaired — pair again"));
@@ -440,7 +589,12 @@ fn sync_one(db: &Mutex<Db>, host: &str, port: u16, tok: &str, pull_rev: i64, pus
     if res.status() != 200 {
         return Err(anyhow!("host error {}", res.status()));
     }
-    let reply: SyncReply = res.body_mut().read_json()?;
+    let sig = res.headers().get("X-Tend-Sig").and_then(|v| v.to_str().ok()).unwrap_or_default().to_string();
+    let text = res.body_mut().with_config().limit(MAX_SYNC_BODY).read_to_string()?;
+    if !verify(tok, &["res", &nonce, &text], &sig) {
+        return Err(anyhow!("the reply wasn't signed by the paired computer"));
+    }
+    let reply: SyncReply = serde_json::from_str(&text)?;
     let changed = db.lock().unwrap().apply_remote(&reply.reminders, &reply.ledger)?;
     Ok((changed, reply.rev, mark))
 }
@@ -503,5 +657,54 @@ mod tests {
         let peer = pair_any(&tablet, "Tablet", &hosts, HTTP_PORT, &state.code(), Some(&device)).unwrap();
         assert_eq!(peer.host, "127.0.0.1");
         assert!(pair_any(&tablet, "Tablet", &hosts, HTTP_PORT, &state.code(), Some("someone-else")).is_err());
+
+        // A signed request works once; replaying it, or sending it unsigned, is refused.
+        let (me, tok) = {
+            let p = phone.lock().unwrap();
+            let tok: String = p.conn.query_row("SELECT token FROM peers", [], |r| r.get(0)).unwrap();
+            (p.device.clone(), tok)
+        };
+        let body = r#"{"since":0,"reminders":[],"ledger":[]}"#;
+        let (time, n) = (now_ms().to_string(), nonce());
+        let send = |sig: &str| {
+            agent()
+                .post(&format!("http://127.0.0.1:{HTTP_PORT}/sync"))
+                .header("X-Tend-Device", &me)
+                .header("X-Tend-Time", &time)
+                .header("X-Tend-Nonce", &n)
+                .header("X-Tend-Sig", sig)
+                .send(body)
+                .unwrap()
+                .status()
+                .as_u16()
+        };
+        let sig = sign(&tok, &["req", &time, &n, body]);
+        assert_eq!(send(&sig), 200);
+        assert_eq!(send(&sig), 401, "replayed request must be refused");
+        assert_eq!(send("00"), 401);
+    }
+
+    #[test]
+    fn signatures_bind_every_part() {
+        let sig = sign("secret", &["res", "n1", "{}"]);
+        assert!(verify("secret", &["res", "n1", "{}"], &sig));
+        assert!(!verify("other", &["res", "n1", "{}"], &sig));
+        assert!(!verify("secret", &["res", "n2", "{}"], &sig));
+        assert!(!verify("secret", &["res", "n1", "{ }"], &sig));
+        assert!(!verify("secret", &["res", "n1", "{}"], "zz"));
+    }
+
+    #[test]
+    fn pairing_locks_after_repeated_wrong_codes() {
+        let state = SyncState::new("Desk".into(), true);
+        let first = state.code();
+        let wrong = if first == "000000" { "000001" } else { "000000" };
+        for _ in 0..MAX_PAIR_FAILURES {
+            assert!(state.try_code(wrong).is_err());
+        }
+        // The code changed and even the right one is refused until the pause ends.
+        let next = state.code();
+        assert_ne!(first, next);
+        assert_eq!(state.try_code(&next).unwrap_err().to_string(), "locked");
     }
 }
