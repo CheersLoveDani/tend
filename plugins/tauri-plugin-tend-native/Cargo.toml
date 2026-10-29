@@ -1,0 +1,18 @@
+[package]
+name = "tauri-plugin-tend-native"
+version = "0.1.0"
+publish = false
+description = "Native Android helpers for Tend: persistent to-do notification, reminder alarms, unlock nudge."
+edition = "2021"
+rust-version = "1.77.2"
+links = "tauri-plugin-tend-native"
+exclude = ["/android/build", "/android/.tauri"]
+
+[dependencies]
+tauri = { version = "2" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+
+[build-dependencies]
+tauri-plugin = { version = "2", features = ["build"] }

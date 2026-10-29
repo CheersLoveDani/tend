@@ -1,0 +1,52 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Tend",
+  "version": "0.1.0",
+  "identifier": "com.tend.reminders",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Tend",
+        "width": 1080,
+        "height": 760,
+        "minWidth": 380,
+        "minHeight": 560,
+        "visible": false,
+        "backgroundColor": "#e6ece5"
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis", "msi"],
+    "createUpdaterArtifacts": true,
+    "publisher": "Dani Fullerton",
+    "copyright": "Copyright (c) 2026 Dani Fullerton. All rights reserved.",
+    "category": "Productivity",
+    "shortDescription": "A gentle reminder app",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlFMjJFN0MyMTExOThFNTkKUldSWmpoa1J3dWNpbnVXS2RxMjdSRDNkZ3I2NlBFUisrTk1TQVZGdHFYb2JkR2R1V1ByVXlQNFYK",
+      "endpoints": ["https://github.com/CheersLoveDani/tend/releases/latest/download/latest.json"],
+      "windows": { "installMode": "passive" }
+    }
+  }
+}

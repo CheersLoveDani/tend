@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- Self-update: hand a newer APK from the project's releases to the system installer. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <application>
+        <!-- A timed reminder is due. -->
+        <receiver
+            android:name="com.tend.native.ReminderAlarmReceiver"
+            android:exported="false" />
+
+        <!-- "Done" / "Snooze 15 min" notification buttons. -->
+        <receiver
+            android:name="com.tend.native.ReminderActionReceiver"
+            android:exported="false" />
+
+        <!-- The "still to do" notification was swiped away: put it back. -->
+        <receiver
+            android:name="com.tend.native.PersistentDismissReceiver"
+            android:exported="false" />
+
+        <!-- Restore alarms / notification / unlock service after boot and app updates. -->
+        <receiver
+            android:name="com.tend.native.BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Listens for ACTION_USER_PRESENT (only deliverable to runtime-registered receivers). -->
+        <service
+            android:name="com.tend.native.UnlockNudgeService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Shows the user's own still-to-do reminder list right after they unlock the device, at their request (ADHD accessibility aid). The service only listens for the screen-unlock broadcast; it does no background work." />
+        </service>
+
+        <!-- Shares the downloaded update with the system installer. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.tendupdates"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/tend_update_paths" />
+        </provider>
+    </application>
+</manifest>

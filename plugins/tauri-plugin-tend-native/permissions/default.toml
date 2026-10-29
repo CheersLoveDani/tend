@@ -1,0 +1,15 @@
+"$schema" = "schemas/schema.json"
+
+[default]
+description = "Allows all Tend native commands and the plugin event listeners (`action`, `pending-actions`)."
+permissions = [
+  "allow-set-state",
+  "allow-get-permissions",
+  "allow-request-permission",
+  "allow-take-launch-action",
+  "allow-take-pending-actions",
+  "allow-download-update",
+  "allow-install-update",
+  "allow-register-listener",
+  "allow-remove-listener",
+]

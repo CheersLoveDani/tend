@@ -1,0 +1,5 @@
+# candle's quantized matmuls pick SIMD kernels at *compile* time. Without AVX2/FMA the x86
+# build falls back to scalar code and is ~4x slower. Only applies to builds run from this
+# directory; the Tauri app should add the same to its own .cargo/config.toml.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+avx2,+fma,+f16c"]

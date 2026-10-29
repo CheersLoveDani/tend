@@ -1,0 +1,21 @@
+[package]
+name = "tend-llm"
+version = "0.1.0"
+edition = "2024"
+description = "Tiny on-device effort scorer for reminders (candle: 17M-param BERT embeddings + kNN; optional 360M GGUF LLM)"
+publish = false
+
+[dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+candle-core = { version = "0.11", default-features = false }
+candle-nn = { version = "0.11", default-features = false }
+candle-transformers = { version = "0.11", default-features = false }
+tokenizers = { version = "0.22", default-features = false, features = ["fancy-regex"] }
+ureq = { version = "3", default-features = false, features = ["rustls"] }
+
+[features]
+default = []
+# The previous SmolLM2-360M GGUF scorer (`tend_llm::large`), ~386 MB download.
+large = []
+

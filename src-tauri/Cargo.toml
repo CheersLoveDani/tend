@@ -1,0 +1,51 @@
+[package]
+name = "tend"
+version = "0.1.0"
+publish = false
+description = "Tend — a gentle, rewarding reminder app"
+authors = ["Dani Fullerton"]
+edition = "2024"
+
+[lib]
+name = "tend_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-opener = "2"
+tauri-plugin-notification = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.37", features = ["bundled"] }
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+tiny_http = "0.12"
+ureq = { version = "3", default-features = false, features = ["rustls", "json"] }
+rand = "0.9"
+if-addrs = "0.13"
+anyhow = "1"
+log = "0.4"
+tend-llm = { path = "../crates/tend-llm" }
+tauri-plugin-tend-native = { path = "../plugins/tauri-plugin-tend-native" }
+
+[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
+tauri-plugin-barcode-scanner = "2"
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-autostart = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true
+
+[profile.dev.package."*"]
+opt-level = 2

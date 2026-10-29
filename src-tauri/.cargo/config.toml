@@ -1,0 +1,3 @@
+# candle picks its SIMD kernels at compile time; without AVX2 the suggester is ~4x slower.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+avx2,+fma,+f16c"]

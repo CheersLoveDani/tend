@@ -1,0 +1,109 @@
+name: Release
+
+# Push a tag like v0.2.0 (matching "version" in package.json, tauri.conf.json and
+# Cargo.toml) to build and publish the Windows installer and the Android APK.
+# Installed copies update themselves from that release: Windows through the
+# signed latest.json, Android by downloading the APK.
+on:
+  push:
+    tags: ['v*']
+  # Run by hand: rebuild only the Android APK for an existing release, or untick
+  # "APK only" to build everything and create the tag and release.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag, e.g. v0.2.0
+        required: true
+      apk_only:
+        description: APK only (the release must already exist)
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  windows:
+    name: Windows
+    if: github.event_name == 'push' || !inputs.apk_only
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
+        with:
+          tagName: ${{ env.TAG }}
+          releaseName: Tend ${{ env.TAG }}
+          releaseBody: Windows installs update themselves. On Android, install the APK below once; after that Tend offers each new version itself.
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true
+
+  android:
+    name: Android
+    needs: windows
+    if: ${{ !cancelled() && (needs.windows.result == 'success' || needs.windows.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      # The runner image ships the Android SDK; only the NDK version is pinned.
+      - name: Install NDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: android
+      - run: npm ci
+      # Every release must be signed with the same key, or installed copies cannot update.
+      - name: Set up signing
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          echo "$KEYSTORE" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          cat > src-tauri/gen/android/keystore.properties <<PROPS
+          password=$PASSWORD
+          keyAlias=tend
+          storeFile=$RUNNER_TEMP/release.jks
+          PROPS
+      - run: npm run tauri android build -- --apk --target aarch64
+      - name: Attach APK to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          apk=$(find src-tauri/gen/android/app/build/outputs/apk -name '*release*.apk' | head -n 1)
+          cp "$apk" "Tend_${TAG#v}_android.apk"
+          gh release upload "$TAG" "Tend_${TAG#v}_android.apk" --clobber
