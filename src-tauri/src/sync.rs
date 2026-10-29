@@ -25,9 +25,16 @@ use crate::model::{LedgerEntry, Reminder};
 pub const HTTP_PORT: u16 = 47821;
 pub const UDP_PORT: u16 = 47822;
 const DISCOVER: &[u8] = b"TEND_DISCOVER";
-/// Wrong pairing codes allowed before the code is replaced and pairing pauses.
+/// Wrong pairing codes one address may send before it is paused, and how many wrong
+/// codes the current code survives (from anyone) before it is replaced.
 const MAX_PAIR_FAILURES: u32 = 5;
 const PAIR_LOCKOUT: Duration = Duration::from_secs(300);
+/// Wrong codes accepted from everyone together per window; past it pairing pauses for all.
+const MAX_PAIR_MISSES_PER_WINDOW: u32 = 20;
+const PAIR_WINDOW: Duration = Duration::from_secs(600);
+/// Pairing is only accepted while the code is on screen; the Settings view keeps this open.
+const PAIR_OPEN_FOR: Duration = Duration::from_secs(120);
+const MAX_TRACKED_ADDRS: usize = 1024;
 /// How far a signed request's clock may be from ours.
 const MAX_SKEW_MS: i64 = 5 * 60 * 1000;
 const MAX_SYNC_BODY: u64 = 16 * 1024 * 1024;
@@ -121,8 +128,12 @@ struct PairCode {
     issued: Instant,
     /// Wrong guesses against the current code, from anyone.
     misses: u32,
-    /// Per-address wrong guesses and lockout, so one noisy device can't block everyone.
-    by_addr: HashMap<IpAddr, (u32, Option<Instant>)>,
+    /// Wrong guesses from everyone in the current window: (window start, count).
+    window: (Instant, u32),
+    /// Until when pairing is accepted (the code is on screen on this device).
+    open_until: Option<Instant>,
+    /// Per-address (wrong guesses, first miss, paused until).
+    by_addr: HashMap<IpAddr, (u32, Instant, Option<Instant>)>,
 }
 
 pub struct SyncState {
@@ -138,7 +149,14 @@ impl SyncState {
         Self {
             name,
             hosting,
-            code: Mutex::new(PairCode { code: new_code(), issued: Instant::now(), misses: 0, by_addr: HashMap::new() }),
+            code: Mutex::new(PairCode {
+                code: new_code(),
+                issued: Instant::now(),
+                misses: 0,
+                window: (Instant::now(), 0),
+                open_until: None,
+                by_addr: HashMap::new(),
+            }),
             seen: Mutex::new(HashMap::new()),
         }
     }
@@ -153,27 +171,46 @@ impl SyncState {
         c.code.clone()
     }
 
-    /// Checks a pairing attempt. Each code gets only a few wrong guesses (from anyone)
-    /// before it is replaced, so working through a million codes is not practical; an
-    /// address that keeps guessing is paused on its own, without blocking other devices.
+    /// Accept pairing for the next couple of minutes. Called while the code is on screen.
+    pub fn open_pairing(&self) {
+        self.code.lock().unwrap().open_until = Some(Instant::now() + PAIR_OPEN_FOR);
+    }
+
+    /// Checks a pairing attempt. Pairing is only possible while the code is on screen.
+    /// Each code survives only a few wrong guesses before it is replaced, an address that
+    /// keeps guessing is paused on its own, and wrong guesses from everyone together are
+    /// capped per window, so switching addresses doesn't buy more tries.
     fn try_code(&self, attempt: &str, from: IpAddr) -> Result<()> {
         use subtle::ConstantTimeEq;
         let current = self.code();
         let mut c = self.code.lock().unwrap();
         let now = Instant::now();
-        c.by_addr.retain(|_, (_, until)| until.is_none_or(|t| now < t));
-        if c.by_addr.get(&from).is_some_and(|(_, until)| until.is_some()) {
+        if c.open_until.is_none_or(|t| now >= t) {
+            return Err(anyhow!("closed"));
+        }
+        if c.window.0.elapsed() >= PAIR_WINDOW {
+            c.window = (now, 0);
+        }
+        c.by_addr.retain(|_, (_, first, until)| match until {
+            Some(t) => now < *t,
+            None => first.elapsed() < PAIR_LOCKOUT,
+        });
+        if c.window.1 >= MAX_PAIR_MISSES_PER_WINDOW || c.by_addr.get(&from).is_some_and(|e| e.2.is_some()) {
             return Err(anyhow!("locked"));
         }
         if bool::from(attempt.trim().as_bytes().ct_eq(current.as_bytes())) {
             c.by_addr.remove(&from);
             return Ok(());
         }
-        let entry = c.by_addr.entry(from).or_insert((0, None));
+        if c.by_addr.len() >= MAX_TRACKED_ADDRS {
+            c.by_addr.retain(|_, e| e.2.is_some());
+        }
+        let entry = c.by_addr.entry(from).or_insert((0, now, None));
         entry.0 += 1;
         if entry.0 >= MAX_PAIR_FAILURES {
-            entry.1 = Some(now + PAIR_LOCKOUT);
+            entry.2 = Some(now + PAIR_LOCKOUT);
         }
+        c.window.1 += 1;
         c.misses += 1;
         if c.misses >= MAX_PAIR_FAILURES {
             c.code = new_code();
@@ -395,6 +432,7 @@ fn handle(
         Err(e) => {
             let code = match e.to_string().as_str() {
                 "unauthorised" | "wrong code" => 401,
+                "closed" => 403,
                 "locked" => 429,
                 _ => 400,
             };
@@ -487,8 +525,11 @@ pub fn pair(db: &Mutex<Db>, my_name: &str, host: &str, port: u16, code: &str) ->
     if res.status() == 401 {
         return Err(anyhow!("That code didn't match — check the code on the other device"));
     }
+    if res.status() == 403 {
+        return Err(anyhow!("Open Settings on the computer so its code is showing, then try again"));
+    }
     if res.status() == 429 {
-        return Err(anyhow!("Too many wrong codes. Wait five minutes, then use the new code shown on the computer"));
+        return Err(anyhow!("Too many wrong codes. Wait a few minutes, then use the new code shown on the computer"));
     }
     let reply: PairResponse = res.body_mut().read_json().map_err(|e| anyhow!("Bad reply: {e}"))?;
     let db = db.lock().unwrap();
@@ -620,6 +661,9 @@ mod tests {
         std::thread::sleep(Duration::from_millis(300));
 
         let phone = db();
+        // Closed until the code is on screen.
+        assert!(pair(&phone, "Phone", "127.0.0.1", HTTP_PORT, &state.code()).is_err());
+        state.open_pairing();
         assert!(pair(&phone, "Phone", "127.0.0.1", HTTP_PORT, "999999x").is_err());
         let peer = pair(&phone, "Phone", "127.0.0.1", HTTP_PORT, &state.code()).unwrap();
         assert_eq!(peer.name, "Desk");
@@ -700,6 +744,7 @@ mod tests {
     #[test]
     fn pairing_locks_after_repeated_wrong_codes() {
         let state = SyncState::new("Desk".into(), true);
+        state.open_pairing();
         let noisy: IpAddr = "10.0.0.9".parse().unwrap();
         let other: IpAddr = "10.0.0.2".parse().unwrap();
         let first = state.code();
@@ -713,5 +758,14 @@ mod tests {
         assert_eq!(state.try_code(&next, noisy).unwrap_err().to_string(), "locked");
         // ...but everyone else can still pair with the new code.
         assert!(state.try_code(&next, other).is_ok());
+
+        // Spreading guesses over many addresses hits the shared cap.
+        for i in 0..MAX_PAIR_MISSES_PER_WINDOW {
+            let addr: IpAddr = format!("10.1.{}.{}", i / 200, i % 200 + 1).parse().unwrap();
+            let current = state.code();
+            let _ = state.try_code(if current == "000000" { "000001" } else { "000000" }, addr);
+        }
+        let fresh: IpAddr = "10.2.0.1".parse().unwrap();
+        assert_eq!(state.try_code(&state.code(), fresh).unwrap_err().to_string(), "locked");
     }
 }

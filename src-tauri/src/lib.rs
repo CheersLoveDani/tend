@@ -207,6 +207,12 @@ struct SyncInfo {
     peers: Vec<sync::Peer>,
 }
 
+/// Accept pairing for the next couple of minutes; the UI calls this while the code is showing.
+#[tauri::command]
+fn open_pairing(state: State<AppState>) {
+    state.sync.open_pairing();
+}
+
 #[tauri::command]
 fn sync_info(state: State<AppState>) -> Res<SyncInfo> {
     let db = state.db.lock().unwrap();
@@ -356,6 +362,7 @@ pub fn run() {
             download_model,
             delete_model,
             sync_info,
+            open_pairing,
             discover_hosts,
             pair_with,
             pair_any,

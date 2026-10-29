@@ -138,6 +138,7 @@ export const api = {
   downloadModel: () => invoke<void>("download_model"),
   deleteModel: () => invoke<void>("delete_model"),
   syncInfo: () => invoke<SyncInfo>("sync_info"),
+  openPairing: () => invoke<void>("open_pairing"),
   discover: () => invoke<Hello[]>("discover_hosts"),
   pair: (host: string, port: number | null, code: string) =>
     invoke<Peer>("pair_with", { host, port, code }),

@@ -88,6 +88,17 @@ function PairQr({ info }: { info: SyncInfo }) {
   useEffect(() => {
     void QRCode.toString(payload, { type: "svg", margin: 1, errorCorrectionLevel: "M", color: { dark: "#26352e", light: "#f5f8f3" } }).then(setSvg);
   }, [payload]);
+  // This device only accepts pairing while its code is actually on screen.
+  useEffect(() => {
+    const open = () => document.visibilityState === "visible" && void api.openPairing().catch(() => null);
+    open();
+    const t = window.setInterval(open, 60_000);
+    document.addEventListener("visibilitychange", open);
+    return () => {
+      window.clearInterval(t);
+      document.removeEventListener("visibilitychange", open);
+    };
+  }, []);
   return (
     <motion.div
       className="pair-qr"
