@@ -68,6 +68,7 @@ function woodblock(ac: AudioContext, freq: number, at: number, level = 0.5) {
     [2.76, 0.35],
     [5.4, 0.12],
   ] as const) {
+    if (freq * mult * 1.04 >= ac.sampleRate / 2) continue; // above what can be heard or played
     const o = ac.createOscillator();
     const og = ac.createGain();
     o.type = "sine";
@@ -104,6 +105,7 @@ function marimba(ac: AudioContext, freq: number, at: number, level = 0.35, lengt
     [9.8, 0.06, 0.06],
   ];
   for (const [mult, amp, len] of partials) {
+    if (freq * mult >= ac.sampleRate / 2) continue;
     const o = ac.createOscillator();
     const og = ac.createGain();
     o.type = "sine";
