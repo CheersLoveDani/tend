@@ -51,7 +51,7 @@
 
         <!-- Shares the downloaded update with the system installer. -->
         <provider
-            android:name="androidx.core.content.FileProvider"
+            android:name="com.tend.native.TendUpdateFileProvider"
             android:authorities="${applicationId}.tendupdates"
             android:exported="false"
             android:grantUriPermissions="true">
