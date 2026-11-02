@@ -74,7 +74,9 @@ export function Tree({ level, progress, size = 160, still }: Props) {
   return (
     <svg viewBox={viewBox} width={size} height={size * 0.9} className="tree" role="img" aria-label={`Your tree at level ${level}`}>
       <ellipse cx="100" cy={groundY + 2} rx={level <= 3 ? 24 : 44 + growth * 30} ry="7" className="tree-ground" />
-      <motion.g style={{ originX: "100px", originY: `${groundY}px` }} animate={sway}>
+      {/* Motion gives SVG transforms `fill-box`, so px origins would be relative to each shape's
+          own box (leaves flew in from far away). `view-box` makes them plain SVG coordinates. */}
+      <motion.g style={{ transformBox: "view-box", originX: "100px", originY: `${groundY}px` }} animate={sway}>
         {level > 3 && (
           <>
             <motion.path
@@ -105,7 +107,6 @@ export function Tree({ level, progress, size = 160, still }: Props) {
                   initial={{ scale: 0, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   transition={{ type: "spring", stiffness: 200, damping: 12, delay: still ? 0 : i * 0.015 }}
-                  style={{ originX: `${b.x}px`, originY: `${b.y}px` }}
                 />
               ))}
               {blossoms &&
@@ -133,7 +134,7 @@ export function Tree({ level, progress, size = 160, still }: Props) {
                   className="tree-leaf shade-1"
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
-                  style={{ originX: "100px", originY: `${y}px` }}
+                  style={{ transformBox: "view-box", originX: "100px", originY: `${y}px` }}
                   transition={{ type: "spring", stiffness: 220, damping: 12 }}
                 />
               );
