@@ -6,6 +6,8 @@ import { greeting, longDate, today } from "../lib/dates";
 import { earned } from "../lib/rewards";
 import { TaskCard } from "../components/TaskCard";
 import { DoseCard } from "../components/DoseCard";
+import { WeatherCheckIn } from "../components/WeatherCheckIn";
+import { todaysWeather } from "../lib/weather";
 import { Seed } from "../components/Icons";
 
 export function Today({ onEdit, onAdd, onOpenMed }: { onEdit: (r: Reminder) => void; onAdd: () => void; onOpenMed: (id: string) => void }) {
@@ -56,6 +58,13 @@ export function Today({ onEdit, onAdd, onOpenMed }: { onEdit: (r: Reminder) => v
               ))}
             </AnimatePresence>
           </div>
+        </section>
+      )}
+
+      {snap && todaysWeather(snap.entries) === null && (
+        <section className="list-section">
+          <h2 className="section-title">What's the weather like in you today?</h2>
+          <WeatherCheckIn compact />
         </section>
       )}
 

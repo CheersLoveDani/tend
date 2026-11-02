@@ -15,6 +15,8 @@ import { Welcome } from "./views/Welcome";
 import { Editor } from "./components/Editor";
 import { RewardLayer } from "./components/RewardLayer";
 import { Tree } from "./components/Tree";
+import { Sky } from "./components/Sky";
+import { todaysWeather } from "./lib/weather";
 import { Calendar, Gear, Pill, Plus, Seed, Sprout, Sun } from "./components/Icons";
 import { sounds } from "./lib/sound";
 import { isAndroid } from "./lib/api";
@@ -210,7 +212,9 @@ function Shell() {
     <div className="app">
       <aside className="rail">
         <div className="rail-tree" onClick={() => setTab("garden")} role="button" tabIndex={-1} aria-hidden>
-          <Tree level={level.level} progress={progress} size={150} still={reduceMotion} />
+          <Sky weather={todaysWeather(snap.entries)} compact>
+            <Tree level={level.level} progress={progress} size={150} still={reduceMotion} />
+          </Sky>
         </div>
         <LevelBadge />
         <nav className="rail-nav" aria-label="Main">

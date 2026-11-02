@@ -3,6 +3,9 @@ import { format, parseISO } from "date-fns";
 import { useStore } from "../lib/store";
 import { Tree } from "../components/Tree";
 import { Seed } from "../components/Icons";
+import { Sky } from "../components/Sky";
+import { WeatherCheckIn } from "../components/WeatherCheckIn";
+import { todaysWeather, weatherDays, weatherOf } from "../lib/weather";
 
 const STAGES = ["Seed", "Sprout", "Seedling", "Sapling", "Young tree", "Leafy tree", "Blossoming tree", "Fruit tree", "Old oak", "Grove"];
 
@@ -15,6 +18,8 @@ export function Garden() {
   const finished = days.reduce((n, d) => n + d.done, 0);
   const max = Math.max(10, ...days.map((d) => d.seeds));
   const stageIdx = STAGES.indexOf(level.stage);
+  const weather = todaysWeather(snap.entries);
+  const spread = weatherDays(snap.entries);
 
   return (
     <div className="view garden">
@@ -29,7 +34,9 @@ export function Garden() {
       </header>
 
       <div className="garden-hero">
-        <Tree level={level.level} progress={progress} size={280} still={reduceMotion} />
+        <Sky weather={weather}>
+          <Tree level={level.level} progress={progress} size={280} still={reduceMotion} />
+        </Sky>
         <div className="level-bar" role="progressbar" aria-valuemin={0} aria-valuemax={level.levelSize} aria-valuenow={level.intoLevel} aria-label="Progress to next level">
           <motion.div className="level-bar-fill" initial={{ width: 0 }} animate={{ width: `${progress * 100}%` }} transition={{ type: "spring", stiffness: 60, damping: 18 }} />
         </div>
@@ -37,6 +44,17 @@ export function Garden() {
           {level.levelSize - level.intoLevel} seeds until level {level.level + 1}
         </p>
       </div>
+
+      <section className="list-section weather-section">
+        <h2 className="section-title">Weather inside today</h2>
+        <WeatherCheckIn />
+        <p className="hint">{weatherOf(weather)?.line ?? "However it is in there, say so. Rain and sun both help it grow."}</p>
+        {spread.rain + spread.sun + spread.mild > 0 && (
+          <p className="weather-spread">
+            This month: {spread.rain} rainy {spread.rain === 1 ? "day" : "days"}, {spread.mild} mild, {spread.sun} sunny. A tree needs every one of them.
+          </p>
+        )}
+      </section>
 
       <div className="stats">
         <div className="stat">
