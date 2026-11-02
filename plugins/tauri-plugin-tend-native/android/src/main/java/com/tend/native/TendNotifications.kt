@@ -134,6 +134,7 @@ object TendNotifications {
   private fun lineFor(item: PendingItem): String {
     val sb = StringBuilder()
     if (!item.time.isNullOrBlank()) sb.append(item.time).append("  ")
+    if (item.dose) sb.append("Take ")
     sb.append(item.title)
     if (item.stepsTotal > 0) sb.append(" · ").append(item.stepsDone).append('/').append(item.stepsTotal).append(" steps")
     return sb.toString()
@@ -191,7 +192,7 @@ object TendNotifications {
   // ---- timed reminders -------------------------------------------------------------------------
 
   @SuppressLint("MissingPermission")
-  fun postReminder(ctx: Context, id: String, title: String, body: String, silent: Boolean) {
+  fun postReminder(ctx: Context, id: String, title: String, body: String, silent: Boolean, dose: Boolean = false) {
     ensureChannels(ctx)
     val builder = baseBuilder(ctx, CHANNEL_REMINDERS)
       .setContentTitle(title)
@@ -201,7 +202,7 @@ object TendNotifications {
       .setShowWhen(true)
       .setWhen(System.currentTimeMillis())
       .setSilent(silent)
-      .addAction(0, "Done", reminderActionPendingIntent(ctx, TendIds.ACTION_DONE, id, title, body))
+      .addAction(0, if (dose) "Taken" else "Done", reminderActionPendingIntent(ctx, TendIds.ACTION_DONE, id, title, body))
       .addAction(0, "Snooze 15 min", reminderActionPendingIntent(ctx, TendIds.ACTION_SNOOZE, id, title, body))
     if (body.isNotBlank()) {
       builder.setContentText(body).setStyle(NotificationCompat.BigTextStyle().bigText(body))

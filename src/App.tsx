@@ -1,25 +1,30 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { StoreProvider, useStore } from "./lib/store";
-import type { Reminder } from "./lib/api";
+import type { Entry, EntryKind, Med, Reminder } from "./lib/api";
 import { Today } from "./views/Today";
 import { Upcoming } from "./views/Upcoming";
 import { Garden } from "./views/Garden";
 import { SettingsView } from "./views/SettingsView";
 import { Nag } from "./views/Nag";
+import { Meds } from "./views/Meds";
+import { MedEditor } from "./components/MedEditor";
+import { MedDetail } from "./components/MedDetail";
+import { EntrySheet } from "./components/EntrySheet";
 import { Welcome } from "./views/Welcome";
 import { Editor } from "./components/Editor";
 import { RewardLayer } from "./components/RewardLayer";
 import { Tree } from "./components/Tree";
-import { Calendar, Gear, Plus, Seed, Sprout, Sun } from "./components/Icons";
+import { Calendar, Gear, Pill, Plus, Seed, Sprout, Sun } from "./components/Icons";
 import { sounds } from "./lib/sound";
 import { isAndroid } from "./lib/api";
 import { appUpdater, appVersion, type UpdateState } from "./lib/updater";
 
-type Tab = "today" | "upcoming" | "garden" | "settings";
+type Tab = "today" | "meds" | "upcoming" | "garden" | "settings";
 
 const TABS: { id: Tab; label: string; icon: typeof Sun }[] = [
   { id: "today", label: "Today", icon: Sun },
+  { id: "meds", label: "Medicine", icon: Pill },
   { id: "upcoming", label: "Coming up", icon: Calendar },
   { id: "garden", label: "Garden", icon: Sprout },
   { id: "settings", label: "Settings", icon: Gear },
@@ -117,6 +122,10 @@ function Shell() {
   const { snap, settings, reduceMotion } = store;
   const [tab, setTab] = useState<Tab>("today");
   const [editing, setEditing] = useState<{ r: Reminder | null; date?: string } | null>(null);
+  const [medEditing, setMedEditing] = useState<{ med: Med | null } | null>(null);
+  const [medOpen, setMedOpen] = useState<string | null>(null);
+  const [entry, setEntry] = useState<{ kind: EntryKind; initial?: Entry } | null>(null);
+  const sheetOpen = !!(editing || medEditing || medOpen || entry);
   const { updating, offer, dismissOffer } = useAppUpdates(settings.autoUpdate);
 
   useEffect(() => {
@@ -130,7 +139,7 @@ function Shell() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement;
-      if (editing || el.closest("input,textarea,select")) return;
+      if (sheetOpen || el.closest("input,textarea,select")) return;
       if (e.key === "n" || e.key === "N") {
         e.preventDefault();
         setEditing({ r: null });
@@ -138,7 +147,7 @@ function Shell() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [editing]);
+  }, [sheetOpen]);
 
   if (!snap || updating) {
     return (
@@ -153,6 +162,7 @@ function Shell() {
   const progress = level.intoLevel / level.levelSize;
   const edit = (r: Reminder) => setEditing({ r });
   const add = (date?: string) => setEditing({ r: null, date });
+  const openMed = snap.meds.find((m) => m.id === medOpen) ?? null;
 
   return (
     <div className="app">
@@ -187,7 +197,8 @@ function Shell() {
             exit={{ opacity: 0, y: reduceMotion ? 0 : -6 }}
             transition={{ duration: 0.18 }}
           >
-            {tab === "today" && <Today onEdit={edit} onAdd={() => add()} />}
+            {tab === "today" && <Today onEdit={edit} onAdd={() => add()} onOpenMed={setMedOpen} />}
+            {tab === "meds" && <Meds onAddMed={() => setMedEditing({ med: null })} onOpenMed={setMedOpen} onEntry={(kind, initial) => setEntry({ kind, initial })} />}
             {tab === "upcoming" && <Upcoming onEdit={edit} onAdd={(d) => add(d)} />}
             {tab === "garden" && <Garden />}
             {tab === "settings" && <SettingsView />}
@@ -198,10 +209,11 @@ function Shell() {
       {tab !== "settings" && (
         <motion.button
           className="fab"
-          aria-label="New reminder"
+          aria-label={tab === "meds" ? "New medication" : "New reminder"}
           onClick={() => {
             sounds.tap();
-            add(tab === "upcoming" ? undefined : undefined);
+            if (tab === "meds") setMedEditing({ med: null });
+            else add();
           }}
           whileTap={{ scale: 0.9 }}
           initial={{ scale: 0 }}
@@ -223,11 +235,26 @@ function Shell() {
       </nav>
 
       <AnimatePresence>{editing && <Editor key="editor" initial={editing.r} defaultDate={editing.date} onClose={() => setEditing(null)} />}</AnimatePresence>
+      <AnimatePresence>
+        {openMed && !medEditing && (
+          <MedDetail key="med" med={openMed} onEdit={() => setMedEditing({ med: openMed })} onClose={() => setMedOpen(null)} />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {medEditing && (
+          <MedEditor
+            key="med-editor"
+            initial={medEditing.med ? { ...medEditing.med, left: snap.meds.find((m) => m.id === medEditing.med!.id)?.left ?? null } : null}
+            onClose={() => setMedEditing(null)}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>{entry && <EntrySheet key="entry" kind={entry.kind} initial={entry.initial} onClose={() => setEntry(null)} />}</AnimatePresence>
       <AnimatePresence>{store.nag && <Nag key="nag" />}</AnimatePresence>
       <AnimatePresence>{!settings.onboarded && <Welcome key="welcome" />}</AnimatePresence>
       {/* Never interrupts: the offer waits until nothing else is open. */}
       <AnimatePresence>
-        {offer && settings.onboarded && !editing && !store.nag && <UpdateOffer key="update" version={offer} onClose={dismissOffer} />}
+        {offer && settings.onboarded && !sheetOpen && !store.nag && <UpdateOffer key="update" version={offer} onClose={dismissOffer} />}
       </AnimatePresence>
       <Toasts />
       <RewardLayer />

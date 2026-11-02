@@ -13,6 +13,12 @@ pub struct PendingItem {
     pub steps_total: u32,
     #[serde(default)]
     pub reward: f64,
+    /// A medication dose: shown first and chimed about until it's taken.
+    #[serde(default)]
+    pub dose: bool,
+    /// Reminds even during quiet hours.
+    #[serde(default)]
+    pub critical: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -24,6 +30,10 @@ pub struct Alarm {
     pub body: String,
     /// Epoch milliseconds.
     pub at: i64,
+    #[serde(default)]
+    pub dose: bool,
+    #[serde(default)]
+    pub critical: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]

@@ -70,6 +70,37 @@ export function installMock() {
     return [g, bonus];
   };
 
+  // Medicine: two sample meds whose doses are worked out the simple way (every day).
+  const meds: any[] = [
+    { id: "m1", name: "Vitamin D3", strength: "1000 IU", form: "tablet", icon: "round", color: "sun", notes: "", schedule: { kind: "daily", every: 1, days: [], onDays: 0, offDays: 0, times: [{ time: "08:00", amount: 1 }] }, startDate: plusDays(-60), endDate: null, stock: 78, stockAt: 0, refillAt: 10, paused: false, critical: false, reward: 5, createdAt: 0 },
+    { id: "m2", name: "Sertraline", strength: "50 mg", form: "capsule", icon: "capsule", color: "sky", notes: "With breakfast", schedule: { kind: "daily", every: 1, days: [], onDays: 0, offDays: 0, times: [{ time: "08:05", amount: 1 }, { time: "21:00", amount: 1 }] }, startDate: plusDays(-30), endDate: null, stock: 4, stockAt: 0, refillAt: 7, paused: false, critical: true, reward: 5, createdAt: 0 },
+  ];
+  const logged = new Map<string, { status: string; at: number }>();
+  const entries: any[] = [
+    { id: "e1", kind: "mood", name: "Mood", value: 4, value2: null, unit: "", note: "", at: Date.now() - 3_600_000 },
+    { id: "e2", kind: "measurement", name: "Blood pressure", value: 122, value2: 79, unit: "mmHg", note: "", at: Date.now() - 86_400_000 },
+  ];
+  const doses = () =>
+    meds
+      .filter((m) => !m.deleted)
+      .flatMap((m) =>
+        m.schedule.times.map((t: any) => {
+          const id = `${m.id}@${today()}T${t.time}`;
+          const [h, mi] = t.time.split(":").map(Number);
+          const due = new Date();
+          due.setHours(h, mi, 0, 0);
+          const l = logged.get(id);
+          return { id, medId: m.id, name: `${m.name} ${m.strength}`, date: today(), time: t.time, amount: t.amount, form: m.form, status: l?.status ?? (due.getTime() <= Date.now() ? "due" : "upcoming"), dueAt: due.getTime(), loggedAt: l?.at ?? null, critical: m.critical, extra: false };
+        }),
+      )
+      .sort((x, y) => x.time.localeCompare(y.time));
+  const medView = (m: any) => {
+    const used = [...logged.entries()].filter(([k, v]) => k.startsWith(m.id) && v.status === "taken").length;
+    const left = m.stock == null ? null : Math.max(0, m.stock - used);
+    return { ...m, left, daysLeft: left == null ? null : Math.floor(left / m.schedule.times.length), low: left != null && left <= (m.refillAt ?? 7) };
+  };
+  const doseEvent = (id: string, gained: number, before: number) => ({ kind: gained >= 0 ? "bit" : "undo", gained, bonus: 0, remaining: 0, before: level(before), after: level(xp()), reminder: { ...mk("Dose", today(), 0), id } });
+
   mockIPC((cmd, a) => {
     const args = a as Record<string, any>;
     const before = xp();
@@ -80,7 +111,57 @@ export function installMock() {
           level: level(xp()),
           days: Array.from({ length: 30 }, (_, i) => ({ date: plusDays(i - 29), seeds: i === 29 ? 20 : Math.random() < 0.3 ? 0 : Math.round(Math.random() * 60), done: 2 })),
           deviceId: "web",
+          meds: meds.filter((m) => !m.deleted).map(medView),
+          doses: doses(),
+          doseAlarms: [],
+          entries: entries.filter((e) => !e.deleted),
         };
+      case "save_med": {
+        const i = args.input;
+        const existing = meds.find((m) => m.id === i.id);
+        if (existing) Object.assign(existing, i);
+        else meds.push({ ...i, id: Math.random().toString(36).slice(2), stockAt: 0, createdAt: Date.now() });
+        return i;
+      }
+      case "delete_med":
+        meds.find((m) => m.id === args.id).deleted = true;
+        return null;
+      case "add_med_stock": {
+        const m = meds.find((x) => x.id === args.id);
+        m.stock = (m.stock ?? 0) + args.amount;
+        return m;
+      }
+      case "take_dose":
+      case "take_extra_dose": {
+        const id = args.id ?? `${args.medId}@${today()}T${Date.now()}`;
+        logged.set(id, { status: "taken", at: Date.now() });
+        ledger.set(`${id}:dose`, 7);
+        return doseEvent(id, 7, before);
+      }
+      case "skip_dose":
+        logged.set(args.id, { status: "skipped", at: Date.now() });
+        return null;
+      case "undo_dose":
+        logged.delete(args.id);
+        ledger.delete(`${args.id}:dose`);
+        return doseEvent(args.id, xp() - before, before);
+      case "med_history":
+        return Array.from({ length: args.days }, (_, i) => ({ date: plusDays(i - args.days + 1), scheduled: 2, taken: i === args.days - 1 ? 0 : Math.random() < 0.85 ? 2 : 1, skipped: 0 }));
+      case "save_entry": {
+        const e = { ...args.entry, id: args.entry.id || Math.random().toString(36).slice(2) };
+        const at = entries.findIndex((x) => x.id === e.id);
+        if (at >= 0) entries[at] = e;
+        else entries.unshift(e);
+        ledger.set(`${e.id}:log`, 2);
+        return doseEvent(e.id, 2, before);
+      }
+      case "delete_entry":
+        entries.find((e) => e.id === args.id).deleted = true;
+        return null;
+      case "export_health":
+        return JSON.stringify({ app: "tend", version: 1, meds, doses: [], entries }, null, 2);
+      case "import_health":
+        return [0, 0, 0];
       case "get_settings":
         return settings;
       case "set_settings":

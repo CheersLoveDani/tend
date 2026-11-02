@@ -1,9 +1,10 @@
 // Bridge to the Android plugin: alarms, the persistent "still to do" notification,
 // and the unlock screen all run natively from the state we push here.
 import { addPluginListener, invoke } from "@tauri-apps/api/core";
-import { isAndroid, type Reminder } from "./api";
+import { isAndroid, type Reminder, type Snapshot } from "./api";
 import type { Settings } from "./settings";
 import { today } from "./dates";
+import { amountText } from "./meds";
 
 export interface Permissions {
   notifications: boolean;
@@ -42,18 +43,45 @@ function epoch(date: string, time: string): number {
   return new Date(y, m - 1, d, h, min).getTime();
 }
 
-export async function pushNativeState(reminders: Reminder[], s: Settings) {
+/** Native ids for doses carry this prefix so notification taps know what they are. */
+export const DOSE_PREFIX = "dose:";
+
+export async function pushNativeState(snap: Snapshot, s: Settings) {
   if (!isAndroid) return;
   const now = Date.now();
-  const pending = waiting(reminders).map((r) => ({
-    id: r.id,
-    title: r.title,
-    time: r.time,
-    stepsDone: r.steps.filter((x) => x.done).length,
-    stepsTotal: r.steps.length,
-    reward: r.reward,
+  // Medication comes first everywhere: the list, the chime and the unlock screen.
+  const doses = snap.doses
+    .filter((d) => d.status === "due" && !d.extra)
+    .map((d) => ({
+      id: DOSE_PREFIX + d.id,
+      title: `${d.name} (${amountText(d.amount, d.form)})`,
+      time: d.time,
+      stepsDone: 0,
+      stepsTotal: 0,
+      reward: 0,
+      dose: true,
+      critical: d.critical,
+    }));
+  const pending = [
+    ...doses,
+    ...waiting(snap.reminders).map((r) => ({
+      id: r.id,
+      title: r.title,
+      time: r.time,
+      stepsDone: r.steps.filter((x) => x.done).length,
+      stepsTotal: r.steps.length,
+      reward: r.reward,
+    })),
+  ];
+  const doseAlarms = snap.doseAlarms.map((d) => ({
+    id: DOSE_PREFIX + d.id,
+    title: `Time for ${d.name}`,
+    body: `${amountText(d.amount, d.form)}. Tap Taken once it's done.`,
+    at: d.dueAt,
+    dose: true,
+    critical: d.critical,
   }));
-  const alarms = reminders
+  const reminderAlarms = snap.reminders
     .filter((r) => r.status === "open" && r.time)
     .map((r) => ({
       id: r.id,
@@ -62,9 +90,8 @@ export async function pushNativeState(reminders: Reminder[], s: Settings) {
         ? `Next tiny step: ${r.steps.find((x) => !x.done)?.title ?? r.steps[0].title}`
         : `Worth ${r.reward} seeds whenever you're ready`,
       at: epoch(r.date, r.time!),
-    }))
-    .filter((a) => a.at > now)
-    .slice(0, 50);
+    }));
+  const alarms = [...doseAlarms, ...reminderAlarms].filter((a) => a.at > now).slice(0, 60);
   await invoke(`${P}set_state`, {
     state: {
       pending,

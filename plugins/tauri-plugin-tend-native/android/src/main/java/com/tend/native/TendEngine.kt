@@ -63,14 +63,27 @@ object TendEngine {
   @Synchronized
   fun onAlarmFired(context: Context, id: String, title: String, body: String) {
     val ctx = context.applicationContext
-    val state = TendStore.loadState(ctx)
-    if (state.alarms.any { it.id == id }) {
-      TendStore.saveState(ctx, state.copy(alarms = state.alarms.filter { it.id != id }))
+    var state = TendStore.loadState(ctx)
+    val alarm = state.alarms.find { it.id == id }
+    if (alarm != null) state = state.copy(alarms = state.alarms.filter { it.id != id })
+    // A dose that comes due joins the "still to do" list at the top, so the chime, the
+    // persistent notification and the unlock screen all keep at it until it's taken.
+    val dose = alarm?.dose == true || id.startsWith("dose:")
+    val critical = alarm?.critical == true
+    if (dose && state.pending.none { it.id == id }) {
+      val time = java.text.SimpleDateFormat("HH:mm", java.util.Locale.ROOT).format(java.util.Date())
+      val item = PendingItem(id, title.removePrefix("Time for "), time, 0, 0, 0.0, dose = true, critical = critical)
+      state = state.copy(pending = listOf(item) + state.pending)
     }
+    TendStore.saveState(ctx, state)
     TendStore.removeScheduledAlarmId(ctx, id)
-    val quiet = state.isQuietNow()
-    TendNotifications.postReminder(ctx, id, title, body, silent = quiet)
+    val quiet = state.isQuietNow() && !critical
+    TendNotifications.postReminder(ctx, id, title, body, silent = quiet, dose = dose)
     if (!quiet) TendStore.setLastChimeAt(ctx, System.currentTimeMillis())
+    if (dose) {
+      TendAlarms.syncChime(ctx, state)
+      refreshSurface(ctx, state)
+    }
   }
 
   /** The periodic chime: sound once if things are waiting, then line up the next one. */
@@ -84,7 +97,7 @@ object TendEngine {
       return
     }
     val now = System.currentTimeMillis()
-    if (!state.isQuietNow()) {
+    if (!state.isQuietFor(now)) {
       TendNotifications.postChime(ctx, state)
       TendStore.setLastChimeAt(ctx, now)
     }
@@ -119,8 +132,13 @@ object TendEngine {
     val ctx = context.applicationContext
     val now = System.currentTimeMillis()
     TendStore.addPendingAction(ctx, "snooze", id, now)
-    val alarm = AlarmItem(id, title, body, now + TendIds.SNOOZE_MS)
     val state = TendStore.loadState(ctx)
+    val prev = state.alarms.find { it.id == id }
+    val alarm = AlarmItem(
+      id, title, body, now + TendIds.SNOOZE_MS,
+      dose = prev?.dose ?: id.startsWith("dose:"),
+      critical = prev?.critical ?: state.pending.any { it.id == id && it.critical }
+    )
     TendStore.saveState(ctx, state.copy(alarms = state.alarms.filter { it.id != id } + alarm))
     TendAlarms.schedule(ctx, alarm)
     TendStore.addScheduledAlarmId(ctx, id)

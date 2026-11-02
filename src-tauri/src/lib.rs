@@ -1,5 +1,6 @@
 mod actions;
 mod db;
+mod meds;
 mod model;
 mod rewards;
 mod suggest;
@@ -62,12 +63,107 @@ fn snapshot(state: State<AppState>) -> Res<Snapshot> {
             .unwrap_or_default();
         if let Some(d) = days.iter_mut().find(|d| d.date == date) {
             d.seeds += amount;
-            if kind == "finish" {
+            if kind == "finish" || kind == "dose" {
                 d.done += 1;
             }
         }
     }
-    Ok(Snapshot { reminders, level, days, device_id: db.device.clone() })
+    let med_views = meds::meds(&db).and_then(|all| all.into_iter().map(|m| meds::view(&db, m)).collect()).map_err(err)?;
+    let entries_since = (chrono::Local::now() - chrono::Duration::days(90)).format("%Y-%m-%d").to_string();
+    Ok(Snapshot {
+        reminders,
+        level,
+        days,
+        device_id: db.device.clone(),
+        meds: med_views,
+        doses: meds::today_slots(&db).map_err(err)?,
+        dose_alarms: meds::upcoming_slots(&db, 7).map_err(err)?,
+        entries: meds::entries(&db, &entries_since).map_err(err)?,
+    })
+}
+
+// ---- medication ----
+
+#[tauri::command]
+fn save_med(app: AppHandle, state: State<AppState>, input: meds::MedInput) -> Res<meds::Med> {
+    let m = meds::upsert_med(&state.db.lock().unwrap(), input).map_err(err)?;
+    after_local_change(&app);
+    Ok(m)
+}
+
+#[tauri::command]
+fn delete_med(app: AppHandle, state: State<AppState>, id: String) -> Res<()> {
+    meds::delete_med(&state.db.lock().unwrap(), &id).map_err(err)?;
+    after_local_change(&app);
+    Ok(())
+}
+
+#[tauri::command]
+fn add_med_stock(app: AppHandle, state: State<AppState>, id: String, amount: f64) -> Res<meds::Med> {
+    let m = meds::add_stock(&state.db.lock().unwrap(), &id, amount).map_err(err)?;
+    after_local_change(&app);
+    Ok(m)
+}
+
+#[tauri::command]
+fn take_dose(app: AppHandle, state: State<AppState>, id: String) -> Res<RewardEvent> {
+    let e = meds::take(&state.db.lock().unwrap(), &id).map_err(err)?;
+    after_local_change(&app);
+    Ok(e)
+}
+
+#[tauri::command]
+fn take_extra_dose(app: AppHandle, state: State<AppState>, med_id: String, amount: f64) -> Res<RewardEvent> {
+    let e = meds::take_extra(&state.db.lock().unwrap(), &med_id, amount).map_err(err)?;
+    after_local_change(&app);
+    Ok(e)
+}
+
+#[tauri::command]
+fn skip_dose(app: AppHandle, state: State<AppState>, id: String) -> Res<()> {
+    meds::skip(&state.db.lock().unwrap(), &id).map_err(err)?;
+    after_local_change(&app);
+    Ok(())
+}
+
+#[tauri::command]
+fn undo_dose(app: AppHandle, state: State<AppState>, id: String) -> Res<RewardEvent> {
+    let e = meds::undo(&state.db.lock().unwrap(), &id).map_err(err)?;
+    after_local_change(&app);
+    Ok(e)
+}
+
+#[tauri::command]
+fn med_history(state: State<AppState>, id: String, days: i64) -> Res<Vec<meds::DayAdherence>> {
+    meds::history(&state.db.lock().unwrap(), &id, days.clamp(1, 366)).map_err(err)
+}
+
+#[tauri::command]
+fn save_entry(app: AppHandle, state: State<AppState>, entry: meds::Entry) -> Res<RewardEvent> {
+    let e = meds::save_entry(&state.db.lock().unwrap(), entry).map_err(err)?;
+    after_local_change(&app);
+    Ok(e)
+}
+
+#[tauri::command]
+fn delete_entry(app: AppHandle, state: State<AppState>, id: String) -> Res<()> {
+    meds::delete_entry(&state.db.lock().unwrap(), &id).map_err(err)?;
+    after_local_change(&app);
+    Ok(())
+}
+
+#[tauri::command]
+fn export_health(state: State<AppState>) -> Res<String> {
+    let data = meds::export(&state.db.lock().unwrap()).map_err(err)?;
+    serde_json::to_string_pretty(&data).map_err(err)
+}
+
+#[tauri::command]
+fn import_health(app: AppHandle, state: State<AppState>, json: String) -> Res<(usize, usize, usize)> {
+    let data: meds::HealthExport = serde_json::from_str(&json).map_err(|_| "That file isn't a Tend health export".to_string())?;
+    let counts = meds::import(&state.db.lock().unwrap(), data).map_err(err)?;
+    after_local_change(&app);
+    Ok(counts)
 }
 
 #[tauri::command]
@@ -368,6 +464,18 @@ pub fn run() {
             pair_any,
             forget_peer,
             sync_now,
+            save_med,
+            delete_med,
+            add_med_stock,
+            take_dose,
+            take_extra_dose,
+            skip_dose,
+            undo_dose,
+            med_history,
+            save_entry,
+            delete_entry,
+            export_health,
+            import_health,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Tend")

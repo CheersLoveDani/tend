@@ -5,9 +5,10 @@ import { useStore } from "../lib/store";
 import { greeting, longDate, today } from "../lib/dates";
 import { earned } from "../lib/rewards";
 import { TaskCard } from "../components/TaskCard";
+import { DoseCard } from "../components/DoseCard";
 import { Seed } from "../components/Icons";
 
-export function Today({ onEdit, onAdd }: { onEdit: (r: Reminder) => void; onAdd: () => void }) {
+export function Today({ onEdit, onAdd, onOpenMed }: { onEdit: (r: Reminder) => void; onAdd: () => void; onOpenMed: (id: string) => void }) {
   const { snap } = useStore();
   const [showDone, setShowDone] = useState(false);
   const t = today();
@@ -23,6 +24,9 @@ export function Today({ onEdit, onAdd }: { onEdit: (r: Reminder) => void; onAdd:
   }, [snap, t]);
 
   const open = earlier.length + todays.length;
+  // Medicine first: due doses, then the rest of today's. Taken ones live on the Medicine tab.
+  const doses = (snap?.doses ?? []).filter((d) => d.status === "due" || d.status === "upcoming");
+  const dueDoses = doses.filter((d) => d.status === "due").length;
 
   return (
     <div className="view">
@@ -30,6 +34,7 @@ export function Today({ onEdit, onAdd }: { onEdit: (r: Reminder) => void; onAdd:
         <p className="view-kicker">{longDate()}</p>
         <h1>{greeting()}</h1>
         <p className="view-sub">
+          {dueDoses > 0 && <>{dueDoses === 1 ? "A dose is due. " : `${dueDoses} doses are due. `}</>}
           {open === 0 && done.length === 0 && "Nothing planted for today yet."}
           {open === 0 && done.length > 0 && "Everything for today is done. Rest is part of growing."}
           {open > 0 && (
@@ -40,6 +45,19 @@ export function Today({ onEdit, onAdd }: { onEdit: (r: Reminder) => void; onAdd:
           )}
         </p>
       </header>
+
+      {doses.length > 0 && (
+        <section className="list-section">
+          <h2 className="section-title">Medicine</h2>
+          <div className="list">
+            <AnimatePresence mode="popLayout">
+              {doses.map((d) => (
+                <DoseCard key={d.id} d={d} onOpen={onOpenMed} />
+              ))}
+            </AnimatePresence>
+          </div>
+        </section>
+      )}
 
       {earlier.length > 0 && (
         <section className="list-section">
@@ -55,7 +73,7 @@ export function Today({ onEdit, onAdd }: { onEdit: (r: Reminder) => void; onAdd:
       )}
 
       <section className="list-section">
-        {earlier.length > 0 && <h2 className="section-title">Today</h2>}
+        {(earlier.length > 0 || doses.length > 0) && <h2 className="section-title">Today</h2>}
         <div className="list">
           <AnimatePresence mode="popLayout">
             {todays.map((r) => (

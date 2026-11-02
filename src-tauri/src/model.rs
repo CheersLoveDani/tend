@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::meds::{DoseSlot, Entry, MedView};
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Step {
@@ -115,4 +117,11 @@ pub struct Snapshot {
     pub level: LevelInfo,
     pub days: Vec<DayStat>,
     pub device_id: String,
+    pub meds: Vec<MedView>,
+    /// Today's doses, soonest first.
+    pub doses: Vec<DoseSlot>,
+    /// Untaken doses over the next week, for alarms.
+    pub dose_alarms: Vec<DoseSlot>,
+    /// Health diary for the last 90 days, newest first.
+    pub entries: Vec<Entry>,
 }

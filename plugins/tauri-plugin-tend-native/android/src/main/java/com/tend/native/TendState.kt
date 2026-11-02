@@ -11,7 +11,11 @@ data class PendingItem(
   val time: String?,
   val stepsDone: Int,
   val stepsTotal: Int,
-  val reward: Double
+  val reward: Double,
+  /** A medication dose: listed first, and chimed about until it's taken. */
+  val dose: Boolean = false,
+  /** Reminds even during quiet hours. */
+  val critical: Boolean = false
 ) {
   fun toJson(): JSONObject = JSONObject()
     .put("id", id)
@@ -20,6 +24,8 @@ data class PendingItem(
     .put("stepsDone", stepsDone)
     .put("stepsTotal", stepsTotal)
     .put("reward", reward)
+    .put("dose", dose)
+    .put("critical", critical)
 
   companion object {
     fun fromJson(o: JSONObject) = PendingItem(
@@ -28,25 +34,38 @@ data class PendingItem(
       time = o.optStringOrNull("time"),
       stepsDone = o.optInt("stepsDone", 0),
       stepsTotal = o.optInt("stepsTotal", 0),
-      reward = o.optDouble("reward", 0.0).let { if (it.isNaN()) 0.0 else it }
+      reward = o.optDouble("reward", 0.0).let { if (it.isNaN()) 0.0 else it },
+      dose = o.optBoolean("dose", false),
+      critical = o.optBoolean("critical", false)
     )
   }
 }
 
 /** A timed reminder to fire at [at] (epoch ms). */
-data class AlarmItem(val id: String, val title: String, val body: String, val at: Long) {
+data class AlarmItem(
+  val id: String,
+  val title: String,
+  val body: String,
+  val at: Long,
+  val dose: Boolean = false,
+  val critical: Boolean = false
+) {
   fun toJson(): JSONObject = JSONObject()
     .put("id", id)
     .put("title", title)
     .put("body", body)
     .put("at", at)
+    .put("dose", dose)
+    .put("critical", critical)
 
   companion object {
     fun fromJson(o: JSONObject) = AlarmItem(
       id = o.optString("id"),
       title = o.optString("title"),
       body = o.optString("body", ""),
-      at = o.optLong("at", 0L)
+      at = o.optLong("at", 0L),
+      dose = o.optBoolean("dose", false),
+      critical = o.optBoolean("critical", false)
     )
   }
 }
@@ -106,9 +125,15 @@ data class NativeState(
 
   val wantsPersistentNotification: Boolean get() = persistentNotification && pending.isNotEmpty()
 
-  val wantsChime: Boolean get() = chimeMinutes > 0 && pending.isNotEmpty()
+  /** Doses keep chiming even when the chime is off for everything else. */
+  val wantsChime: Boolean get() = pending.isNotEmpty() && (chimeMinutes > 0 || pending.any { it.dose })
 
-  val chimeIntervalMs: Long get() = chimeMinutes.toLong() * 60_000L
+  val chimeIntervalMs: Long get() = (if (chimeMinutes > 0) chimeMinutes else 15).toLong() * 60_000L
+
+  /** A critical dose is waiting: quiet hours don't apply. */
+  val hasCriticalDose: Boolean get() = pending.any { it.dose && it.critical }
+
+  fun isQuietFor(ms: Long = System.currentTimeMillis()): Boolean = !hasCriticalDose && isQuietAt(ms)
 
   fun isQuietNow(): Boolean = quietHours?.contains() ?: false
 
@@ -118,7 +143,7 @@ data class NativeState(
   /** The next chime slot after [fromMs], pushed past quiet hours. */
   fun nextChimeAfter(fromMs: Long): Long {
     val at = fromMs + chimeIntervalMs
-    if (!isQuietAt(at)) return at
+    if (!isQuietFor(at)) return at
     return quietHours?.nextEnd(at) ?: at
   }
 

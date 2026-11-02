@@ -69,6 +69,93 @@ export interface Snapshot {
   level: LevelInfo;
   days: DayStat[];
   deviceId: string;
+  meds: MedView[];
+  /** Today's doses, soonest first. */
+  doses: DoseSlot[];
+  /** Untaken doses over the next week, for alarms. */
+  doseAlarms: DoseSlot[];
+  /** Health diary for the last 90 days, newest first. */
+  entries: Entry[];
+}
+
+export type ScheduleKind = "daily" | "interval" | "weekdays" | "cycle" | "asNeeded";
+
+export interface DoseTime {
+  time: string;
+  amount: number;
+}
+
+export interface Schedule {
+  kind: ScheduleKind;
+  every: number;
+  /** 0 = Monday */
+  days: number[];
+  onDays: number;
+  offDays: number;
+  times: DoseTime[];
+}
+
+export interface Med {
+  id: string;
+  name: string;
+  strength: string;
+  form: string;
+  icon: string;
+  color: string;
+  notes: string;
+  schedule: Schedule;
+  startDate: string;
+  endDate: string | null;
+  stock: number | null;
+  stockAt: number;
+  refillAt: number | null;
+  paused: boolean;
+  critical: boolean;
+  reward: number;
+  createdAt: number;
+}
+
+export interface MedView extends Med {
+  left: number | null;
+  daysLeft: number | null;
+  low: boolean;
+}
+
+export type MedInput = Omit<Med, "id" | "stockAt" | "createdAt"> & { id: string | null };
+
+export interface DoseSlot {
+  id: string;
+  medId: string;
+  name: string;
+  date: string;
+  time: string;
+  amount: number;
+  form: string;
+  status: "upcoming" | "due" | "taken" | "skipped";
+  dueAt: number;
+  loggedAt: number | null;
+  critical: boolean;
+  extra: boolean;
+}
+
+export interface DayAdherence {
+  date: string;
+  scheduled: number;
+  taken: number;
+  skipped: number;
+}
+
+export type EntryKind = "measurement" | "symptom" | "mood";
+
+export interface Entry {
+  id: string;
+  kind: EntryKind;
+  name: string;
+  value: number;
+  value2: number | null;
+  unit: string;
+  note: string;
+  at: number;
 }
 
 export interface Suggestion {
@@ -146,6 +233,18 @@ export const api = {
     invoke<Peer>("pair_any", { hosts, port, code, device }),
   forgetPeer: (id: string) => invoke<void>("forget_peer", { id }),
   syncNow: () => invoke<SyncOutcome>("sync_now"),
+  saveMed: (input: MedInput) => invoke<Med>("save_med", { input }),
+  deleteMed: (id: string) => invoke<void>("delete_med", { id }),
+  addMedStock: (id: string, amount: number) => invoke<Med>("add_med_stock", { id, amount }),
+  takeDose: (id: string) => invoke<RewardEvent>("take_dose", { id }),
+  takeExtraDose: (medId: string, amount: number) => invoke<RewardEvent>("take_extra_dose", { medId, amount }),
+  skipDose: (id: string) => invoke<void>("skip_dose", { id }),
+  undoDose: (id: string) => invoke<RewardEvent>("undo_dose", { id }),
+  medHistory: (id: string, days: number) => invoke<DayAdherence[]>("med_history", { id, days }),
+  saveEntry: (entry: Entry) => invoke<RewardEvent>("save_entry", { entry }),
+  deleteEntry: (id: string) => invoke<void>("delete_entry", { id }),
+  exportHealth: () => invoke<string>("export_health"),
+  importHealth: (json: string) => invoke<[number, number, number]>("import_health", { json }),
 };
 
 export const uid = () =>

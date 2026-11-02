@@ -59,6 +59,83 @@ function Choice<T extends string>({ label, value, options, onChange }: { label: 
   );
 }
 
+/** Copy (and on desktop, save) every medication, dose and diary entry; read one back in. */
+function HealthData() {
+  const { refresh, toast } = useStore();
+  const [busy, setBusy] = useState(false);
+
+  async function exportAll() {
+    setBusy(true);
+    try {
+      const json = await api.exportHealth();
+      await navigator.clipboard?.writeText(json).catch(() => null);
+      if (!isAndroid) {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+        a.download = `tend-health-${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }
+      toast(isAndroid ? "Copied to the clipboard. Paste it anywhere to keep it." : "Saved, and copied to the clipboard.");
+    } catch (e) {
+      toast(String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function importText(json: string) {
+    setBusy(true);
+    try {
+      const [meds, doses, entries] = await api.importHealth(json);
+      await refresh();
+      toast(`Brought in ${meds} medications, ${doses} doses and ${entries} diary entries.`);
+    } catch (e) {
+      toast(String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="row">
+        <span className="row-text">
+          <span className="row-label">Export medicine and diary</span>
+          <span className="row-hint">Everything on the Medicine tab, as a file you can keep or move.</span>
+        </span>
+        <button className="btn btn-soft" disabled={busy} onClick={() => void exportAll()}>
+          Export
+        </button>
+      </div>
+      <div className="row">
+        <span className="row-text">
+          <span className="row-label">Import</span>
+          <span className="row-hint">From a Tend export file. Adds to what's here; nothing is removed.</span>
+        </span>
+        <span className="row-actions">
+          <button className="btn btn-quiet" disabled={busy} onClick={() => void navigator.clipboard?.readText().then(importText).catch(() => toast("Couldn't read the clipboard"))}>
+            Paste
+          </button>
+          <label className={`btn btn-soft file-btn ${busy ? "is-disabled" : ""}`}>
+            Choose file
+            <input
+              type="file"
+              accept=".json,application/json,text/plain"
+              disabled={busy}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (f) void f.text().then(importText);
+              }}
+            />
+          </label>
+        </span>
+      </div>
+    </>
+  );
+}
+
 const PERMS: { kind: PermissionKind; label: string; hint: string }[] = [
   { kind: "notifications", label: "Notifications", hint: "Needed for reminders and the 'still to do' notification." },
   { kind: "exactAlarm", label: "On-time alarms", hint: "Lets reminders arrive at the exact minute." },
@@ -334,6 +411,10 @@ export function SettingsView() {
             </button>
           )}
         </div>
+      </Group>
+
+      <Group title="Medicine">
+        <HealthData />
       </Group>
 
       <Group title="Reminders">

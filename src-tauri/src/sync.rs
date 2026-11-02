@@ -19,7 +19,7 @@ use std::net::{IpAddr, Ipv4Addr, UdpSocket};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use crate::db::{Db, now_ms};
+use crate::db::{Db, Item, now_ms};
 use crate::model::{LedgerEntry, Reminder};
 
 pub const HTTP_PORT: u16 = 47821;
@@ -113,6 +113,9 @@ struct SyncBody {
     since: i64,
     reminders: Vec<Reminder>,
     ledger: Vec<LedgerEntry>,
+    /// Medications, doses and the health diary. Absent from versions before 0.2.
+    #[serde(default)]
+    items: Vec<Item>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -121,6 +124,9 @@ struct SyncReply {
     rev: i64,
     reminders: Vec<Reminder>,
     ledger: Vec<LedgerEntry>,
+    /// `None` means the host predates items and dropped any we sent.
+    #[serde(default)]
+    items: Option<Vec<Item>>,
 }
 
 struct PairCode {
@@ -413,13 +419,14 @@ fn handle(
             }
             let peer = signed.device.clone();
             let req: SyncBody = serde_json::from_str(body)?;
-            let changed = db.apply_remote(&req.reminders, &req.ledger)?;
+            let changed = db.apply_remote(&req.reminders, &req.ledger, &req.items)?;
             db.conn
                 .execute("UPDATE peers SET last_sync=?1 WHERE id=?2", params![now_ms(), peer])?;
             let reply = SyncReply {
                 rev: db.max_rev()?,
                 reminders: db.reminders_since(req.since)?,
                 ledger: db.ledger_since(req.since)?,
+                items: Some(db.items_since(req.since)?),
             };
             let out = serde_json::to_string(&reply)?;
             let sig = sign(&tok, &["res", &signed.nonce, &out]);
@@ -610,7 +617,12 @@ fn sync_one(db: &Mutex<Db>, host: &str, port: u16, tok: &str, pull_rev: i64, pus
         let db = db.lock().unwrap();
         let mark = db.max_rev()?;
         (
-            SyncBody { since: pull_rev, reminders: db.reminders_since(push_rev)?, ledger: db.ledger_since(push_rev)? },
+            SyncBody {
+                since: pull_rev,
+                reminders: db.reminders_since(push_rev)?,
+                ledger: db.ledger_since(push_rev)?,
+                items: db.items_since(push_rev)?,
+            },
             mark,
             db.device.clone(),
         )
@@ -639,8 +651,14 @@ fn sync_one(db: &Mutex<Db>, host: &str, port: u16, tok: &str, pull_rev: i64, pus
         return Err(anyhow!("the reply wasn't signed by the paired computer"));
     }
     let reply: SyncReply = serde_json::from_str(&text)?;
-    let changed = db.lock().unwrap().apply_remote(&reply.reminders, &reply.ledger)?;
-    Ok((changed, reply.rev, mark))
+    let db = db.lock().unwrap();
+    let changed = db.apply_remote(&reply.reminders, &reply.ledger, reply.items.as_deref().unwrap_or(&[]))?;
+    // An older host ignored our items: don't mark them as sent, so they go again once it updates.
+    let pushed = match reply.items {
+        Some(_) => mark,
+        None => db.first_item_rev_after(push_rev)?.map_or(mark, |r| (r - 1).min(mark)),
+    };
+    Ok((changed, reply.rev, pushed))
 }
 
 #[cfg(test)]

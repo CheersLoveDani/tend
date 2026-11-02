@@ -136,3 +136,10 @@ export const Steps = ({ size, ...p }: P) => (
     <path d="M4 19h4v-4h4v-4h4V7h4" />
   </svg>
 );
+
+export const Pill = ({ size, ...p }: P) => (
+  <svg {...base(size)} {...p}>
+    <path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z" />
+    <path d="m8.5 8.5 7 7" />
+  </svg>
+);

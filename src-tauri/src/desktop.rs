@@ -113,7 +113,29 @@ fn tick(app: &AppHandle) {
         .flatten()
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_default();
-    if in_quiet_hours(&ui) {
+    let quiet = in_quiet_hours(&ui);
+    let doses: Vec<_> = crate::meds::today_slots(&db)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|s| s.status == "due" && !s.extra)
+        .collect();
+
+    // Medication first. Critical meds still remind during quiet hours.
+    for s in doses.iter().filter(|s| !quiet || s.critical) {
+        let key = format!("dose:{}", s.id);
+        if db.was_notified(&key).unwrap_or(true) {
+            continue;
+        }
+        let _ = db.mark_notified(&key);
+        let amount = if s.amount.fract() == 0.0 { format!("{}", s.amount as i64) } else { s.amount.to_string() };
+        let _ = app
+            .notification()
+            .builder()
+            .title(format!("Time for {}", s.name))
+            .body(format!("{amount} {} at {}. Mark it in Tend once it's taken.", s.form, s.time))
+            .show();
+    }
+    if quiet {
         return;
     }
 
@@ -139,16 +161,19 @@ fn tick(app: &AppHandle) {
 
     // Gentle periodic chime while things are waiting (off when 0).
     let every_min = ui.get("chimeMinutes").and_then(|v| v.as_f64()).unwrap_or(15.0);
-    if every_min > 0.0 && !waiting.is_empty() {
+    if every_min > 0.0 && (!waiting.is_empty() || !doses.is_empty()) {
         let last: i64 = db.setting("lastNudge").ok().flatten().and_then(|s| s.parse().ok()).unwrap_or(0);
         if now_ms() - last > (every_min * 60_000.0) as i64 {
             let _ = db.set_setting("lastNudge", &now_ms().to_string());
             if last != 0 {
-                let title = match waiting.len() {
-                    1 => "One thing is still waiting".to_string(),
-                    n => format!("{n} things are still waiting"),
+                let title = match (doses.len(), waiting.len()) {
+                    (0, 1) => "One thing is still waiting".to_string(),
+                    (0, n) => format!("{n} things are still waiting"),
+                    (1, _) => format!("{} hasn't been taken yet", doses[0].name),
+                    (n, _) => format!("{n} doses haven't been taken yet"),
                 };
-                let names: Vec<&str> = waiting.iter().take(3).map(|r| r.title.as_str()).collect();
+                let names: Vec<&str> =
+                    doses.iter().map(|s| s.name.as_str()).chain(waiting.iter().map(|r| r.title.as_str())).take(3).collect();
                 let _ = app.notification().builder().title(title).body(names.join(" · ")).show();
             }
         }

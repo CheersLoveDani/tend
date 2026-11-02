@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 use rusqlite::{Connection, OptionalExtension, params};
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 use crate::model::{LedgerEntry, Reminder, Step};
@@ -41,7 +42,46 @@ CREATE TABLE IF NOT EXISTS peers (
   is_client INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS notified (id TEXT PRIMARY KEY, at INTEGER NOT NULL);
+-- Generic synced records (medications, doses, health diary). `k1`/`k2` are lookup keys.
+CREATE TABLE IF NOT EXISTS items (
+  kind TEXT NOT NULL, id TEXT NOT NULL, k1 TEXT NOT NULL DEFAULT '', k2 TEXT NOT NULL DEFAULT '',
+  data TEXT NOT NULL, updated_at INTEGER NOT NULL, device TEXT NOT NULL, deleted INTEGER NOT NULL DEFAULT 0,
+  rev INTEGER NOT NULL, PRIMARY KEY (kind, id)
+);
+CREATE INDEX IF NOT EXISTS items_rev ON items(rev);
+CREATE INDEX IF NOT EXISTS items_keys ON items(kind, k1, k2);
 "#;
+
+/// One synced record of any kind. `data` is the record itself, as JSON.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Item {
+    pub kind: String,
+    pub id: String,
+    #[serde(default)]
+    pub k1: String,
+    #[serde(default)]
+    pub k2: String,
+    pub data: serde_json::Value,
+    pub updated_at: i64,
+    pub device: String,
+    #[serde(default)]
+    pub deleted: bool,
+}
+
+fn row_to_item(row: &rusqlite::Row) -> rusqlite::Result<Item> {
+    let data: String = row.get("data")?;
+    Ok(Item {
+        kind: row.get("kind")?,
+        id: row.get("id")?,
+        k1: row.get("k1")?,
+        k2: row.get("k2")?,
+        data: serde_json::from_str(&data).unwrap_or(serde_json::Value::Null),
+        updated_at: row.get("updated_at")?,
+        device: row.get("device")?,
+        deleted: row.get::<_, i64>("deleted")? != 0,
+    })
+}
 
 fn row_to_reminder(row: &rusqlite::Row) -> rusqlite::Result<Reminder> {
     let steps: String = row.get("steps")?;
@@ -89,6 +129,12 @@ impl Db {
         let conn = Connection::open(path)?;
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;")?;
         conn.execute_batch(SCHEMA)?;
+        // Items arrived in 0.2. Peers we synced with before may hold items we skipped over while
+        // we were too old to read them, so pull everything once more (merging is idempotent).
+        if conn.query_row("SELECT 1 FROM meta WHERE key='items_v1'", [], |_| Ok(())).optional()?.is_none() {
+            conn.execute("UPDATE peers SET pull_rev=0", [])?;
+            conn.execute("INSERT INTO meta(key,value) VALUES('items_v1','1')", [])?;
+        }
         let device = match conn
             .query_row("SELECT value FROM meta WHERE key='device'", [], |r| r.get::<_, String>(0))
             .optional()?
@@ -236,8 +282,60 @@ impl Db {
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 
+    // ---- generic items ----
+
+    fn write_item(&self, it: &Item) -> Result<()> {
+        let rev = self.next_rev()?;
+        self.conn.execute(
+            "INSERT INTO items(kind,id,k1,k2,data,updated_at,device,deleted,rev) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)
+             ON CONFLICT(kind,id) DO UPDATE SET k1=excluded.k1,k2=excluded.k2,data=excluded.data,
+               updated_at=excluded.updated_at,device=excluded.device,deleted=excluded.deleted,rev=excluded.rev",
+            params![
+                it.kind, it.id, it.k1, it.k2, serde_json::to_string(&it.data)?, it.updated_at, it.device,
+                it.deleted as i64, rev
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Saves a locally edited item, stamping it as the newest version.
+    pub fn put_item(&self, it: &mut Item) -> Result<()> {
+        let prev = self.get_item(&it.kind, &it.id)?.map_or(0, |p| p.updated_at);
+        it.updated_at = now_ms().max(prev + 1);
+        it.device = self.device.clone();
+        self.write_item(it)
+    }
+
+    pub fn get_item(&self, kind: &str, id: &str) -> Result<Option<Item>> {
+        Ok(self
+            .conn
+            .query_row("SELECT * FROM items WHERE kind=?1 AND id=?2", [kind, id], row_to_item)
+            .optional()?)
+    }
+
+    /// Live items of a kind, optionally narrowed by `k1` and a `k2` range (inclusive).
+    pub fn items(&self, kind: &str, k1: Option<&str>, k2: Option<(&str, &str)>) -> Result<Vec<Item>> {
+        let (lo, hi) = k2.unwrap_or(("", "\u{10FFFF}"));
+        let mut stmt = self.conn.prepare(
+            "SELECT * FROM items WHERE kind=?1 AND deleted=0 AND (?2 IS NULL OR k1=?2) AND k2 >= ?3 AND k2 <= ?4
+             ORDER BY k2, id",
+        )?;
+        let rows = stmt.query_map(params![kind, k1, lo, hi], row_to_item)?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
+    pub fn first_item_rev_after(&self, rev: i64) -> Result<Option<i64>> {
+        Ok(self.conn.query_row("SELECT MIN(rev) FROM items WHERE rev > ?1", [rev], |r| r.get(0))?)
+    }
+
+    pub fn items_since(&self, rev: i64) -> Result<Vec<Item>> {
+        let mut stmt = self.conn.prepare("SELECT * FROM items WHERE rev > ?1")?;
+        let rows = stmt.query_map([rev], row_to_item)?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
     /// Applies remote rows that are newer than ours. Returns how many changed.
-    pub fn apply_remote(&self, reminders: &[Reminder], ledger: &[LedgerEntry]) -> Result<usize> {
+    pub fn apply_remote(&self, reminders: &[Reminder], ledger: &[LedgerEntry], items: &[Item]) -> Result<usize> {
         let mut changed = 0;
         self.conn.execute_batch("BEGIN")?;
         let result = (|| -> Result<()> {
@@ -255,6 +353,13 @@ impl Db {
                     .optional()?;
                 if mine.is_none_or(|m| newer(e.updated_at, &e.device, m.updated_at, &m.device)) {
                     self.write_ledger(e)?;
+                    changed += 1;
+                }
+            }
+            for it in items {
+                let mine = self.get_item(&it.kind, &it.id)?;
+                if mine.is_none_or(|m| newer(it.updated_at, &it.device, m.updated_at, &m.device)) {
+                    self.write_item(it)?;
                     changed += 1;
                 }
             }

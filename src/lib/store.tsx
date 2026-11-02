@@ -1,9 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { api, type Reminder, type ReminderInput, type RewardEvent, type Snapshot } from "./api";
+import { api, type DoseSlot, type Entry, type Med, type MedInput, type Reminder, type ReminderInput, type RewardEvent, type Snapshot } from "./api";
 import { defaultSettings, type Settings } from "./settings";
 import { configureSound, sounds } from "./sound";
-import { native, pushNativeState } from "./native";
+import { DOSE_PREFIX, native, pushNativeState } from "./native";
 import { tomorrow } from "./dates";
 
 export type Toast = { id: number; text: string; undo?: () => void };
@@ -28,6 +28,15 @@ interface Store {
   moveTo: (r: Reminder, date: string) => Promise<void>;
   remove: (r: Reminder) => Promise<void>;
   toast: (text: string, undo?: () => void) => void;
+  saveMed: (input: MedInput) => Promise<Med | null>;
+  deleteMed: (m: Med) => Promise<void>;
+  addStock: (m: Med, amount: number) => Promise<void>;
+  takeDose: (d: DoseSlot) => Promise<void>;
+  takeExtra: (m: Med, amount: number) => Promise<void>;
+  skipDose: (d: DoseSlot) => Promise<void>;
+  undoDose: (d: DoseSlot) => Promise<void>;
+  saveEntry: (e: Entry) => Promise<boolean>;
+  deleteEntry: (e: Entry) => Promise<void>;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -60,7 +69,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     try {
       const s = await api.snapshot();
       setSnap(s);
-      void pushNativeState(s.reminders, settingsRef.current);
+      void pushNativeState(s, settingsRef.current);
     } catch (e) {
       console.error(e);
     }
@@ -81,7 +90,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const applyPending = useCallback(async () => {
     const actions = await native.takePendingActions().catch(() => []);
     for (const a of actions) {
-      if (a.type === "complete") await api.complete(a.id).catch(() => null);
+      if (a.type !== "complete") continue;
+      if (a.id.startsWith(DOSE_PREFIX)) await api.takeDose(a.id.slice(DOSE_PREFIX.length)).catch(() => null);
+      else await api.complete(a.id).catch(() => null);
     }
     if (actions.length) await refresh();
   }, [refresh]);
@@ -136,7 +147,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         settingsRef.current = next;
         configureSound({ enabled: next.sound, volume: next.volume });
         void api.setSettings(next);
-        if (snap) void pushNativeState(snap.reminders, next);
+        if (snap) void pushNativeState(snap, next);
         return next;
       });
     },
@@ -206,6 +217,66 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           fail(e);
         }
       },
+      saveMed: async (input) => {
+        try {
+          const m = await api.saveMed(input);
+          await refresh();
+          return m;
+        } catch (e) {
+          fail(e);
+          return null;
+        }
+      },
+      deleteMed: async (m) => {
+        try {
+          await api.deleteMed(m.id);
+          await refresh();
+          toast(`Removed ${m.name}. Its history stays.`);
+        } catch (e) {
+          fail(e);
+        }
+      },
+      addStock: async (m, amount) => {
+        try {
+          await api.addMedStock(m.id, amount);
+          sounds.tap();
+          await refresh();
+        } catch (e) {
+          fail(e);
+        }
+      },
+      takeDose: (d) => run(api.takeDose(d.id)),
+      takeExtra: (m, amount) => run(api.takeExtraDose(m.id, amount)),
+      skipDose: async (d) => {
+        try {
+          await api.skipDose(d.id);
+          sounds.tap();
+          await refresh();
+          toast(`Skipped ${d.name}`, () => void api.undoDose(d.id).then(refresh));
+        } catch (e) {
+          fail(e);
+        }
+      },
+      undoDose: (d) => run(api.undoDose(d.id)),
+      saveEntry: async (e) => {
+        try {
+          reward(await api.saveEntry(e));
+          await refresh();
+          return true;
+        } catch (err) {
+          fail(err);
+          return false;
+        }
+      },
+      deleteEntry: async (e) => {
+        try {
+          await api.deleteEntry(e.id);
+          await refresh();
+          toast(`Removed ${e.name}`, () => void api.saveEntry(e).then(refresh));
+        } catch (err) {
+          fail(err);
+        }
+      },
       remove: async (r) => {
         try {
           await api.remove(r.id);
@@ -220,7 +291,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       },
     };
-  }, [snap, settings, rewards, toasts, nag, systemReduce, refresh, updateSettings, toast, fail, run]);
+  }, [snap, settings, rewards, toasts, nag, systemReduce, refresh, updateSettings, toast, fail, run, reward]);
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

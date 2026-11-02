@@ -31,6 +31,13 @@ It's designed with AuDHD in mind: see [docs/AUDHD_RESEARCH.md](docs/AUDHD_RESEAR
     from a library of 170 ADHD-friendly breakdowns, and you add them with one tap.
   - Exact repeats reuse your last value. If the model isn't downloaded or is
     switched off, a keyword estimate is used instead.
+- **Medicine.** Add what you take, with its shape and colour, dose, and schedule
+  (every day, every few days, some days of the week, on/off cycles, or when
+  needed). Due doses come before everything else: on Today, in the chime and on
+  the unlock screen, until they're taken or skipped. Each dose earns seeds, with
+  a little extra when it's on time. It counts what's left and warns before you
+  run out, and keeps a health diary of mood, symptoms and readings like blood
+  pressure. Export and import it all from Settings.
 - **A gentle chime** every 15 minutes while things are waiting (or 30, an hour,
   or off). It stays silent during quiet hours.
 - **Android:**

@@ -352,12 +352,12 @@ mod tests {
         let a = db();
         let b = db();
         let r = upsert(&a, input(1)).unwrap();
-        b.apply_remote(&a.reminders_since(0).unwrap(), &a.ledger_since(0).unwrap()).unwrap();
+        b.apply_remote(&a.reminders_since(0).unwrap(), &a.ledger_since(0).unwrap(), &[]).unwrap();
         complete(&b, &r.id, false).unwrap();
-        a.apply_remote(&b.reminders_since(0).unwrap(), &b.ledger_since(0).unwrap()).unwrap();
+        a.apply_remote(&b.reminders_since(0).unwrap(), &b.ledger_since(0).unwrap(), &[]).unwrap();
         assert_eq!(a.get_reminder(&r.id).unwrap().unwrap().status, "done");
         assert_eq!(a.total_xp().unwrap(), b.total_xp().unwrap());
         // Re-applying is a no-op.
-        assert_eq!(a.apply_remote(&b.reminders_since(0).unwrap(), &b.ledger_since(0).unwrap()).unwrap(), 0);
+        assert_eq!(a.apply_remote(&b.reminders_since(0).unwrap(), &b.ledger_since(0).unwrap(), &[]).unwrap(), 0);
     }
 }

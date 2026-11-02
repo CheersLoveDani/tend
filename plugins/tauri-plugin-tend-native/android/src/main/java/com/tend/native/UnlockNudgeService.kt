@@ -127,7 +127,7 @@ class UnlockNudgeService : Service() {
       stopSelf()
       return
     }
-    if (state.isQuietNow()) {
+    if (state.isQuietFor()) {
       Log.i("TendNative", "unlock: quiet hours")
       return
     }
