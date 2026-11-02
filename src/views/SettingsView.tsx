@@ -337,6 +337,17 @@ export function SettingsView() {
       </Group>
 
       <Group title="Reminders">
+        <Choice
+          label="Chime while things wait"
+          value={String(s.chimeMinutes)}
+          onChange={(v) => set({ chimeMinutes: Number(v) })}
+          options={[
+            { value: "0", label: "Off" },
+            { value: "15", label: "15 min" },
+            { value: "30", label: "30 min" },
+            { value: "60", label: "Hour" },
+          ]}
+        />
         {isAndroid && (
           <>
             <Toggle
@@ -353,14 +364,14 @@ export function SettingsView() {
             />
             {s.nagOnUnlock && (
               <Choice
-                label="At most every"
-                value={String(s.nagCooldownMinutes)}
-                onChange={(v) => set({ nagCooldownMinutes: Number(v) })}
+                label="Show it"
+                value={String(s.nagEvery < 0 && s.chimeMinutes === 0 ? 30 : s.nagEvery)}
+                onChange={(v) => set({ nagEvery: Number(v) })}
                 options={[
-                  { value: "0", label: "Unlock" },
+                  ...(s.chimeMinutes > 0 ? [{ value: "-1", label: "Each chime" }] : []),
+                  { value: "0", label: "Every unlock" },
                   { value: "30", label: "30 min" },
                   { value: "60", label: "Hour" },
-                  { value: "180", label: "3 hours" },
                 ]}
               />
             )}
@@ -372,18 +383,6 @@ export function SettingsView() {
             hint="Tend waits quietly in the tray so reminders arrive on time."
             checked={autostart}
             onChange={(v) => void (v ? enableAutostart() : disableAutostart()).then(() => setAutostart(v)).catch((e) => toast(String(e)))}
-          />
-        )}
-        {!isAndroid && (
-          <Choice
-            label="Gentle nudge while things wait"
-            value={String(s.desktopNudgeHours)}
-            onChange={(v) => set({ desktopNudgeHours: Number(v) })}
-            options={[
-              { value: "0", label: "Off" },
-              { value: "1", label: "Hourly" },
-              { value: "3", label: "3 hours" },
-            ]}
           />
         )}
         <Toggle

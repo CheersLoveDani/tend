@@ -18,6 +18,11 @@
             android:name="com.tend.native.ReminderAlarmReceiver"
             android:exported="false" />
 
+        <!-- The gentle periodic "still waiting" chime. -->
+        <receiver
+            android:name="com.tend.native.ChimeReceiver"
+            android:exported="false" />
+
         <!-- "Done" / "Snooze 15 min" notification buttons. -->
         <receiver
             android:name="com.tend.native.ReminderActionReceiver"

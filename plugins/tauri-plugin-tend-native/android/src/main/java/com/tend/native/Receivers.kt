@@ -15,6 +15,14 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
   }
 }
 
+/** Time for the gentle "still waiting" chime. */
+class ChimeReceiver : BroadcastReceiver() {
+  override fun onReceive(context: Context, intent: Intent) {
+    if (intent.action != TendIds.ACTION_CHIME) return
+    TendEngine.onChime(context)
+  }
+}
+
 /** "Done" / "Snooze 15 min" buttons on a reminder notification. */
 class ReminderActionReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {

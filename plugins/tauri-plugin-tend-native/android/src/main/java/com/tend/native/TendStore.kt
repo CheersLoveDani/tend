@@ -12,6 +12,8 @@ object TendStore {
   private const val KEY_SCHEDULED_IDS = "scheduled_alarm_ids"
   private const val KEY_PENDING_ACTIONS = "pending_actions"
   private const val KEY_LAST_NAG_AT = "last_nag_at"
+  private const val KEY_LAST_CHIME_AT = "last_chime_at"
+  private const val KEY_NEXT_CHIME_AT = "next_chime_at"
 
   private fun prefs(ctx: Context): SharedPreferences =
     ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -82,5 +84,23 @@ object TendStore {
   @Synchronized
   fun setLastNagAt(ctx: Context, at: Long) {
     prefs(ctx).edit().putLong(KEY_LAST_NAG_AT, at).apply()
+  }
+
+  /** When a chime or timed reminder last alerted the user. */
+  @Synchronized
+  fun lastChimeAt(ctx: Context): Long = prefs(ctx).getLong(KEY_LAST_CHIME_AT, 0L)
+
+  @Synchronized
+  fun setLastChimeAt(ctx: Context, at: Long) {
+    prefs(ctx).edit().putLong(KEY_LAST_CHIME_AT, at).apply()
+  }
+
+  /** When the next chime is scheduled (0 = none). */
+  @Synchronized
+  fun nextChimeAt(ctx: Context): Long = prefs(ctx).getLong(KEY_NEXT_CHIME_AT, 0L)
+
+  @Synchronized
+  fun setNextChimeAt(ctx: Context, at: Long) {
+    prefs(ctx).edit().putLong(KEY_NEXT_CHIME_AT, at).apply()
   }
 }

@@ -6,9 +6,11 @@ export interface Settings {
   surpriseBonuses: boolean;
   persistentNotification: boolean;
   nagOnUnlock: boolean;
-  nagCooldownMinutes: number;
+  /** When the unlock screen may show again: -1 = after each chime, 0 = every unlock, else minutes. */
+  nagEvery: number;
   quietHours: { start: string; end: string } | null;
-  desktopNudgeHours: number;
+  /** Gentle notification sound while things are waiting, every N minutes (0 = off). */
+  chimeMinutes: number;
   useModel: boolean;
   autoUpdate: boolean;
   onboarded: boolean;
@@ -22,9 +24,9 @@ export const defaultSettings: Settings = {
   surpriseBonuses: true,
   persistentNotification: true,
   nagOnUnlock: true,
-  nagCooldownMinutes: 30,
+  nagEvery: -1,
   quietHours: { start: "22:30", end: "07:30" },
-  desktopNudgeHours: 3,
+  chimeMinutes: 15,
   useModel: true,
   autoUpdate: true,
   onboarded: false,

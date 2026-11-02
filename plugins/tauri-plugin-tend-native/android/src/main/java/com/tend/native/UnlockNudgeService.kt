@@ -134,11 +134,19 @@ class UnlockNudgeService : Service() {
 
     val now = System.currentTimeMillis()
     val last = TendStore.lastNagAt(this)
-    val cooldownMs = state.nagCooldownMinutes.toLong() * 60_000L
     // `last > now` means the clock went backwards: don't let that block nudges forever.
-    if (last in 1..now && now - last < cooldownMs) {
-      Log.i("TendNative", "unlock: cooldown")
-      return
+    if (state.nagAfterChime) {
+      // Once per chime / reminder: show it if one has sounded since the screen last showed.
+      if (last in 1..now && TendStore.lastChimeAt(this) <= last) {
+        Log.i("TendNative", "unlock: no chime since last nag")
+        return
+      }
+    } else {
+      val cooldownMs = state.nagCooldownMinutes.toLong() * 60_000L
+      if (last in 1..now && now - last < cooldownMs) {
+        Log.i("TendNative", "unlock: cooldown")
+        return
+      }
     }
     TendStore.setLastNagAt(this, now)
 

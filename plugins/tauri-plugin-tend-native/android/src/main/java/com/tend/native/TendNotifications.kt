@@ -16,6 +16,7 @@ object TendNotifications {
   const val CHANNEL_STILL_TO_DO = "tend_still_to_do"
   const val CHANNEL_REMINDERS = "tend_reminders"
   const val CHANNEL_NUDGE = "tend_nudge"
+  const val CHANNEL_CHIME = "tend_chime"
 
   private const val MAX_INBOX_LINES = 6
 
@@ -49,6 +50,14 @@ object TendNotifications {
           description = "Shown after unlocking when the full-screen reminder can't open."
           setSound(null, null)
           enableVibration(false)
+        }
+      )
+    }
+    if (nm.getNotificationChannel(CHANNEL_CHIME) == null) {
+      nm.createNotificationChannel(
+        NotificationChannel(CHANNEL_CHIME, "Gentle chime", NotificationManager.IMPORTANCE_DEFAULT).apply {
+          description = "A soft sound every so often while things are still waiting."
+          setShowBadge(false)
         }
       )
     }
@@ -198,6 +207,39 @@ object TendNotifications {
 
   fun cancelReminder(ctx: Context, id: String) {
     nm(ctx).cancel(TendIds.reminderNotificationId(id))
+  }
+
+  // ---- periodic chime -------------------------------------------------------------------------
+
+  @SuppressLint("MissingPermission")
+  fun postChime(ctx: Context, state: NativeState) {
+    ensureChannels(ctx)
+    val n = state.pending.size
+    val title = countPhrase(n, "still waiting")
+    val text = state.pending.take(3).joinToString(" · ") { it.title }
+    // What shows on a secure lock screen: just the count, never the titles.
+    val publicVersion = baseBuilder(ctx, CHANNEL_CHIME)
+      .setContentTitle(title)
+      .setContentText("Open Tend to see them")
+      .build()
+    val builder = baseBuilder(ctx, CHANNEL_CHIME)
+      .setContentTitle(title)
+      .setContentText(text)
+      .setAutoCancel(true)
+      .setOnlyAlertOnce(false)
+      .setCategory(NotificationCompat.CATEGORY_REMINDER)
+      .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+      .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+      .setPublicVersion(publicVersion)
+      .setLocalOnly(true)
+      // The next chime replaces it anyway; don't leave a stale one behind.
+      .setTimeoutAfter(state.chimeIntervalMs.coerceAtLeast(60_000L))
+    activityPendingIntent(ctx, TendIds.RC_NAG, TendIds.LAUNCH_NAG, null)?.let { builder.setContentIntent(it) }
+    nm(ctx).notify(TendIds.CHIME_NOTIFICATION_ID, builder.build())
+  }
+
+  fun cancelChime(ctx: Context) {
+    nm(ctx).cancel(TendIds.CHIME_NOTIFICATION_ID)
   }
 
   // ---- unlock nudge fallback -------------------------------------------------------------------

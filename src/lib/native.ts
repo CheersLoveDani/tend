@@ -71,7 +71,10 @@ export async function pushNativeState(reminders: Reminder[], s: Settings) {
       alarms,
       persistentNotification: s.persistentNotification,
       nagOnUnlock: s.nagOnUnlock,
-      nagCooldownMinutes: s.nagCooldownMinutes,
+      // "After each chime" needs chimes; without them fall back to at most every 30 min.
+      nagAfterChime: s.nagEvery < 0 && s.chimeMinutes > 0,
+      nagCooldownMinutes: s.nagEvery < 0 ? (s.chimeMinutes > 0 ? 0 : 30) : s.nagEvery,
+      chimeMinutes: s.chimeMinutes,
       quietHours: s.quietHours,
     },
   }).catch((e) => console.warn("native state", e));

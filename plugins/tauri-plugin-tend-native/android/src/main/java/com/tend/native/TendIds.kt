@@ -5,6 +5,7 @@ import android.net.Uri
 object TendIds {
   const val PERSISTENT_NOTIFICATION_ID = 0x7E4D01
   const val NUDGE_NOTIFICATION_ID = 0x7E4D02
+  const val CHIME_NOTIFICATION_ID = 0x7E4D03
 
   const val EXTRA_ACTION = "tend_action"
   const val EXTRA_REMINDER_ID = "tend_reminder_id"
@@ -16,6 +17,7 @@ object TendIds {
   const val LAUNCH_REMINDER = "reminder"
 
   const val ACTION_ALARM = "com.tend.native.action.ALARM"
+  const val ACTION_CHIME = "com.tend.native.action.CHIME"
   const val ACTION_DONE = "com.tend.native.action.DONE"
   const val ACTION_SNOOZE = "com.tend.native.action.SNOOZE"
   const val ACTION_PERSISTENT_DISMISSED = "com.tend.native.action.PERSISTENT_DISMISSED"
@@ -23,6 +25,7 @@ object TendIds {
   const val RC_OPEN = 0x7E4D10
   const val RC_NAG = 0x7E4D11
   const val RC_PERSISTENT_DISMISSED = 0x7E4D12
+  const val RC_CHIME = 0x7E4D13
 
   const val SNOOZE_MS = 15L * 60L * 1000L
 

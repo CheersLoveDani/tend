@@ -137,11 +137,11 @@ fn tick(app: &AppHandle) {
         let _ = app.notification().builder().title(&r.title).body(body).show();
     }
 
-    // Gentle periodic nudge while things are waiting (off when 0).
-    let every_h = ui.get("desktopNudgeHours").and_then(|v| v.as_f64()).unwrap_or(3.0);
-    if every_h > 0.0 && !waiting.is_empty() {
+    // Gentle periodic chime while things are waiting (off when 0).
+    let every_min = ui.get("chimeMinutes").and_then(|v| v.as_f64()).unwrap_or(15.0);
+    if every_min > 0.0 && !waiting.is_empty() {
         let last: i64 = db.setting("lastNudge").ok().flatten().and_then(|s| s.parse().ok()).unwrap_or(0);
-        if now_ms() - last > (every_h * 3_600_000.0) as i64 {
+        if now_ms() - last > (every_min * 60_000.0) as i64 {
             let _ = db.set_setting("lastNudge", &now_ms().to_string());
             if last != 0 {
                 let title = match waiting.len() {

@@ -45,6 +45,60 @@ object TendAlarms {
     AlarmManagerCompat.setAndAllowWhileIdle(am, AlarmManager.RTC_WAKEUP, alarm.at, pi)
   }
 
+  private fun chimeIntent(ctx: Context): Intent =
+    Intent(ctx, ChimeReceiver::class.java).setAction(TendIds.ACTION_CHIME)
+
+  /** One chime at [at]; the receiver schedules the next one. */
+  fun scheduleChime(ctx: Context, at: Long) {
+    val pi = PendingIntent.getBroadcast(
+      ctx,
+      TendIds.RC_CHIME,
+      chimeIntent(ctx),
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    )
+    val am = am(ctx)
+    if (canScheduleExact(ctx)) {
+      try {
+        AlarmManagerCompat.setExactAndAllowWhileIdle(am, AlarmManager.RTC_WAKEUP, at, pi)
+        return
+      } catch (e: SecurityException) {
+        // Fall through to inexact.
+      }
+    }
+    AlarmManagerCompat.setAndAllowWhileIdle(am, AlarmManager.RTC_WAKEUP, at, pi)
+  }
+
+  fun cancelChime(ctx: Context) {
+    val pi = PendingIntent.getBroadcast(
+      ctx,
+      TendIds.RC_CHIME,
+      chimeIntent(ctx),
+      PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+    ) ?: return
+    am(ctx).cancel(pi)
+    pi.cancel()
+  }
+
+  /**
+   * Keep the chime schedule in line with [state] without restarting the countdown on every
+   * state push: an upcoming chime is kept (unless the interval got shorter), otherwise the
+   * next one is a full interval from now.
+   */
+  fun syncChime(ctx: Context, state: NativeState) {
+    if (!state.wantsChime) {
+      cancelChime(ctx)
+      TendStore.setNextChimeAt(ctx, 0L)
+      TendNotifications.cancelChime(ctx)
+      return
+    }
+    val now = System.currentTimeMillis()
+    val next = TendStore.nextChimeAt(ctx)
+    val at = if (next > now && next - now <= state.chimeIntervalMs) next else state.nextChimeAfter(now)
+    // Alarms don't survive a reboot, so always (re)register. Same request code: this replaces.
+    scheduleChime(ctx, at)
+    TendStore.setNextChimeAt(ctx, at)
+  }
+
   fun cancel(ctx: Context, id: String) {
     val pi = PendingIntent.getBroadcast(
       ctx,

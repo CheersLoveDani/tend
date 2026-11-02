@@ -47,7 +47,11 @@ pub struct NativeState {
     #[serde(default)]
     pub nag_on_unlock: bool,
     #[serde(default)]
+    pub nag_after_chime: bool,
+    #[serde(default)]
     pub nag_cooldown_minutes: u32,
+    #[serde(default)]
+    pub chime_minutes: u32,
     #[serde(default)]
     pub quiet_hours: Option<QuietHours>,
 }

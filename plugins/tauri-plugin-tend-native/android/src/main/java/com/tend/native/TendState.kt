@@ -61,6 +61,20 @@ data class QuietHours(val start: String, val end: String) {
     return if (s < e) now in s until e else (now >= s || now < e)
   }
 
+  /** Epoch ms of the next time this window ends, after [fromMs]. */
+  fun nextEnd(fromMs: Long): Long? {
+    val e = minutesOf(end) ?: return null
+    val cal = Calendar.getInstance().apply {
+      timeInMillis = fromMs
+      set(Calendar.HOUR_OF_DAY, e / 60)
+      set(Calendar.MINUTE, e % 60)
+      set(Calendar.SECOND, 0)
+      set(Calendar.MILLISECOND, 0)
+    }
+    if (cal.timeInMillis <= fromMs) cal.add(Calendar.DAY_OF_YEAR, 1)
+    return cal.timeInMillis
+  }
+
   fun toJson(): JSONObject = JSONObject().put("start", start).put("end", end)
 
   companion object {
@@ -80,7 +94,11 @@ data class NativeState(
   val alarms: List<AlarmItem>,
   val persistentNotification: Boolean,
   val nagOnUnlock: Boolean,
+  /** Show the unlock screen once after each chime / reminder, instead of on a cooldown. */
+  val nagAfterChime: Boolean,
   val nagCooldownMinutes: Int,
+  /** Sound a gentle notification every N minutes while things are waiting (0 = off). */
+  val chimeMinutes: Int,
   val quietHours: QuietHours?
 ) {
   /** The unlock listener only makes sense when there is something to nudge about. */
@@ -88,7 +106,21 @@ data class NativeState(
 
   val wantsPersistentNotification: Boolean get() = persistentNotification && pending.isNotEmpty()
 
+  val wantsChime: Boolean get() = chimeMinutes > 0 && pending.isNotEmpty()
+
+  val chimeIntervalMs: Long get() = chimeMinutes.toLong() * 60_000L
+
   fun isQuietNow(): Boolean = quietHours?.contains() ?: false
+
+  fun isQuietAt(ms: Long): Boolean =
+    quietHours?.contains(Calendar.getInstance().apply { timeInMillis = ms }) ?: false
+
+  /** The next chime slot after [fromMs], pushed past quiet hours. */
+  fun nextChimeAfter(fromMs: Long): Long {
+    val at = fromMs + chimeIntervalMs
+    if (!isQuietAt(at)) return at
+    return quietHours?.nextEnd(at) ?: at
+  }
 
   fun toJson(): JSONObject {
     val p = JSONArray()
@@ -100,12 +132,14 @@ data class NativeState(
       .put("alarms", a)
       .put("persistentNotification", persistentNotification)
       .put("nagOnUnlock", nagOnUnlock)
+      .put("nagAfterChime", nagAfterChime)
       .put("nagCooldownMinutes", nagCooldownMinutes)
+      .put("chimeMinutes", chimeMinutes)
       .put("quietHours", quietHours?.toJson() ?: JSONObject.NULL)
   }
 
   companion object {
-    val EMPTY = NativeState(emptyList(), emptyList(), false, false, 0, null)
+    val EMPTY = NativeState(emptyList(), emptyList(), false, false, false, 0, 0, null)
 
     fun fromJson(o: JSONObject): NativeState {
       val pending = mutableListOf<PendingItem>()
@@ -126,7 +160,9 @@ data class NativeState(
         alarms = alarms.filter { it.id.isNotEmpty() },
         persistentNotification = o.optBoolean("persistentNotification", false),
         nagOnUnlock = o.optBoolean("nagOnUnlock", false),
+        nagAfterChime = o.optBoolean("nagAfterChime", false),
         nagCooldownMinutes = o.optInt("nagCooldownMinutes", 0).coerceAtLeast(0),
+        chimeMinutes = o.optInt("chimeMinutes", 0).coerceAtLeast(0),
         quietHours = quiet
       )
     }

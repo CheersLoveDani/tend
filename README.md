@@ -31,14 +31,17 @@ It's designed with AuDHD in mind: see [docs/AUDHD_RESEARCH.md](docs/AUDHD_RESEAR
     from a library of 170 ADHD-friendly breakdowns, and you add them with one tap.
   - Exact repeats reuse your last value. If the model isn't downloaded or is
     switched off, a keyword estimate is used instead.
+- **A gentle chime** every 15 minutes while things are waiting (or 30, an hour,
+  or off). It stays silent during quiet hours.
 - **Android:**
   - A quiet "still to do" notification that comes back if you swipe it away.
   - Exact alarms with *Done* and *Snooze 15 min* buttons.
   - A "before you dive in" screen when you unlock your phone while things are
-    waiting. It has a cooldown, quiet hours, and a one-tap way to pause it.
+    waiting. By default it shows once after each chime; it can instead show on
+    every unlock or at most every 30 minutes or hour. It respects quiet hours
+    and has a one-tap way to pause it.
 - **Desktop:**
   - Lives in the tray and fires due reminders.
-  - Optional gentle nudge every few hours while things are waiting.
   - Can start with Windows.
 - **Updates itself.** It checks this repository's releases at launch and every
   six hours, downloads a new version in the background, then asks before
@@ -52,7 +55,8 @@ It's designed with AuDHD in mind: see [docs/AUDHD_RESEARCH.md](docs/AUDHD_RESEAR
 ## Battery
 
 - Nothing on the phone polls.
-- Alarms use `AlarmManager`.
+- Alarms use `AlarmManager`. The chime is one alarm at a time, only while
+  something is waiting, and it skips quiet hours.
 - The unlock screen is a sleeping foreground service. It holds a single
   `USER_PRESENT` receiver, with no threads, timers or wakelocks, and stops as soon
   as nothing is waiting.

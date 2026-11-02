@@ -13,6 +13,7 @@ object TendEngine {
     val ctx = context.applicationContext
     TendNotifications.ensureChannels(ctx)
     TendAlarms.sync(ctx, state.alarms, fireMissedAlarms)
+    TendAlarms.syncChime(ctx, state)
     refreshSurface(ctx, state)
   }
 
@@ -67,7 +68,32 @@ object TendEngine {
       TendStore.saveState(ctx, state.copy(alarms = state.alarms.filter { it.id != id }))
     }
     TendStore.removeScheduledAlarmId(ctx, id)
-    TendNotifications.postReminder(ctx, id, title, body, silent = state.isQuietNow())
+    val quiet = state.isQuietNow()
+    TendNotifications.postReminder(ctx, id, title, body, silent = quiet)
+    if (!quiet) TendStore.setLastChimeAt(ctx, System.currentTimeMillis())
+  }
+
+  /** The periodic chime: sound once if things are waiting, then line up the next one. */
+  @Synchronized
+  fun onChime(context: Context) {
+    val ctx = context.applicationContext
+    val state = TendStore.loadState(ctx)
+    TendStore.setNextChimeAt(ctx, 0L)
+    if (!state.wantsChime) {
+      TendNotifications.cancelChime(ctx)
+      return
+    }
+    val now = System.currentTimeMillis()
+    if (!state.isQuietNow()) {
+      TendNotifications.postChime(ctx, state)
+      TendStore.setLastChimeAt(ctx, now)
+    }
+    val next = state.nextChimeAfter(now)
+    TendAlarms.scheduleChime(ctx, next)
+    TendStore.setNextChimeAt(ctx, next)
+    // An exact alarm may start a foreground service: bring the unlock listener back if the
+    // system killed it, so the unlock screen keeps working without opening the app.
+    refreshSurface(ctx, state)
   }
 
   @Synchronized
@@ -83,6 +109,7 @@ object TendEngine {
     TendAlarms.cancel(ctx, id)
     TendStore.removeScheduledAlarmId(ctx, id)
     TendNotifications.cancelReminder(ctx, id)
+    TendAlarms.syncChime(ctx, next)
     refreshSurface(ctx, next)
     TendNativePlugin.notifyPendingActions(ctx)
   }
