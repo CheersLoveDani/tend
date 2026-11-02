@@ -44,4 +44,8 @@ impl<R: Runtime> TendNative<R> {
     pub fn install_update(&self) -> crate::Result<()> {
         Ok(())
     }
+
+    pub fn move_to_back(&self) -> crate::Result<()> {
+        Ok(())
+    }
 }

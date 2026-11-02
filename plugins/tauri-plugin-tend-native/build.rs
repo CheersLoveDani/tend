@@ -6,6 +6,7 @@ const COMMANDS: &[&str] = &[
     "take_pending_actions",
     "download_update",
     "install_update",
+    "move_to_back",
     // Needed so `addPluginListener('tend-native', ...)` passes the ACL.
     "register_listener",
     "remove_listener",

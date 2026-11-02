@@ -11,6 +11,7 @@ Allows all Tend native commands and the plugin event listeners (`action`, `pendi
 - `allow-take-pending-actions`
 - `allow-download-update`
 - `allow-install-update`
+- `allow-move-to-back`
 - `allow-register-listener`
 - `allow-remove-listener`
 
@@ -97,6 +98,32 @@ Enables the install_update command without any pre-configured scope.
 <td>
 
 Denies the install_update command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`tend-native:allow-move-to-back`
+
+</td>
+<td>
+
+Enables the move_to_back command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`tend-native:deny-move-to-back`
+
+</td>
+<td>
+
+Denies the move_to_back command without any pre-configured scope.
 
 </td>
 </tr>

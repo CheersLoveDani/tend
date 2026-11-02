@@ -331,6 +331,18 @@
           "markdownDescription": "Denies the install_update command without any pre-configured scope."
         },
         {
+          "description": "Enables the move_to_back command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-move-to-back",
+          "markdownDescription": "Enables the move_to_back command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the move_to_back command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-move-to-back",
+          "markdownDescription": "Denies the move_to_back command without any pre-configured scope."
+        },
+        {
           "description": "Enables the register_listener command without any pre-configured scope.",
           "type": "string",
           "const": "allow-register-listener",
@@ -403,10 +415,10 @@
           "markdownDescription": "Denies the take_pending_actions command without any pre-configured scope."
         },
         {
-          "description": "Allows all Tend native commands and the plugin event listeners (`action`, `pending-actions`).\n#### This default permission set includes:\n\n- `allow-set-state`\n- `allow-get-permissions`\n- `allow-request-permission`\n- `allow-take-launch-action`\n- `allow-take-pending-actions`\n- `allow-download-update`\n- `allow-install-update`\n- `allow-register-listener`\n- `allow-remove-listener`",
+          "description": "Allows all Tend native commands and the plugin event listeners (`action`, `pending-actions`).\n#### This default permission set includes:\n\n- `allow-set-state`\n- `allow-get-permissions`\n- `allow-request-permission`\n- `allow-take-launch-action`\n- `allow-take-pending-actions`\n- `allow-download-update`\n- `allow-install-update`\n- `allow-move-to-back`\n- `allow-register-listener`\n- `allow-remove-listener`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Allows all Tend native commands and the plugin event listeners (`action`, `pending-actions`).\n#### This default permission set includes:\n\n- `allow-set-state`\n- `allow-get-permissions`\n- `allow-request-permission`\n- `allow-take-launch-action`\n- `allow-take-pending-actions`\n- `allow-download-update`\n- `allow-install-update`\n- `allow-register-listener`\n- `allow-remove-listener`"
+          "markdownDescription": "Allows all Tend native commands and the plugin event listeners (`action`, `pending-actions`).\n#### This default permission set includes:\n\n- `allow-set-state`\n- `allow-get-permissions`\n- `allow-request-permission`\n- `allow-take-launch-action`\n- `allow-take-pending-actions`\n- `allow-download-update`\n- `allow-install-update`\n- `allow-move-to-back`\n- `allow-register-listener`\n- `allow-remove-listener`"
         }
       ]
     }

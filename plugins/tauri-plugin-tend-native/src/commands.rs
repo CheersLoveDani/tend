@@ -47,3 +47,9 @@ pub(crate) async fn download_update<R: Runtime>(app: AppHandle<R>, url: String) 
 pub(crate) async fn install_update<R: Runtime>(app: AppHandle<R>) -> Result<()> {
     app.tend_native().install_update()
 }
+
+/// Sends the app to the background, like Android's own back on a home screen.
+#[command]
+pub(crate) async fn move_to_back<R: Runtime>(app: AppHandle<R>) -> Result<()> {
+    app.tend_native().move_to_back()
+}

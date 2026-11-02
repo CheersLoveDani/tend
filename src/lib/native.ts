@@ -108,6 +108,8 @@ export async function pushNativeState(snap: Snapshot, s: Settings) {
 }
 
 export const native = {
+  /** Leave to the home screen without closing, like Android's own back. */
+  moveToBack: () => (isAndroid ? invoke(`${P}move_to_back`).catch(() => null) : Promise.resolve(null)),
   permissions: () =>
     isAndroid
       ? invoke<Permissions>(`${P}get_permissions`)

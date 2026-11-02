@@ -66,4 +66,11 @@ impl<R: Runtime> TendNative<R> {
             .map(|_| ())
             .map_err(Into::into)
     }
+
+    pub fn move_to_back(&self) -> crate::Result<()> {
+        self.0
+            .run_mobile_plugin::<serde_json::Value>("moveToBack", ())
+            .map(|_| ())
+            .map_err(Into::into)
+    }
 }

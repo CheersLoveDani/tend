@@ -50,6 +50,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             commands::take_pending_actions,
             commands::download_update,
             commands::install_update,
+            commands::move_to_back,
         ])
         .setup(|app, api| {
             #[cfg(mobile)]

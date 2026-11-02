@@ -141,6 +141,13 @@ class TendNativePlugin(private val activity: Activity) : Plugin(activity) {
     invoke.resolve(action ?: JSObject().put("action", JSONObject.NULL))
   }
 
+  /** Back on the app's home screen: leave like Android does, keeping the app alive. */
+  @Command
+  fun moveToBack(invoke: Invoke) {
+    activity.runOnUiThread { activity.moveTaskToBack(true) }
+    invoke.resolve()
+  }
+
   @Command
   fun takePendingActions(invoke: Invoke) {
     invoke.resolve(JSObject().put("actions", TendStore.takePendingActions(activity)))

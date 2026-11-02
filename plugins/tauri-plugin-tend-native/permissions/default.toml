@@ -10,6 +10,7 @@ permissions = [
   "allow-take-pending-actions",
   "allow-download-update",
   "allow-install-update",
+  "allow-move-to-back",
   "allow-register-listener",
   "allow-remove-listener",
 ]

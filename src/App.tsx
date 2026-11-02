@@ -19,6 +19,8 @@ import { Calendar, Gear, Pill, Plus, Seed, Sprout, Sun } from "./components/Icon
 import { sounds } from "./lib/sound";
 import { isAndroid } from "./lib/api";
 import { appUpdater, appVersion, type UpdateState } from "./lib/updater";
+import { native } from "./lib/native";
+import { onBackButtonPress } from "@tauri-apps/api/app";
 
 type Tab = "today" | "meds" | "upcoming" | "garden" | "settings";
 
@@ -120,13 +122,53 @@ function UpdateOffer({ version, onClose }: { version: string; onClose: () => voi
 function Shell() {
   const store = useStore();
   const { snap, settings, reduceMotion } = store;
-  const [tab, setTab] = useState<Tab>("today");
+  const { updating, offer, dismissOffer } = useAppUpdates(settings.autoUpdate);
+  const [tab, setTabNow] = useState<Tab>("today");
+  // Tabs visited before this one, so back retraces them.
+  const tabHistory = useRef<Tab[]>([]);
+  const setTab = (next: Tab) => {
+    if (next === tab) return;
+    tabHistory.current = [...tabHistory.current.filter((t) => t !== tab), tab].slice(-20);
+    setTabNow(next);
+  };
   const [editing, setEditing] = useState<{ r: Reminder | null; date?: string } | null>(null);
   const [medEditing, setMedEditing] = useState<{ med: Med | null } | null>(null);
   const [medOpen, setMedOpen] = useState<string | null>(null);
   const [entry, setEntry] = useState<{ kind: EntryKind; initial?: Entry } | null>(null);
   const sheetOpen = !!(editing || medEditing || medOpen || entry);
-  const { updating, offer, dismissOffer } = useAppUpdates(settings.autoUpdate);
+  const offerShown = !!offer && settings.onboarded && !sheetOpen && !store.nag;
+
+  // Back closes whatever is on top, then retraces tabs, then goes home. Only on Today with
+  // nothing open does it leave the app (to the background, the way Android does).
+  const back = useRef<() => void>(() => {});
+  back.current = () => {
+    if (!settings.onboarded) return void native.moveToBack();
+    if (store.nag) return store.setNag(false);
+    if (offerShown) return dismissOffer();
+    if (entry) return setEntry(null);
+    if (medEditing) return setMedEditing(null);
+    if (editing) return setEditing(null);
+    if (medOpen) return setMedOpen(null);
+    const prev = tabHistory.current.pop();
+    if (prev) return setTabNow(prev);
+    if (tab !== "today") return setTabNow("today");
+    void native.moveToBack();
+  };
+  useEffect(() => {
+    if (!isAndroid) return;
+    const sub = onBackButtonPress(() => back.current());
+    return () => void sub.then((s) => s.unregister()).catch(() => null);
+  }, []);
+  // The mouse's back button does the same on desktop (short of leaving).
+  useEffect(() => {
+    const onMouse = (e: MouseEvent) => {
+      if (e.button !== 3) return;
+      e.preventDefault();
+      if (sheetOpen || store.nag || tabHistory.current.length || tab !== "today") back.current();
+    };
+    window.addEventListener("mouseup", onMouse);
+    return () => window.removeEventListener("mouseup", onMouse);
+  }, [sheetOpen, store.nag, tab]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -254,7 +296,7 @@ function Shell() {
       <AnimatePresence>{!settings.onboarded && <Welcome key="welcome" />}</AnimatePresence>
       {/* Never interrupts: the offer waits until nothing else is open. */}
       <AnimatePresence>
-        {offer && settings.onboarded && !sheetOpen && !store.nag && <UpdateOffer key="update" version={offer} onClose={dismissOffer} />}
+        {offerShown && <UpdateOffer key="update" version={offer!} onClose={dismissOffer} />}
       </AnimatePresence>
       <Toasts />
       <RewardLayer />
