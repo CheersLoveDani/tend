@@ -16,7 +16,8 @@ import { Editor } from "./components/Editor";
 import { RewardLayer } from "./components/RewardLayer";
 import { Tree } from "./components/Tree";
 import { Sky } from "./components/Sky";
-import { todaysWeather } from "./lib/weather";
+import { pickQuote, todaysWeather, WEATHER_EVENT, type Weather } from "./lib/weather";
+import type { WeatherMoment } from "./views/Garden";
 import { Calendar, Gear, Pill, Plus, Seed, Sprout, Sun } from "./components/Icons";
 import { sounds } from "./lib/sound";
 import { isAndroid } from "./lib/api";
@@ -138,6 +139,21 @@ function Shell() {
   const [medOpen, setMedOpen] = useState<string | null>(null);
   const [entry, setEntry] = useState<{ kind: EntryKind; initial?: Entry } | null>(null);
   const sheetOpen = !!(editing || medEditing || medOpen || entry);
+  // Logging the weather inside takes you to the garden to watch the tree respond.
+  const [moment, setMoment] = useState<WeatherMoment | null>(null);
+  const goGarden = useRef<(w: Weather) => void>(() => {});
+  goGarden.current = (w) => {
+    setTab("garden");
+    setMoment({ key: Date.now(), weather: w, quote: pickQuote(w) });
+  };
+  useEffect(() => {
+    if (tab !== "garden") setMoment(null);
+  }, [tab]);
+  useEffect(() => {
+    const on = (e: Event) => goGarden.current((e as CustomEvent<Weather>).detail);
+    window.addEventListener(WEATHER_EVENT, on);
+    return () => window.removeEventListener(WEATHER_EVENT, on);
+  }, []);
   const offerShown = !!offer && settings.onboarded && !sheetOpen && !store.nag;
 
   // Back closes whatever is on top, then retraces tabs, then goes home. Only on Today with
@@ -246,7 +262,7 @@ function Shell() {
             {tab === "today" && <Today onEdit={edit} onAdd={() => add()} onOpenMed={setMedOpen} />}
             {tab === "meds" && <Meds onAddMed={() => setMedEditing({ med: null })} onOpenMed={setMedOpen} onEntry={(kind, initial) => setEntry({ kind, initial })} />}
             {tab === "upcoming" && <Upcoming onEdit={edit} onAdd={(d) => add(d)} />}
-            {tab === "garden" && <Garden />}
+            {tab === "garden" && <Garden moment={moment} onMomentDone={() => setMoment(null)} />}
             {tab === "settings" && <SettingsView />}
           </motion.div>
         </AnimatePresence>

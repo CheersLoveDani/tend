@@ -1,16 +1,21 @@
 import { motion } from "motion/react";
 import { useStore } from "../lib/store";
-import { WEATHERS, todaysWeather, type Weather } from "../lib/weather";
+import { WEATHERS, WEATHER_EVENT, todaysWeather, type Weather } from "../lib/weather";
 import { sounds } from "../lib/sound";
+import { today, ymd } from "../lib/dates";
 
 /** "What's the weather like in you?" Five honest answers, all of them good for the tree. */
 export function WeatherCheckIn({ compact }: { compact?: boolean }) {
   const store = useStore();
   const current = todaysWeather(store.snap?.entries ?? []);
 
-  const pick = (v: Weather) => {
+  const pick = async (v: Weather) => {
     sounds.tap();
-    void store.saveEntry({ id: "", kind: "mood", name: "Mood", value: v, value2: null, unit: "", note: "", at: Date.now() });
+    // Changing your mind later today updates the same check-in (so seeds come once a day).
+    const t = today();
+    const existing = (store.snap?.entries ?? []).find((e) => e.kind === "mood" && ymd(new Date(e.at)) === t);
+    await store.saveEntry({ id: existing?.id ?? "", kind: "mood", name: "Mood", value: v, value2: null, unit: "", note: "", at: Date.now() });
+    window.dispatchEvent(new CustomEvent(WEATHER_EVENT, { detail: v }));
   };
 
   return (
@@ -22,7 +27,7 @@ export function WeatherCheckIn({ compact }: { compact?: boolean }) {
           aria-checked={current === w.value}
           className={`weather-pick ${current === w.value ? "is-on" : ""}`}
           whileTap={{ scale: 0.9 }}
-          onClick={() => pick(w.value)}
+          onClick={() => void pick(w.value)}
         >
           <span className="weather-icon">{w.icon}</span>
           <span>{w.label}</span>

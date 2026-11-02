@@ -2538,3 +2538,130 @@ select.field-input {
   color: var(--bark-2);
   font-size: 14px;
 }
+
+/* ---------- weather: thunder, bright sun, the tree's response, quotes ---------- */
+.tree-response {
+  transform-origin: 50% 100%;
+}
+.sky-5 .sky-sun {
+  transform: scale(1.25);
+  box-shadow: 0 0 60px 24px color-mix(in srgb, #f6d77a 45%, transparent);
+}
+.sky-5 .sky-glow {
+  background:
+    radial-gradient(circle at 82% 14%, color-mix(in srgb, #f6d77a 50%, transparent), transparent 62%),
+    linear-gradient(180deg, color-mix(in srgb, var(--pollen) 14%, transparent), transparent 80%);
+}
+.sky-4 .sky-glow {
+  background: radial-gradient(circle at 82% 14%, color-mix(in srgb, var(--pollen) 28%, transparent), transparent 58%);
+}
+.sky-2 .sky-sun,
+.sky-1 .sky-sun {
+  opacity: 0;
+}
+.sky-1 .sky-glow {
+  opacity: 1;
+  background: linear-gradient(180deg, color-mix(in srgb, #1d2230 70%, transparent), color-mix(in srgb, var(--dusk) 18%, transparent) 80%);
+}
+.sky-1 .sky-cloud {
+  background: color-mix(in srgb, #2b3040 75%, var(--bark-3));
+}
+.sky-1 .sky-rain span {
+  rotate: 8deg;
+}
+.sky-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  background: #fff;
+  opacity: 0;
+  animation: sky-flash 7s infinite;
+}
+.sky-bolt {
+  position: absolute;
+  z-index: 1;
+  top: 16%;
+  left: 62%;
+  width: 22px;
+  fill: #f6e38a;
+  filter: drop-shadow(0 0 8px #f6e38a);
+  opacity: 0;
+  animation: sky-flash 7s infinite;
+}
+.sky.is-compact .sky-bolt {
+  width: 12px;
+}
+@keyframes sky-flash {
+  0%, 62%, 66%, 70%, 100% {
+    opacity: 0;
+  }
+  63%, 68% {
+    opacity: 0.35;
+  }
+}
+.sky-bolt {
+  animation-name: sky-bolt;
+}
+@keyframes sky-bolt {
+  0%, 62%, 72%, 100% {
+    opacity: 0;
+  }
+  63%, 69% {
+    opacity: 1;
+  }
+}
+[data-reduce-motion] .sky-flash,
+[data-reduce-motion] .sky-bolt {
+  animation: none;
+}
+[data-reduce-motion] .sky-bolt {
+  opacity: 0.9;
+}
+
+.weather-quote {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 14px 0 0;
+  padding: 16px 18px;
+  border-radius: var(--radius-l);
+  background: var(--paper);
+  box-shadow: var(--shadow);
+  border-left: 4px solid var(--moss);
+  cursor: pointer;
+  text-align: left;
+}
+.weather-quote.wq-5,
+.weather-quote.wq-4 {
+  border-left-color: #f6d77a;
+}
+.weather-quote.wq-2,
+.weather-quote.wq-1 {
+  border-left-color: var(--dusk);
+}
+.wq-weather {
+  display: block;
+  font-size: 13.5px;
+  color: var(--bark-2);
+  margin-bottom: 8px;
+}
+.weather-quote blockquote {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.45;
+  font-style: italic;
+  color: var(--bark);
+}
+.weather-quote figcaption {
+  margin-top: 6px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--bark-2);
+}
+.weather-quote figcaption::before {
+  content: "— ";
+}
+.weather-check .weather-pick span:last-child {
+  text-align: center;
+  line-height: 1.15;
+}
