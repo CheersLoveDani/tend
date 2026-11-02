@@ -42,6 +42,11 @@ class RequestPermissionArgs {
 }
 
 @InvokeArg
+class WriteBackupArgs {
+  lateinit var data: String
+}
+
+@InvokeArg
 class DownloadUpdateArgs {
   lateinit var url: String
 }
@@ -139,6 +144,124 @@ class TendNativePlugin(private val activity: Activity) : Plugin(activity) {
       a
     }
     invoke.resolve(action ?: JSObject().put("action", JSONObject.NULL))
+  }
+
+  // ---- backups ---------------------------------------------------------------------------------
+  // One file the user picks once (Google Drive, Files, anywhere with a document provider).
+  // Tend overwrites it each time; Drive keeps its own version history.
+
+  private fun displayName(uri: Uri): String? = try {
+    activity.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
+      if (it.moveToFirst()) it.getString(0) else null
+    }
+  } catch (e: Exception) {
+    null
+  }
+
+  private fun backupUri(): Uri? {
+    val saved = TendStore.backupUri(activity) ?: return null
+    val uri = Uri.parse(saved)
+    // Permission can be revoked (file deleted, account removed): treat that as "not set".
+    val held = activity.contentResolver.persistedUriPermissions.any { it.uri == uri && it.isWritePermission }
+    return if (held) uri else null
+  }
+
+  @Command
+  fun chooseBackupFile(invoke: Invoke) {
+    val intent = Intent(Intent.ACTION_CREATE_DOCUMENT)
+      .addCategory(Intent.CATEGORY_OPENABLE)
+      .setType("application/octet-stream")
+      .putExtra(Intent.EXTRA_TITLE, "tend-backup.tendbak")
+    try {
+      startActivityForResult(invoke, intent, "onBackupFileChosen")
+    } catch (e: ActivityNotFoundException) {
+      invoke.reject("No file picker on this phone")
+    }
+  }
+
+  @ActivityCallback
+  private fun onBackupFileChosen(invoke: Invoke, result: ActivityResult) {
+    val uri = result.data?.data
+    if (result.resultCode != Activity.RESULT_OK || uri == null) {
+      invoke.resolve(JSObject().put("name", backupUri()?.let { displayName(it) } ?: JSONObject.NULL))
+      return
+    }
+    try {
+      activity.contentResolver.takePersistableUriPermission(
+        uri,
+        Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+      )
+    } catch (e: SecurityException) {
+      invoke.reject("That location can't be written to later. Pick another one.")
+      return
+    }
+    TendStore.setBackupUri(activity, uri.toString())
+    invoke.resolve(JSObject().put("name", displayName(uri) ?: "your backup file"))
+  }
+
+  @Command
+  fun backupTarget(invoke: Invoke) {
+    invoke.resolve(JSObject().put("name", backupUri()?.let { displayName(it) ?: "your backup file" } ?: JSONObject.NULL))
+  }
+
+  @Command
+  fun writeBackup(invoke: Invoke) {
+    val data = try {
+      invoke.parseArgs(WriteBackupArgs::class.java).data
+    } catch (e: Exception) {
+      invoke.reject("missing `data`")
+      return
+    }
+    val uri = backupUri()
+    if (uri == null) {
+      invoke.reject("Choose where to keep backups first")
+      return
+    }
+    // Cloud providers can be slow: never write on the main thread.
+    Thread {
+      try {
+        val bytes = android.util.Base64.decode(data, android.util.Base64.DEFAULT)
+        val out = activity.contentResolver.openOutputStream(uri, "wt") ?: throw IllegalStateException("can't open")
+        out.use { it.write(bytes) }
+        invoke.resolve()
+      } catch (e: Exception) {
+        invoke.reject("Couldn't save the backup: ${e.message ?: e.javaClass.simpleName}")
+      }
+    }.start()
+  }
+
+  @Command
+  fun openBackupFile(invoke: Invoke) {
+    val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
+      .addCategory(Intent.CATEGORY_OPENABLE)
+      .setType("*/*")
+    try {
+      startActivityForResult(invoke, intent, "onBackupFileOpened")
+    } catch (e: ActivityNotFoundException) {
+      invoke.reject("No file picker on this phone")
+    }
+  }
+
+  @ActivityCallback
+  private fun onBackupFileOpened(invoke: Invoke, result: ActivityResult) {
+    val uri = result.data?.data
+    if (result.resultCode != Activity.RESULT_OK || uri == null) {
+      invoke.resolve(JSObject().put("data", JSONObject.NULL))
+      return
+    }
+    Thread {
+      try {
+        val bytes = activity.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+          ?: throw IllegalStateException("can't open")
+        invoke.resolve(
+          JSObject()
+            .put("name", displayName(uri) ?: JSONObject.NULL)
+            .put("data", android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP))
+        )
+      } catch (e: Exception) {
+        invoke.reject("Couldn't read that file: ${e.message ?: e.javaClass.simpleName}")
+      }
+    }.start()
   }
 
   /** Back on the app's home screen: leave like Android does, keeping the app alive. */

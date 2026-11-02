@@ -14,6 +14,7 @@ object TendStore {
   private const val KEY_LAST_NAG_AT = "last_nag_at"
   private const val KEY_LAST_CHIME_AT = "last_chime_at"
   private const val KEY_NEXT_CHIME_AT = "next_chime_at"
+  private const val KEY_BACKUP_URI = "backup_uri"
 
   private fun prefs(ctx: Context): SharedPreferences =
     ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -93,6 +94,14 @@ object TendStore {
   @Synchronized
   fun setLastChimeAt(ctx: Context, at: Long) {
     prefs(ctx).edit().putLong(KEY_LAST_CHIME_AT, at).apply()
+  }
+
+  @Synchronized
+  fun backupUri(ctx: Context): String? = prefs(ctx).getString(KEY_BACKUP_URI, null)
+
+  @Synchronized
+  fun setBackupUri(ctx: Context, uri: String?) {
+    prefs(ctx).edit().putString(KEY_BACKUP_URI, uri).apply()
   }
 
   /** When the next chime is scheduled (0 = none). */

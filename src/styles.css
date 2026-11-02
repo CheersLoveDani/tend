@@ -2326,3 +2326,16 @@ select.field-input {
     font-size: 11px;
   }
 }
+
+/* ---------- backup ---------- */
+.row.stack {
+  flex-direction: column;
+  align-items: stretch;
+}
+.pass-form {
+  display: grid;
+  gap: 8px;
+}
+.row-hint.warn {
+  color: var(--fruit);
+}

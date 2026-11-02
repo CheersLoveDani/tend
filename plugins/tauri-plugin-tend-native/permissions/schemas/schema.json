@@ -295,6 +295,30 @@
       "type": "string",
       "oneOf": [
         {
+          "description": "Enables the backup_target command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-backup-target",
+          "markdownDescription": "Enables the backup_target command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the backup_target command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-backup-target",
+          "markdownDescription": "Denies the backup_target command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the choose_backup_file command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-choose-backup-file",
+          "markdownDescription": "Enables the choose_backup_file command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the choose_backup_file command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-choose-backup-file",
+          "markdownDescription": "Denies the choose_backup_file command without any pre-configured scope."
+        },
+        {
           "description": "Enables the download_update command without any pre-configured scope.",
           "type": "string",
           "const": "allow-download-update",
@@ -341,6 +365,18 @@
           "type": "string",
           "const": "deny-move-to-back",
           "markdownDescription": "Denies the move_to_back command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the open_backup_file command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-open-backup-file",
+          "markdownDescription": "Enables the open_backup_file command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the open_backup_file command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-open-backup-file",
+          "markdownDescription": "Denies the open_backup_file command without any pre-configured scope."
         },
         {
           "description": "Enables the register_listener command without any pre-configured scope.",
@@ -415,10 +451,22 @@
           "markdownDescription": "Denies the take_pending_actions command without any pre-configured scope."
         },
         {
-          "description": "Allows all Tend native commands and the plugin event listeners (`action`, `pending-actions`).\n#### This default permission set includes:\n\n- `allow-set-state`\n- `allow-get-permissions`\n- `allow-request-permission`\n- `allow-take-launch-action`\n- `allow-take-pending-actions`\n- `allow-download-update`\n- `allow-install-update`\n- `allow-move-to-back`\n- `allow-register-listener`\n- `allow-remove-listener`",
+          "description": "Enables the write_backup command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-write-backup",
+          "markdownDescription": "Enables the write_backup command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the write_backup command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-write-backup",
+          "markdownDescription": "Denies the write_backup command without any pre-configured scope."
+        },
+        {
+          "description": "Allows all Tend native commands and the plugin event listeners (`action`, `pending-actions`).\n#### This default permission set includes:\n\n- `allow-set-state`\n- `allow-get-permissions`\n- `allow-request-permission`\n- `allow-take-launch-action`\n- `allow-take-pending-actions`\n- `allow-download-update`\n- `allow-install-update`\n- `allow-move-to-back`\n- `allow-choose-backup-file`\n- `allow-backup-target`\n- `allow-write-backup`\n- `allow-open-backup-file`\n- `allow-register-listener`\n- `allow-remove-listener`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Allows all Tend native commands and the plugin event listeners (`action`, `pending-actions`).\n#### This default permission set includes:\n\n- `allow-set-state`\n- `allow-get-permissions`\n- `allow-request-permission`\n- `allow-take-launch-action`\n- `allow-take-pending-actions`\n- `allow-download-update`\n- `allow-install-update`\n- `allow-move-to-back`\n- `allow-register-listener`\n- `allow-remove-listener`"
+          "markdownDescription": "Allows all Tend native commands and the plugin event listeners (`action`, `pending-actions`).\n#### This default permission set includes:\n\n- `allow-set-state`\n- `allow-get-permissions`\n- `allow-request-permission`\n- `allow-take-launch-action`\n- `allow-take-pending-actions`\n- `allow-download-update`\n- `allow-install-update`\n- `allow-move-to-back`\n- `allow-choose-backup-file`\n- `allow-backup-target`\n- `allow-write-backup`\n- `allow-open-backup-file`\n- `allow-register-listener`\n- `allow-remove-listener`"
         }
       ]
     }

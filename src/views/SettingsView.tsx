@@ -7,6 +7,7 @@ import { native, type PermissionKind, type Permissions } from "../lib/native";
 import { sounds } from "../lib/sound";
 import { Sync } from "../components/Icons";
 import { appUpdater, appVersion } from "../lib/updater";
+import { backup, type BackupSource, type BackupStatus } from "../lib/backup";
 import { formatDistanceToNow } from "date-fns";
 import QRCode from "qrcode";
 import { Format, checkPermissions as scanPermissions, requestPermissions as requestScan, scan } from "@tauri-apps/plugin-barcode-scanner";
@@ -131,6 +132,163 @@ function HealthData() {
             />
           </label>
         </span>
+      </div>
+    </>
+  );
+}
+
+/** Encrypted daily backups to a place the user picks, and restoring from one. */
+function BackupSettings() {
+  const { refresh, toast } = useStore();
+  const [status, setStatus] = useState<BackupStatus | null>(null);
+  const [target, setTarget] = useState<string | null>(null);
+  const [pass, setPass] = useState("");
+  const [pass2, setPass2] = useState("");
+  const [changing, setChanging] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [source, setSource] = useState<BackupSource | null>(null);
+  const [restorePass, setRestorePass] = useState("");
+
+  const load = () =>
+    void Promise.all([backup.status(), backup.target()])
+      .then(([s, t]) => {
+        setStatus(s);
+        setTarget(t);
+      })
+      .catch(() => null);
+  useEffect(load, []);
+
+  async function step(work: () => Promise<unknown>, done?: string) {
+    setBusy(true);
+    try {
+      await work();
+      if (done) toast(done);
+    } catch (e) {
+      toast(String(e));
+    } finally {
+      setBusy(false);
+      load();
+    }
+  }
+
+  const passOk = pass.length >= 8 && pass === pass2;
+  const askPass = !status?.hasKey || changing;
+
+  return (
+    <>
+      <div className="row">
+        <span className="row-text">
+          <span className="row-label">Daily backup</span>
+          <span className="row-hint">
+            {status?.last
+              ? `Last saved ${formatDistanceToNow(status.last, { addSuffix: true })}${target ? ` to ${target}` : ""}.`
+              : status?.hasKey && target
+                ? "Set up. The first backup runs now."
+                : "Everything, encrypted with a passphrase only you know, saved once a day when Tend opens."}
+          </span>
+          {status?.error && <span className="row-hint warn">Last try failed: {status.error}</span>}
+        </span>
+        {status?.hasKey && target && (
+          <button className="btn btn-soft" disabled={busy} onClick={() => void step(backup.run, "Backed up")}>
+            Back up now
+          </button>
+        )}
+      </div>
+
+      {askPass && (
+        <div className="row stack">
+          <span className="row-text">
+            <span className="row-label">{changing ? "New passphrase" : "Choose a passphrase"}</span>
+            <span className="row-hint">At least 8 characters. Write it down: without it a backup can't be opened, by anyone.</span>
+          </span>
+          <div className="pass-form">
+            <input className="field-input" type="password" autoComplete="new-password" placeholder="Passphrase" value={pass} onChange={(e) => setPass(e.target.value)} />
+            <input className="field-input" type="password" autoComplete="new-password" placeholder="Same again" value={pass2} onChange={(e) => setPass2(e.target.value)} />
+            <button
+              className="btn btn-primary"
+              disabled={busy || !passOk}
+              onClick={() =>
+                void step(async () => {
+                  await backup.setPassphrase(pass);
+                  setPass("");
+                  setPass2("");
+                  setChanging(false);
+                }, changing ? "New passphrase set. Older backups still open with the old one." : "Passphrase set")
+              }
+            >
+              Save
+            </button>
+          </div>
+          {pass2 && pass !== pass2 && <span className="row-hint warn">Those don't match yet.</span>}
+        </div>
+      )}
+
+      {status?.hasKey && (
+        <div className="row">
+          <span className="row-text">
+            <span className="row-label">{isAndroid ? "Backup file" : "Backup folder"}</span>
+            <span className="row-hint">
+              {target ?? (isAndroid ? "Pick where to keep it. Google Drive works and keeps older versions too." : "Pick a folder. The last 7 days are kept.")}
+            </span>
+          </span>
+          <button
+            className="btn btn-soft"
+            disabled={busy}
+            onClick={() =>
+              void step(async () => {
+                const t = await backup.chooseTarget();
+                setTarget(t);
+                if (t) await backup.run();
+              })
+            }
+          >
+            {target ? "Change" : "Choose"}
+          </button>
+        </div>
+      )}
+
+      <div className="row stack">
+        <span className="row-text">
+          <span className="row-label">Restore from a backup</span>
+          <span className="row-hint">Adds it to what's here. Anything changed more recently on this device stays.</span>
+        </span>
+        {source ? (
+          <div className="pass-form">
+            <span className="row-hint">{source.name}</span>
+            <input className="field-input" type="password" autoComplete="current-password" placeholder="Its passphrase" value={restorePass} onChange={(e) => setRestorePass(e.target.value)} />
+            <span className="row-actions">
+              <button className="btn btn-quiet" onClick={() => (setSource(null), setRestorePass(""))}>
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary"
+                disabled={busy || !restorePass}
+                onClick={() =>
+                  void step(async () => {
+                    const r = await backup.restore(source, restorePass);
+                    setSource(null);
+                    setRestorePass("");
+                    await refresh();
+                    toast(`Restored the backup from ${new Date(r.createdAt).toLocaleDateString()}: ${r.changed} things updated.`);
+                  })
+                }
+              >
+                Restore
+              </button>
+            </span>
+          </div>
+        ) : (
+          <span className="row-actions">
+            {status?.hasKey && !changing && (
+              <button className="btn btn-quiet" onClick={() => setChanging(true)}>
+                Change passphrase
+              </button>
+            )}
+            <button className="btn btn-soft" disabled={busy} onClick={() => void step(async () => setSource(await backup.pick()))}>
+              Choose a backup
+            </button>
+          </span>
+        )}
       </div>
     </>
   );
@@ -411,6 +569,10 @@ export function SettingsView() {
             </button>
           )}
         </div>
+      </Group>
+
+      <Group title="Backup">
+        <BackupSettings />
       </Group>
 
       <Group title="Medicine">

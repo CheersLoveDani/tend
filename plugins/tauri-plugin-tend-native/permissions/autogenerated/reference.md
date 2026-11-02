@@ -12,6 +12,10 @@ Allows all Tend native commands and the plugin event listeners (`action`, `pendi
 - `allow-download-update`
 - `allow-install-update`
 - `allow-move-to-back`
+- `allow-choose-backup-file`
+- `allow-backup-target`
+- `allow-write-backup`
+- `allow-open-backup-file`
 - `allow-register-listener`
 - `allow-remove-listener`
 
@@ -23,6 +27,58 @@ Allows all Tend native commands and the plugin event listeners (`action`, `pendi
 <th>Description</th>
 </tr>
 
+
+<tr>
+<td>
+
+`tend-native:allow-backup-target`
+
+</td>
+<td>
+
+Enables the backup_target command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`tend-native:deny-backup-target`
+
+</td>
+<td>
+
+Denies the backup_target command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`tend-native:allow-choose-backup-file`
+
+</td>
+<td>
+
+Enables the choose_backup_file command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`tend-native:deny-choose-backup-file`
+
+</td>
+<td>
+
+Denies the choose_backup_file command without any pre-configured scope.
+
+</td>
+</tr>
 
 <tr>
 <td>
@@ -124,6 +180,32 @@ Enables the move_to_back command without any pre-configured scope.
 <td>
 
 Denies the move_to_back command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`tend-native:allow-open-backup-file`
+
+</td>
+<td>
+
+Enables the open_backup_file command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`tend-native:deny-open-backup-file`
+
+</td>
+<td>
+
+Denies the open_backup_file command without any pre-configured scope.
 
 </td>
 </tr>
@@ -280,6 +362,32 @@ Enables the take_pending_actions command without any pre-configured scope.
 <td>
 
 Denies the take_pending_actions command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`tend-native:allow-write-backup`
+
+</td>
+<td>
+
+Enables the write_backup command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`tend-native:deny-write-backup`
+
+</td>
+<td>
+
+Denies the write_backup command without any pre-configured scope.
 
 </td>
 </tr>

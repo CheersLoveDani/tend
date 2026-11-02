@@ -5,6 +5,7 @@ import { defaultSettings, type Settings } from "./settings";
 import { configureSound, sounds } from "./sound";
 import { DOSE_PREFIX, native, pushNativeState } from "./native";
 import { tomorrow } from "./dates";
+import { autoBackup } from "./backup";
 
 export type Toast = { id: number; text: string; undo?: () => void };
 
@@ -109,6 +110,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const launch = await native.takeLaunchAction().catch(() => ({ action: null }));
       if (launch.action === "nag") setNag(true);
       void api.syncNow().catch(() => null);
+      void autoBackup();
     })();
     const unlisten = listen("data-changed", () => void refresh());
     const actionSub = native.onAction((a) => {
@@ -120,6 +122,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (document.visibilityState === "visible") {
         void applyPending();
         void api.syncNow().then(() => refresh()).catch(() => null);
+        void autoBackup();
       }
     };
     document.addEventListener("visibilitychange", onVisible);

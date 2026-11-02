@@ -67,6 +67,25 @@ impl<R: Runtime> TendNative<R> {
             .map_err(Into::into)
     }
 
+    pub fn choose_backup_file(&self) -> crate::Result<BackupTarget> {
+        self.0.run_mobile_plugin("chooseBackupFile", ()).map_err(Into::into)
+    }
+
+    pub fn backup_target(&self) -> crate::Result<BackupTarget> {
+        self.0.run_mobile_plugin("backupTarget", ()).map_err(Into::into)
+    }
+
+    pub fn write_backup(&self, data: String) -> crate::Result<()> {
+        self.0
+            .run_mobile_plugin::<serde_json::Value>("writeBackup", WriteBackupArgs { data })
+            .map(|_| ())
+            .map_err(Into::into)
+    }
+
+    pub fn open_backup_file(&self) -> crate::Result<BackupFile> {
+        self.0.run_mobile_plugin("openBackupFile", ()).map_err(Into::into)
+    }
+
     pub fn move_to_back(&self) -> crate::Result<()> {
         self.0
             .run_mobile_plugin::<serde_json::Value>("moveToBack", ())

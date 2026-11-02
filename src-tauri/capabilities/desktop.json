@@ -4,5 +4,5 @@
   "description": "Desktop-only permissions",
   "platforms": ["windows", "linux", "macOS"],
   "windows": ["main"],
-  "permissions": ["autostart:default", "updater:default", "process:allow-restart"]
+  "permissions": ["autostart:default", "updater:default", "process:allow-restart", "dialog:allow-open"]
 }

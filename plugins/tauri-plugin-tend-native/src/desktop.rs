@@ -45,6 +45,23 @@ impl<R: Runtime> TendNative<R> {
         Ok(())
     }
 
+    /// Desktop backups go to a folder handled by the app itself.
+    pub fn choose_backup_file(&self) -> crate::Result<BackupTarget> {
+        Ok(BackupTarget::default())
+    }
+
+    pub fn backup_target(&self) -> crate::Result<BackupTarget> {
+        Ok(BackupTarget::default())
+    }
+
+    pub fn write_backup(&self, _data: String) -> crate::Result<()> {
+        Ok(())
+    }
+
+    pub fn open_backup_file(&self) -> crate::Result<BackupFile> {
+        Ok(BackupFile::default())
+    }
+
     pub fn move_to_back(&self) -> crate::Result<()> {
         Ok(())
     }

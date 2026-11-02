@@ -66,6 +66,30 @@ pub struct NativeState {
     pub quiet_hours: Option<QuietHours>,
 }
 
+/// Where backups are written (Android: a file the user picked, e.g. in Google Drive).
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupTarget {
+    #[serde(default)]
+    pub name: Option<String>,
+}
+
+/// A backup file's contents, base64.
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupFile {
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub data: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WriteBackupArgs {
+    pub data: String,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SetStateArgs {

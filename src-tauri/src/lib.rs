@@ -1,4 +1,5 @@
 mod actions;
+mod backup;
 mod db;
 mod meds;
 mod model;
@@ -80,6 +81,84 @@ fn snapshot(state: State<AppState>) -> Res<Snapshot> {
         dose_alarms: meds::upcoming_slots(&db, 7).map_err(err)?,
         entries: meds::entries(&db, &entries_since).map_err(err)?,
     })
+}
+
+// ---- backup ----
+
+#[tauri::command]
+fn backup_status(state: State<AppState>) -> Res<backup::Status> {
+    backup::status(&state.db.lock().unwrap()).map_err(err)
+}
+
+#[tauri::command]
+async fn set_backup_passphrase(state: State<'_, AppState>, passphrase: String) -> Res<()> {
+    let db = state.db.clone();
+    tauri::async_runtime::spawn_blocking(move || backup::set_passphrase(&db.lock().unwrap(), &passphrase))
+        .await
+        .map_err(err)?
+        .map_err(err)
+}
+
+#[tauri::command]
+fn set_backup_dir(state: State<AppState>, dir: String) -> Res<()> {
+    backup::set_dir(&state.db.lock().unwrap(), &dir).map_err(err)
+}
+
+/// Desktop with a folder: writes the file and returns `{ path }`. Otherwise returns
+/// `{ data }` (base64) for the caller to save, then report back with `backup_written`.
+#[tauri::command]
+async fn backup_now(state: State<'_, AppState>) -> Res<serde_json::Value> {
+    let db = state.db.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let db = db.lock().unwrap();
+        let has_dir = backup::status(&db).map(|s| s.dir.is_some()).unwrap_or(false);
+        let out = if cfg!(desktop) && has_dir {
+            backup::to_dir(&db).map(|p| {
+                let _ = backup::record(&db, None);
+                serde_json::json!({ "path": p.display().to_string() })
+            })
+        } else {
+            backup::encrypt(&db).map(|b| {
+                use base64::Engine;
+                serde_json::json!({ "data": base64::engine::general_purpose::STANDARD.encode(b) })
+            })
+        };
+        if let Err(e) = &out {
+            let _ = backup::record(&db, Some(&e.to_string()));
+        }
+        out.map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+
+#[tauri::command]
+fn backup_written(state: State<AppState>, error: Option<String>) -> Res<()> {
+    backup::record(&state.db.lock().unwrap(), error.as_deref()).map_err(err)
+}
+
+#[tauri::command]
+async fn restore_backup(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    data: Option<String>,
+    path: Option<String>,
+    passphrase: String,
+) -> Res<backup::Restored> {
+    use base64::Engine;
+    let bytes = match (data, path) {
+        (Some(d), _) => base64::engine::general_purpose::STANDARD.decode(d).map_err(|_| "That file couldn't be read".to_string())?,
+        (None, Some(p)) => std::fs::read(p).map_err(err)?,
+        _ => return Err("Choose a backup to restore".into()),
+    };
+    let db = state.db.clone();
+    let done = tauri::async_runtime::spawn_blocking(move || backup::restore(&db.lock().unwrap(), &bytes, &passphrase))
+        .await
+        .map_err(err)?
+        .map_err(err)?;
+    notify_changed(&app);
+    after_local_change(&app);
+    Ok(done)
 }
 
 // ---- medication ----
@@ -408,6 +487,7 @@ pub fn run() {
                 Some(vec!["--hidden"]),
             ))
             .plugin(tauri_plugin_updater::Builder::new().build())
+            .plugin(tauri_plugin_dialog::init())
             .plugin(tauri_plugin_process::init());
     }
     #[cfg(mobile)]
@@ -476,6 +556,12 @@ pub fn run() {
             delete_entry,
             export_health,
             import_health,
+            backup_status,
+            set_backup_passphrase,
+            set_backup_dir,
+            backup_now,
+            backup_written,
+            restore_backup,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Tend")

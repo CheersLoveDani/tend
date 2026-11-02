@@ -51,6 +51,10 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             commands::download_update,
             commands::install_update,
             commands::move_to_back,
+            commands::choose_backup_file,
+            commands::backup_target,
+            commands::write_backup,
+            commands::open_backup_file,
         ])
         .setup(|app, api| {
             #[cfg(mobile)]

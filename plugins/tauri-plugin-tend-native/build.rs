@@ -7,6 +7,10 @@ const COMMANDS: &[&str] = &[
     "download_update",
     "install_update",
     "move_to_back",
+    "choose_backup_file",
+    "backup_target",
+    "write_backup",
+    "open_backup_file",
     // Needed so `addPluginListener('tend-native', ...)` passes the ACL.
     "register_listener",
     "remove_listener",

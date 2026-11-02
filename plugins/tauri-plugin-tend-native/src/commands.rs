@@ -48,6 +48,29 @@ pub(crate) async fn install_update<R: Runtime>(app: AppHandle<R>) -> Result<()> 
     app.tend_native().install_update()
 }
 
+/// Asks where to keep the backup (a new file anywhere, Google Drive included).
+#[command]
+pub(crate) async fn choose_backup_file<R: Runtime>(app: AppHandle<R>) -> Result<BackupTarget> {
+    app.tend_native().choose_backup_file()
+}
+
+#[command]
+pub(crate) async fn backup_target<R: Runtime>(app: AppHandle<R>) -> Result<BackupTarget> {
+    app.tend_native().backup_target()
+}
+
+/// Overwrites the chosen backup file with `data` (base64).
+#[command]
+pub(crate) async fn write_backup<R: Runtime>(app: AppHandle<R>, data: String) -> Result<()> {
+    app.tend_native().write_backup(data)
+}
+
+/// Lets the user pick a backup to restore and returns its contents.
+#[command]
+pub(crate) async fn open_backup_file<R: Runtime>(app: AppHandle<R>) -> Result<BackupFile> {
+    app.tend_native().open_backup_file()
+}
+
 /// Sends the app to the background, like Android's own back on a home screen.
 #[command]
 pub(crate) async fn move_to_back<R: Runtime>(app: AppHandle<R>) -> Result<()> {
