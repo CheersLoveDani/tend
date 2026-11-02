@@ -1925,11 +1925,12 @@ html.is-scanning .app > * {
   font-size: 14px;
 }
 @media (max-width: 420px) {
-  .dose-row {
+  /* Take/Skip move under the name on narrow phones; a taken dose's Undo stays inline. */
+  .dose-card.is-due .dose-row,
+  .dose-card.is-upcoming .dose-row {
     grid-template-columns: auto 1fr;
   }
-  .dose-actions,
-  .dose-undo {
+  .dose-actions {
     grid-column: 1 / -1;
     justify-self: end;
   }
