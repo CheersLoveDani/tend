@@ -8,6 +8,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.tend.nativeplugin.R
@@ -16,7 +17,7 @@ object TendNotifications {
   const val CHANNEL_STILL_TO_DO = "tend_still_to_do"
   const val CHANNEL_REMINDERS = "tend_reminders"
   const val CHANNEL_NUDGE = "tend_nudge"
-  const val CHANNEL_CHIME = "tend_chime"
+  const val CHANNEL_CHIME = "tend_chime_alert"
 
   private const val MAX_INBOX_LINES = 6
 
@@ -53,11 +54,16 @@ object TendNotifications {
         }
       )
     }
+    // 0.1.2 shipped a default-importance chime channel; importance can't be raised later.
+    if (nm.getNotificationChannel("tend_chime") != null) nm.deleteNotificationChannel("tend_chime")
     if (nm.getNotificationChannel(CHANNEL_CHIME) == null) {
       nm.createNotificationChannel(
-        NotificationChannel(CHANNEL_CHIME, "Gentle chime", NotificationManager.IMPORTANCE_DEFAULT).apply {
-          description = "A soft sound every so often while things are still waiting."
+        NotificationChannel(CHANNEL_CHIME, "Chime", NotificationManager.IMPORTANCE_HIGH).apply {
+          description = "A sound, buzz and pop-up every so often while things are still waiting."
           setShowBadge(false)
+          enableVibration(true)
+          vibrationPattern = longArrayOf(0, 250, 150, 250)
+          lockscreenVisibility = Notification.VISIBILITY_PRIVATE
         }
       )
     }
@@ -228,13 +234,22 @@ object TendNotifications {
       .setAutoCancel(true)
       .setOnlyAlertOnce(false)
       .setCategory(NotificationCompat.CATEGORY_REMINDER)
-      .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+      .setPriority(NotificationCompat.PRIORITY_HIGH)
+      .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)
       .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
       .setPublicVersion(publicVersion)
       .setLocalOnly(true)
       // The next chime replaces it anyway; don't leave a stale one behind.
       .setTimeoutAfter(state.chimeIntervalMs.coerceAtLeast(60_000L))
-    activityPendingIntent(ctx, TendIds.RC_NAG, TendIds.LAUNCH_NAG, null)?.let { builder.setContentIntent(it) }
+    activityPendingIntent(ctx, TendIds.RC_NAG, TendIds.LAUNCH_NAG, null)?.let { pi ->
+      builder.setContentIntent(pi)
+      // A full-screen intent is what makes Android wake a sleeping screen. Only use it while
+      // the screen is off: when the phone is in use, a pop-up is enough.
+      val pm = ctx.getSystemService(Context.POWER_SERVICE) as PowerManager
+      val fullScreenAllowed =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE || nm(ctx).canUseFullScreenIntent()
+      if (!pm.isInteractive && fullScreenAllowed) builder.setFullScreenIntent(pi, true)
+    }
     nm(ctx).notify(TendIds.CHIME_NOTIFICATION_ID, builder.build())
   }
 
