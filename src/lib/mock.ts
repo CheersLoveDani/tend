@@ -17,7 +17,12 @@ function level(xp: number): LevelInfo {
 
 export function installMock() {
   const ledger = new Map<string, number>();
-  let settings: Record<string, unknown> = { onboarded: true };
+  let settings: Record<string, unknown> = { onboarded: true, fitSince: today() };
+  // Fake Health Connect: ?steps=9500&mins=25 previews the goal bars at any value.
+  (window as unknown as Record<string, unknown>).__TEND_MOCK_FIT__ = true;
+  const q = new URLSearchParams(location.search);
+  const mockSteps = Number(q.get("steps") ?? 7340);
+  const mockMins = Number(q.get("mins") ?? 25);
   const mk = (title: string, date: string, reward: number, steps: string[] = [], time: string | null = null): Reminder => ({
     id: Math.random().toString(36).slice(2),
     seriesId: "",
@@ -235,6 +240,18 @@ export function installMock() {
         return { peers: 0, ok: 0, changed: 0, errors: [] };
       case "discover_hosts":
         return [];
+      case "plugin:tend-native|health_status":
+      case "plugin:tend-native|health_request":
+        return { status: "available", steps: true, workouts: true };
+      case "plugin:tend-native|health_read": {
+        const start = Date.now() - (mockMins + 60) * 60_000;
+        return {
+          days: [{ date: today(), steps: mockSteps }],
+          workouts: mockMins ? [{ id: "w1", start, end: start + mockMins * 60_000, type: 56, title: "", app: "preview" }] : [],
+        };
+      }
+      case "fit_award":
+        return { event: { kind: "none", gained: 0, bonus: 0, remaining: 0, before: level(before), after: level(before), reminder: mk("Moving", today(), 0) }, earned: [], counted: args.input.workouts.map((w: { id: string }) => w.id), completed: [] };
       default:
         return null;
     }

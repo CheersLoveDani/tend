@@ -5,6 +5,7 @@ import { clock, dayName, today } from "../lib/dates";
 import { earned } from "../lib/rewards";
 import { Check, Moon, Seed } from "../components/Icons";
 import { DoseCard } from "../components/DoseCard";
+import { GoalBars } from "../components/GoalBars";
 
 /** The "before you dive in" screen shown on phone unlock while things are waiting. */
 export function Nag() {
@@ -92,6 +93,9 @@ export function Nag() {
           </AnimatePresence>
         </ul>
         {tasks.length > shown.length && <p className="hint">and {tasks.length - shown.length} more in Today.</p>}
+
+        {/* Just for a glance: steps never make this screen appear on their own. */}
+        <GoalBars compact />
 
         <div className="nag-foot">
           <button className="btn btn-primary btn-wide" onClick={close}>

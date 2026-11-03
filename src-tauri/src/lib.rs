@@ -235,8 +235,10 @@ fn delete_entry(app: AppHandle, state: State<AppState>, id: String) -> Res<()> {
 /// Pays seeds for steps and workouts read from Health Connect on the phone.
 #[tauri::command]
 fn fit_award(app: AppHandle, state: State<AppState>, input: fitness::FitInput) -> Res<fitness::FitResult> {
-    let r = fitness::award(&state.db.lock().unwrap(), input).map_err(err)?;
-    if r.event.gained > 0 {
+    let db = state.db.lock().unwrap();
+    let r = fitness::award(&db, input, surprise_enabled(&db)).map_err(err)?;
+    drop(db);
+    if r.event.gained > 0 || !r.completed.is_empty() {
         after_local_change(&app);
     }
     Ok(r)

@@ -1,12 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { api, isAndroid, type DoseSlot, type Entry, type Med, type MedInput, type Reminder, type ReminderInput, type RewardEvent, type Snapshot } from "./api";
+import { api, type DoseSlot, type Entry, type Med, type MedInput, type Reminder, type ReminderInput, type RewardEvent, type Snapshot } from "./api";
 import { defaultSettings, type Settings } from "./settings";
 import { configureSound, sounds } from "./sound";
 import { DOSE_PREFIX, native, pushNativeState } from "./native";
 import { tomorrow } from "./dates";
 import { autoBackup } from "./backup";
-import { earnedText, fitness, type FitData } from "./fitness";
+import { earnedText, fitness, fitSupported, type FitData } from "./fitness";
 
 export type Toast = { id: number; text: string; undo?: () => void };
 
@@ -97,20 +97,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const syncFit = useCallback(
     async (force = false) => {
       const since = settingsRef.current.fitSince;
-      if (!isAndroid || !since) return setFit(null);
+      if (!fitSupported() || !since) return setFit(null);
       if (!force && Date.now() - fitAt.current < 60_000) return;
       fitAt.current = Date.now();
       try {
         const st = await fitness.status();
         if (st.status !== "available" || (!st.steps && !st.workouts)) return setFit(null);
         const data = await fitness.read(7);
-        const r = await fitness.award(since, data.days, data.workouts);
+        const r = await fitness.award(settingsRef.current, data.days, data.workouts);
         setFit({ ...data, counted: r.counted });
         if (r.event.gained > 0) {
           reward(r.event);
           toast(earnedText(r));
-          await refresh();
         }
+        // Exercise tasks a workout just ticked off get the full finish celebration.
+        for (const e of r.completed) reward(e);
+        if (r.event.gained > 0 || r.completed.length) await refresh();
       } catch (e) {
         console.warn("fitness", e);
       }

@@ -103,6 +103,9 @@ fn row_to_reminder(row: &rusqlite::Row) -> rusqlite::Result<Reminder> {
         updated_at: row.get("updated_at")?,
         device: row.get("device")?,
         deleted: row.get::<_, i64>("deleted")? != 0,
+        exercise: row
+            .get::<_, Option<String>>("exercise")?
+            .and_then(|s| serde_json::from_str(&s).ok()),
     })
 }
 
@@ -129,6 +132,13 @@ impl Db {
         let conn = Connection::open(path)?;
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;")?;
         conn.execute_batch(SCHEMA)?;
+        // Exercise tasks arrived in 0.2.4.
+        let has_exercise: bool = conn
+            .prepare("SELECT 1 FROM pragma_table_info('reminders') WHERE name='exercise'")?
+            .exists([])?;
+        if !has_exercise {
+            conn.execute("ALTER TABLE reminders ADD COLUMN exercise TEXT", [])?;
+        }
         // Items arrived in 0.2. Peers we synced with before may hold items we skipped over while
         // we were too old to read them, so pull everything once more (merging is idempotent).
         if conn.query_row("SELECT 1 FROM meta WHERE key='items_v1'", [], |_| Ok(())).optional()?.is_none() {
@@ -177,17 +187,18 @@ impl Db {
         let rev = self.next_rev()?;
         self.conn.execute(
             "INSERT INTO reminders(id,series_id,title,notes,date,time,steps,reward,suggested,status,repeat,bits,
-               completed_at,created_at,updated_at,device,deleted,rev)
-             VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18)
+               completed_at,created_at,updated_at,device,deleted,rev,exercise)
+             VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19)
              ON CONFLICT(id) DO UPDATE SET series_id=excluded.series_id,title=excluded.title,notes=excluded.notes,
                date=excluded.date,time=excluded.time,steps=excluded.steps,reward=excluded.reward,
                suggested=excluded.suggested,status=excluded.status,repeat=excluded.repeat,bits=excluded.bits,
                completed_at=excluded.completed_at,created_at=excluded.created_at,updated_at=excluded.updated_at,
-               device=excluded.device,deleted=excluded.deleted,rev=excluded.rev",
+               device=excluded.device,deleted=excluded.deleted,rev=excluded.rev,exercise=excluded.exercise",
             params![
                 r.id, r.series_id, r.title, r.notes, r.date, r.time,
                 serde_json::to_string(&r.steps)?, r.reward, r.suggested, r.status, r.repeat, r.bits,
-                r.completed_at, r.created_at, r.updated_at, r.device, r.deleted as i64, rev
+                r.completed_at, r.created_at, r.updated_at, r.device, r.deleted as i64, rev,
+                r.exercise.as_ref().map(serde_json::to_string).transpose()?
             ],
         )?;
         Ok(())

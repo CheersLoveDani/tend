@@ -9,6 +9,7 @@ import { DoseCard } from "../components/DoseCard";
 import { WeatherCheckIn } from "../components/WeatherCheckIn";
 import { todaysWeather } from "../lib/weather";
 import { Seed } from "../components/Icons";
+import { GoalBars } from "../components/GoalBars";
 
 export function Today({ onEdit, onAdd, onOpenMed }: { onEdit: (r: Reminder) => void; onAdd: () => void; onOpenMed: (id: string) => void }) {
   const { snap } = useStore();
@@ -47,6 +48,8 @@ export function Today({ onEdit, onAdd, onOpenMed }: { onEdit: (r: Reminder) => v
           )}
         </p>
       </header>
+
+      <GoalBars />
 
       {doses.length > 0 && (
         <section className="list-section">

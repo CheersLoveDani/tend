@@ -6,6 +6,13 @@ export interface Step {
   done: boolean;
 }
 
+/** A reminder that's a workout: ticks itself off when Health Connect sees a matching one. */
+export interface Exercise {
+  /** Health Connect exercise types that count; empty means any workout. */
+  types: number[];
+  minutes: number;
+}
+
 export interface Reminder {
   id: string;
   seriesId: string;
@@ -24,6 +31,7 @@ export interface Reminder {
   updatedAt: number;
   device: string;
   deleted: boolean;
+  exercise?: Exercise | null;
 }
 
 export type Repeat = "daily" | "weekdays" | "weekly" | "monthly";
@@ -38,6 +46,7 @@ export interface ReminderInput {
   reward: number;
   suggested: number | null;
   repeat: Repeat | null;
+  exercise?: Exercise | null;
 }
 
 export interface LevelInfo {

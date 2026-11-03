@@ -16,6 +16,12 @@ export interface Settings {
   onboarded: boolean;
   /** Day steps and workouts started counting (Health Connect), or null when not connected. */
   fitSince: string | null;
+  /** Daily step goal, and the seeds reaching it is worth. */
+  stepGoal: number;
+  stepSeeds: number;
+  /** Daily active-minutes goal (from logged workouts), and its seeds. */
+  moveGoal: number;
+  moveSeeds: number;
 }
 
 export const defaultSettings: Settings = {
@@ -33,6 +39,10 @@ export const defaultSettings: Settings = {
   autoUpdate: true,
   onboarded: false,
   fitSince: null,
+  stepGoal: 6000,
+  stepSeeds: 15,
+  moveGoal: 20,
+  moveSeeds: 10,
 };
 
 export function inQuietHours(q: Settings["quietHours"], now = new Date()): boolean {

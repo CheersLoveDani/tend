@@ -2,11 +2,12 @@ import { AnimatePresence, motion, Reorder } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as chrono from "chrono-node";
 import { format, parseISO } from "date-fns";
-import { api, isAndroid, uid, type Reminder, type Repeat, type Step, type StepIdea, type Suggestion } from "../lib/api";
+import { api, isAndroid, uid, type Exercise, type Reminder, type Repeat, type Step, type StepIdea, type Suggestion } from "../lib/api";
 import { useStore } from "../lib/store";
 import { clock, dayName, plusDays, today, ymd } from "../lib/dates";
 import { stepValue } from "../lib/rewards";
 import { sounds } from "../lib/sound";
+import { EXERCISES, exerciseOf } from "../lib/fitness";
 import { Calendar, Close, Minus, Plus, Seed, Sparkle, Steps } from "./Icons";
 
 interface Props {
@@ -29,6 +30,8 @@ const TIMES = [
   { label: "Afternoon", value: "15:00" },
   { label: "Evening", value: "19:00" },
 ];
+
+const MINUTES = [10, 15, 20, 30, 45, 60];
 
 const shortDay = (d: string) => {
   const n = dayName(d);
@@ -71,6 +74,7 @@ export function Editor({ initial, defaultDate, onClose }: Props) {
   const [time, setTime] = useState<string | null>(initial?.time ?? null);
   const [repeat, setRepeat] = useState<Repeat | null>(initial?.repeat ?? null);
   const [steps, setSteps] = useState<Step[]>(initial?.steps ?? []);
+  const [exercise, setExercise] = useState<Exercise | null>(initial?.exercise ?? null);
   const [stepDraft, setStepDraft] = useState("");
   const [reward, setReward] = useState(initial?.reward ?? 15);
   const [suggestion, setSuggestion] = useState<Suggestion | null>(
@@ -184,6 +188,7 @@ export function Editor({ initial, defaultDate, onClose }: Props) {
       reward,
       suggested: suggestion?.reward ?? null,
       repeat,
+      exercise,
     });
     setSaving(false);
     if (saved) {
@@ -358,6 +363,37 @@ export function Editor({ initial, defaultDate, onClose }: Props) {
                 <Plus size={16} />
               </button>
             </div>
+          </section>
+
+          <section className="group exercise-pick">
+            <h3>Workout</h3>
+            <p className="hint">
+              {exercise
+                ? `Ticks itself off when your phone logs a ${exercise.minutes}-minute ${exerciseOf(exercise.types)?.noun ?? "workout"} on the day.${store.settings.fitSince ? "" : " Connect steps & workouts in Settings first."}`
+                : "If this is exercise, Tend can tick it off for you when your phone logs it."}
+            </p>
+            <div className="chips">
+              <button className={`chip ${exercise === null ? "is-on" : ""}`} onClick={() => setExercise(null)}>
+                Not a workout
+              </button>
+              {EXERCISES.map((x) => {
+                const on = !!exercise && exerciseOf(exercise.types)?.key === x.key;
+                return (
+                  <button key={x.key} className={`chip ${on ? "is-on" : ""}`} onClick={() => setExercise({ types: x.types, minutes: exercise?.minutes ?? 20 })}>
+                    {x.label}
+                  </button>
+                );
+              })}
+            </div>
+            {exercise && (
+              <div className="chips" role="radiogroup" aria-label="Minutes">
+                {MINUTES.map((m) => (
+                  <button key={m} role="radio" aria-checked={exercise.minutes === m} className={`chip ${exercise.minutes === m ? "is-on" : ""}`} onClick={() => setExercise({ ...exercise, minutes: m })}>
+                    {m} min
+                  </button>
+                ))}
+              </div>
+            )}
           </section>
 
           {showNotes ? (

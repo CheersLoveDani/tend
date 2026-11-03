@@ -161,6 +161,7 @@ mod tests {
                 reward: s + 10,
                 suggested: Some(s),
                 repeat: None,
+                exercise: None,
             };
             actions::upsert(&db.lock().unwrap(), i).unwrap();
         }

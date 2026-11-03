@@ -698,6 +698,7 @@ mod tests {
                 reward: 10,
                 suggested: None,
                 repeat: None,
+                exercise: None,
             },
         )
         .unwrap();

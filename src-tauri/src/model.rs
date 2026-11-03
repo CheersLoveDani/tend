@@ -11,6 +11,17 @@ pub struct Step {
     pub done: bool,
 }
 
+/// A reminder that is a workout: it ticks itself off when Health Connect sees a matching one.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Exercise {
+    /// Health Connect exercise types that count; empty means any workout.
+    #[serde(default)]
+    pub types: Vec<i64>,
+    /// Minutes needed in one day.
+    pub minutes: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Reminder {
@@ -43,6 +54,8 @@ pub struct Reminder {
     pub device: String,
     #[serde(default)]
     pub deleted: bool,
+    #[serde(default)]
+    pub exercise: Option<Exercise>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -75,6 +88,8 @@ pub struct ReminderInput {
     pub reward: i64,
     pub suggested: Option<i64>,
     pub repeat: Option<String>,
+    #[serde(default)]
+    pub exercise: Option<Exercise>,
 }
 
 #[derive(Debug, Clone, Serialize)]

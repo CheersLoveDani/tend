@@ -62,6 +62,7 @@ pub fn upsert(db: &Db, input: ReminderInput) -> Result<Reminder> {
                 updated_at: 0,
                 device: String::new(),
                 deleted: false,
+                exercise: None,
             }
         }
     };
@@ -73,6 +74,10 @@ pub fn upsert(db: &Db, input: ReminderInput) -> Result<Reminder> {
     r.reward = input.reward.clamp(1, 100);
     r.suggested = input.suggested.or(r.suggested);
     r.repeat = input.repeat.filter(|s| !s.is_empty());
+    r.exercise = input.exercise.filter(|e| e.minutes > 0).map(|mut e| {
+        e.minutes = e.minutes.clamp(1, 600);
+        e
+    });
     r.deleted = false;
     db.save_reminder(&mut r)?;
     Ok(r)
@@ -293,6 +298,7 @@ mod tests {
             reward: 30,
             suggested: Some(25),
             repeat: None,
+            exercise: None,
         }
     }
 

@@ -2667,48 +2667,162 @@ select.field-input {
 }
 
 /* ---------- moving: steps and workouts from Health Connect ---------- */
-.moving-card {
+.goal-bars {
   display: grid;
-  gap: 8px;
-  padding: 16px;
+  gap: 14px;
+  padding: 16px 16px 12px;
   border-radius: var(--radius-l);
   background: var(--paper);
   box-shadow: var(--shadow);
+  margin-bottom: 28px;
 }
-.moving-card .level-bar {
-  width: 100%;
+.goal-bars.is-compact {
+  gap: 10px;
+  padding: 12px 14px;
+  margin: 4px 0 16px;
 }
-.moving-steps {
+.goal {
+  display: grid;
+  gap: 7px;
+}
+.goal-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  min-width: 0;
 }
-.moving-steps strong {
-  font-family: var(--font-display);
-  font-size: 34px;
-  line-height: 1.1;
+.goal-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--moss-soft);
+  color: var(--moss);
+  flex: none;
+  transition: background 0.4s, color 0.4s;
 }
-.moving-steps > span {
-  color: var(--bark-2);
+.goal.is-reached .goal-icon {
+  background: var(--pollen-soft);
+  color: var(--pollen);
+}
+.goal-value {
+  color: var(--bark-3);
   font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.moving-steps .moving-earned {
+.goal-value strong {
+  font-family: var(--font-display);
+  font-size: 22px;
+  color: var(--bark);
+  font-variant-numeric: tabular-nums;
+}
+.is-compact .goal-value strong {
+  font-size: 17px;
+}
+.goal-over {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--pollen-soft);
+  color: var(--pollen);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.goal-seeds {
   margin-left: auto;
-}
-.moving-earned {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: var(--moss-2);
-  font-weight: 600;
+  color: var(--moss);
+  font-weight: 700;
   font-size: 14px;
   white-space: nowrap;
 }
+.goal-track {
+  position: relative;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--moss-soft);
+  overflow: hidden;
+}
+.is-compact .goal-track {
+  height: 10px;
+}
+.goal-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--moss-2), var(--moss));
+}
+.goal.is-reached .goal-fill {
+  background: linear-gradient(90deg, var(--moss), var(--moss-2));
+}
+/* The second lap: a golden band riding inside the full bar, with a moving shine. */
+.goal-overflow {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  max-width: calc(100% - 6px);
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--pollen), #f3d77e, var(--pollen));
+  background-size: 200% 100%;
+  box-shadow: 0 0 10px 1px color-mix(in srgb, var(--pollen) 55%, transparent);
+  animation: goal-shine 2.4s linear infinite;
+}
+.is-compact .goal-overflow {
+  top: 2px;
+  bottom: 2px;
+}
+.goal.is-reached .goal-track {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--pollen) 35%, transparent);
+  animation: goal-glow 3s ease-in-out infinite;
+}
+.goal.is-maxed .goal-overflow {
+  background: linear-gradient(90deg, var(--pollen), #fff1bf, var(--pollen), #fff1bf, var(--pollen));
+  background-size: 200% 100%;
+}
+.goal-notch {
+  position: absolute;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  margin: -2px 0 0 -2px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--bark-3) 55%, transparent);
+}
+.goal-notch.is-passed {
+  background: color-mix(in srgb, var(--paper) 80%, transparent);
+}
+.goal-caption {
+  margin: 0;
+  color: var(--bark-3);
+  font-size: 13px;
+}
+@keyframes goal-shine {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+@keyframes goal-glow {
+  50% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--pollen) 50%, transparent), 0 0 14px color-mix(in srgb, var(--pollen) 35%, transparent);
+  }
+}
+[data-reduce-motion] .goal-overflow,
+[data-reduce-motion] .goal.is-reached .goal-track {
+  animation: none;
+}
 .moving-workouts {
   list-style: none;
-  margin: 6px 0 0;
-  padding: 8px 0 0;
+  margin: 0;
+  padding: 10px 0 0;
   border-top: 1px solid var(--moss-soft);
   display: grid;
   gap: 8px;
@@ -2718,4 +2832,28 @@ select.field-input {
   justify-content: space-between;
   align-items: baseline;
   gap: 12px;
+}
+.card-exercise {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.exercise-pick .chips {
+  margin-top: 8px;
+}
+.moving .goal-bars {
+  margin-bottom: 12px;
+}
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.stepper-value {
+  min-width: 92px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
 }

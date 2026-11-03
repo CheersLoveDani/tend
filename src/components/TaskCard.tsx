@@ -4,6 +4,7 @@ import type { Reminder } from "../lib/api";
 import { useStore } from "../lib/store";
 import { clock, dayName, partOfDay, today } from "../lib/dates";
 import { bitValue, earned, finishValue, MAX_BITS, stepValue } from "../lib/rewards";
+import { exerciseOf } from "../lib/fitness";
 import { Check, Chevron, Clock, Moon, Repeat, Seed, Sprout, Trash } from "./Icons";
 
 interface Props {
@@ -77,13 +78,18 @@ export function TaskCard({ r, onEdit, compact }: Props) {
 
         <button className="card-main" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
           <span className="card-title">{r.title}</span>
-          {(meta.length > 0 || r.repeat) && (
+          {(meta.length > 0 || r.repeat || r.exercise) && (
             <span className="card-meta">
               {r.time && <Clock size={13} />}
               {meta.join(" · ")}
               {r.repeat && (
                 <span className="card-repeat">
                   <Repeat size={13} /> {r.repeat}
+                </span>
+              )}
+              {r.exercise && (
+                <span className="card-exercise" title="Ticks itself off when your phone logs it">
+                  <Sprout size={13} /> {exerciseOf(r.exercise.types)?.label ?? "Workout"}, {r.exercise.minutes} min
                 </span>
               )}
             </span>

@@ -604,6 +604,7 @@ fn as_reminder(id: &str, title: &str) -> Reminder {
         updated_at: now,
         device: String::new(),
         deleted: false,
+        exercise: None,
     }
 }
 

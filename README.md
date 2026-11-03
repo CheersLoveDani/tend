@@ -40,9 +40,12 @@ It's designed with AuDHD in mind: see [docs/AUDHD_RESEARCH.md](docs/AUDHD_RESEAR
   pressure. Export and import it all from Settings.
 - **Steps and workouts grow the tree too (Android).** Connect Health Connect in
   Settings, where Google Fit, Samsung Health, Fitbit and most fitness apps keep
-  their data. Every 2,000 steps pays seeds (up to 15,000 a day), and a workout
-  pays 3 seeds plus 1 for every 5 minutes. Tend only reads, only the last week,
-  only while it's open, and a workout logged by two apps counts once.
+  their data, and set a daily step goal and exercise-minutes goal, each with the
+  seeds reaching it is worth. Seeds come as you get closer, and keep coming past
+  the goal up to double. Today shows both as bars that fill up, then glow gold
+  as they overflow; the unlock screen shows them too, but never opens just for
+  them. A reminder can be a workout ("Run, 20 min") and ticks itself off when
+  your phone logs one. Tend only reads, only the last week, only while it's open.
 - **A gentle chime** every 15 minutes while things are waiting (or 30, an hour,
   or off). It stays silent during quiet hours.
 - **Android:**

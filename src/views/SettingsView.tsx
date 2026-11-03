@@ -5,10 +5,10 @@ import { api, isAndroid, type Hello, type SyncInfo } from "../lib/api";
 import { useStore } from "../lib/store";
 import { native, type PermissionKind, type Permissions } from "../lib/native";
 import { sounds } from "../lib/sound";
-import { Sync } from "../components/Icons";
+import { Minus, Plus, Sync } from "../components/Icons";
 import { appUpdater, appVersion } from "../lib/updater";
 import { backup, type BackupSource, type BackupStatus } from "../lib/backup";
-import { fitness, type FitStatus } from "../lib/fitness";
+import { fitness, fitSupported, minuteMilestones, stepMilestones, type FitStatus } from "../lib/fitness";
 import { today } from "../lib/dates";
 import { format, formatDistanceToNow, parseISO } from "date-fns";
 import QRCode from "qrcode";
@@ -296,6 +296,32 @@ function BackupSettings() {
   );
 }
 
+function Stepper({ label, hint, value, step, min, max, unit, onChange }: { label: string; hint?: string; value: number; step: number; min: number; max: number; unit: string; onChange: (v: number) => void }) {
+  const set = (v: number) => {
+    sounds.tap();
+    onChange(Math.min(max, Math.max(min, v)));
+  };
+  return (
+    <div className="row">
+      <span className="row-text">
+        <span className="row-label">{label}</span>
+        {hint && <span className="row-hint">{hint}</span>}
+      </span>
+      <span className="stepper">
+        <button className="btn btn-soft btn-icon" aria-label={`Less: ${label}`} disabled={value <= min} onClick={() => set(value - step)}>
+          <Minus size={15} />
+        </button>
+        <span className="stepper-value">
+          {value.toLocaleString()} <span className="row-hint">{unit}</span>
+        </span>
+        <button className="btn btn-soft btn-icon" aria-label={`More: ${label}`} disabled={value >= max} onClick={() => set(value + step)}>
+          <Plus size={15} />
+        </button>
+      </span>
+    </div>
+  );
+}
+
 /** Steps and workouts from Health Connect, where Google Fit and most fitness apps keep them. */
 function MovementSettings() {
   const { settings: s, updateSettings, syncFit, toast } = useStore();
@@ -311,9 +337,47 @@ function MovementSettings() {
     void syncFit(true);
   }, [s.fitSince, syncFit]);
 
-  const rules = "Every 2,000 steps pays seeds, up to 15,000 a day. A workout pays 3 seeds, plus 1 for every 5 minutes.";
+  // New goals can mean new milestones reached: look again once they've settled.
+  const goalKey = `${s.stepGoal}/${s.stepSeeds}/${s.moveGoal}/${s.moveSeeds}`;
+  const firstGoal = useRef(goalKey);
+  useEffect(() => {
+    if (firstGoal.current === goalKey) return;
+    const t = setTimeout(() => void syncFit(true), 1200);
+    return () => clearTimeout(t);
+  }, [goalKey, syncFit]);
 
-  if (!isAndroid) {
+  const rules = "Seeds come as you get closer to your goals, and keep coming past them, up to double.";
+  const stepPlan = stepMilestones(s.stepSeeds);
+  const minutePlan = minuteMilestones(s.moveSeeds);
+  const lead = (plan: { pct: number; seeds: number }[]) => plan.filter((m) => m.pct < 100);
+  const goals = (
+    <>
+      <Stepper
+        label="Daily step goal"
+        hint={`${lead(stepPlan).map((m) => `${m.pct}%`).join(", ")} pay ${lead(stepPlan)[0].seeds} each, the goal pays ${stepPlan.find((m) => m.pct === 100)!.seeds}, and every extra quarter pays ${stepPlan.at(-1)!.seeds}.`}
+        value={s.stepGoal}
+        step={500}
+        min={1000}
+        max={30000}
+        unit="steps"
+        onChange={(v) => updateSettings({ stepGoal: v })}
+      />
+      <Stepper label="Seeds for reaching it" value={s.stepSeeds} step={5} min={5} max={100} unit="seeds" onChange={(v) => updateSettings({ stepSeeds: v })} />
+      <Stepper
+        label="Daily exercise goal"
+        hint={`Minutes of logged workouts. Halfway pays ${minutePlan[0].seeds}, the goal pays ${minutePlan[1].seeds}, and each workout adds 2 for showing up.`}
+        value={s.moveGoal}
+        step={5}
+        min={5}
+        max={180}
+        unit="min"
+        onChange={(v) => updateSettings({ moveGoal: v })}
+      />
+      <Stepper label="Seeds for reaching it" value={s.moveSeeds} step={5} min={5} max={100} unit="seeds" onChange={(v) => updateSettings({ moveSeeds: v })} />
+    </>
+  );
+
+  if (!fitSupported()) {
     return (
       <div className="row">
         <span className="row-text">
@@ -392,6 +456,7 @@ function MovementSettings() {
           </span>
         )}
       </div>
+      {on && goals}
     </>
   );
 }
