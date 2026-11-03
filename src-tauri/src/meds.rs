@@ -620,13 +620,23 @@ pub(crate) fn event(db: &Db, kind: &str, gained: i64, bonus: i64, xp_before: i64
     })
 }
 
-fn void_dose_seeds(db: &Db, id: &str) -> Result<()> {
-    for kind in ["dose", "ontime"] {
-        if db.ledger_for(id)?.iter().any(|e| e.id == format!("{id}:{kind}") && !e.void) {
+fn void_seeds(db: &Db, id: &str, kinds: &[&str]) -> Result<()> {
+    let rows = db.ledger_for(id)?;
+    for kind in kinds {
+        if rows.iter().any(|e| e.id == format!("{id}:{kind}") && !e.void) {
             db.put_ledger(ledger(id, kind, 0, true))?;
         }
     }
     Ok(())
+}
+
+fn void_dose_seeds(db: &Db, id: &str) -> Result<()> {
+    void_seeds(db, id, &["dose", "ontime", "skip"])
+}
+
+/// Skipping on purpose still counts for something: a quarter of the dose's seeds (at least 1).
+pub fn skip_value(reward: i64) -> i64 {
+    ((reward + 3) / 4).max(1)
 }
 
 /// Takes a scheduled dose (by slot id). Taking one twice does nothing.
@@ -646,6 +656,8 @@ pub fn take(db: &Db, slot: &str) -> Result<RewardEvent> {
     let now = now_ms();
     let dose = Dose { id: slot.into(), med_id: m.id.clone(), date: d.into(), time: t.into(), amount, status: "taken".into(), at: now };
     save_dose(db, &dose, false)?;
+    // Taken after all: the dose's seeds replace the smaller skip ones.
+    void_seeds(db, slot, &["skip"])?;
     db.put_ledger(ledger(slot, "dose", m.reward, false))?;
     let mut bonus = 0;
     if !t.contains('~') && (now - local_ms(d, t)).abs() <= ON_TIME_WINDOW_MS {
@@ -677,13 +689,21 @@ pub fn take_extra(db: &Db, med_id: &str, amount: f64) -> Result<RewardEvent> {
     event(db, "bit", m.reward, 0, xp_before, &slot, &display_name(&m))
 }
 
-pub fn skip(db: &Db, slot: &str) -> Result<()> {
+/// Skips a scheduled dose. Replaces a "taken" record (and its seeds); skipping twice does nothing.
+pub fn skip(db: &Db, slot: &str) -> Result<RewardEvent> {
+    let xp_before = db.total_xp()?;
     let (med_id, d, t) = split_slot(slot)?;
     let m = get_med(db, med_id)?;
+    if get_dose(db, slot)?.is_some_and(|x| x.status == "skipped") {
+        return event(db, "none", 0, 0, xp_before, slot, &display_name(&m));
+    }
     let amount = m.schedule.times.iter().find(|x| x.time == t).map_or(1.0, |x| x.amount);
-    let dose = Dose { id: slot.into(), med_id: m.id, date: d.into(), time: t.into(), amount, status: "skipped".into(), at: now_ms() };
+    let dose = Dose { id: slot.into(), med_id: m.id.clone(), date: d.into(), time: t.into(), amount, status: "skipped".into(), at: now_ms() };
     save_dose(db, &dose, false)?;
-    void_dose_seeds(db, slot)
+    void_seeds(db, slot, &["dose", "ontime"])?;
+    db.put_ledger(ledger(slot, "skip", skip_value(m.reward), false))?;
+    let after = db.total_xp()?;
+    event(db, "bit", after - xp_before, 0, xp_before, slot, &display_name(&m))
 }
 
 /// Forgets a taken or skipped dose (a mistap); a scheduled one becomes due again.
@@ -859,10 +879,45 @@ mod tests {
         undo(&db, &slot).unwrap();
         assert_eq!(db.total_xp().unwrap(), 0);
         assert_eq!(stock_left(&db, &get_med(&db, &m.id).unwrap()).unwrap(), Some(10.0));
-        skip(&db, &slot).unwrap();
-        assert_eq!(db.total_xp().unwrap(), 0);
+        let s = skip(&db, &slot).unwrap();
+        assert_eq!(s.gained, 2);
+        assert_eq!(db.total_xp().unwrap(), 2);
+        assert_eq!(skip(&db, &slot).unwrap().kind, "none");
         let slots = slots_on(&db, &m, &today, now_ms()).unwrap();
         assert_eq!(slots[0].status, "skipped");
+    }
+
+    #[test]
+    fn skipping_pays_a_quarter() {
+        assert_eq!(skip_value(5), 2);
+        assert_eq!(skip_value(8), 2);
+        assert_eq!(skip_value(10), 3);
+        assert_eq!(skip_value(1), 1);
+        assert_eq!(skip_value(0), 1);
+        let db = db();
+        let mut i = input("daily");
+        i.start_date = ymd(Local::now().date_naive() - Duration::days(1));
+        i.reward = 10;
+        let m = upsert_med(&db, i).unwrap();
+        let slot = slot_id(&m.id, &ymd(Local::now().date_naive()), "08:05");
+        // Skip, then undo: nothing left.
+        skip(&db, &slot).unwrap();
+        assert_eq!(db.total_xp().unwrap(), 3);
+        undo(&db, &slot).unwrap();
+        assert_eq!(db.total_xp().unwrap(), 0);
+        // Skip, then take after all: the dose replaces the skip.
+        skip(&db, &slot).unwrap();
+        let taken = take(&db, &slot).unwrap();
+        let full = db.total_xp().unwrap();
+        assert!(full >= 10);
+        // The event shows the dose's own seeds; the skip's 3 are quietly replaced.
+        assert_eq!(taken.gained, full);
+        assert!(db.ledger_for(&slot).unwrap().iter().any(|e| e.kind == "skip" && e.void));
+        // Take, then skip: the dose's seeds go, the skip's come.
+        let e = skip(&db, &slot).unwrap();
+        assert_eq!(db.total_xp().unwrap(), 3);
+        assert_eq!(e.gained, 3 - full);
+        assert!(db.ledger_for(&slot).unwrap().iter().any(|e| e.id == format!("{slot}:skip") && !e.void));
     }
 
     #[test]

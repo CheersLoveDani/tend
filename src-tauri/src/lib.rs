@@ -35,11 +35,17 @@ fn surprise_enabled(db: &Db) -> bool {
 /// Tells every window the data changed (sync, tray, notification actions).
 fn notify_changed(app: &AppHandle) {
     let _ = app.emit("data-changed", ());
+    #[cfg(desktop)]
+    desktop::refresh_tray(app);
 }
 
 #[tauri::command]
-fn snapshot(state: State<AppState>) -> Res<Snapshot> {
+fn snapshot(app: AppHandle, state: State<AppState>) -> Res<Snapshot> {
     let db = state.db.lock().unwrap();
+    // Cheap when nothing is overdue; keeps daily habits on today after midnight.
+    if actions::roll_forward(&db).map_err(err)? > 0 {
+        after_local_change(&app);
+    }
     let since = (chrono::Local::now() - chrono::Duration::days(45)).format("%Y-%m-%d").to_string();
     let reminders = db.reminders_live(&since).map_err(err)?;
     let level = rewards::level_info(db.total_xp().map_err(err)?);
@@ -65,6 +71,7 @@ fn snapshot(state: State<AppState>) -> Res<Snapshot> {
             .unwrap_or_default();
         if let Some(d) = days.iter_mut().find(|d| d.date == date) {
             d.seeds += amount;
+            // A skipped dose earns a little but isn't something "done".
             if kind == "finish" || kind == "dose" || kind == "workout" {
                 d.done += 1;
             }
@@ -200,10 +207,10 @@ fn take_extra_dose(app: AppHandle, state: State<AppState>, med_id: String, amoun
 }
 
 #[tauri::command]
-fn skip_dose(app: AppHandle, state: State<AppState>, id: String) -> Res<()> {
-    meds::skip(&state.db.lock().unwrap(), &id).map_err(err)?;
+fn skip_dose(app: AppHandle, state: State<AppState>, id: String) -> Res<RewardEvent> {
+    let e = meds::skip(&state.db.lock().unwrap(), &id).map_err(err)?;
     after_local_change(&app);
-    Ok(())
+    Ok(e)
 }
 
 #[tauri::command]
@@ -277,6 +284,16 @@ fn move_reminder(app: AppHandle, state: State<AppState>, id: String, date: Strin
     let r = actions::move_to(&state.db.lock().unwrap(), &id, &date).map_err(err)?;
     after_local_change(&app);
     Ok(r)
+}
+
+/// Moves several reminders at once; `date` may be SOMEDAY ("9999-12-31"). Returns how many moved.
+#[tauri::command]
+fn move_reminders(app: AppHandle, state: State<AppState>, ids: Vec<String>, date: String) -> Res<usize> {
+    let n = actions::move_many(&state.db.lock().unwrap(), &ids, &date).map_err(err)?;
+    if n > 0 {
+        after_local_change(&app);
+    }
+    Ok(n)
 }
 
 #[tauri::command]
@@ -477,6 +494,8 @@ async fn run_sync(app: AppHandle) -> Res<sync::SyncOutcome> {
 
 /// Pushes local edits to paired hosts shortly after they happen.
 fn after_local_change(app: &AppHandle) {
+    #[cfg(desktop)]
+    desktop::refresh_tray(app);
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         let _ = run_sync(app).await;
@@ -515,6 +534,9 @@ pub fn run() {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
             let db = Db::open(&data_dir.join("tend.db"))?;
+            if let Err(e) = actions::roll_forward(&db) {
+                log::warn!("rolling repeating reminders forward failed: {e}");
+            }
             let db = Arc::new(Mutex::new(db));
             let hosting = cfg!(desktop);
             let name = if cfg!(target_os = "android") {
@@ -539,6 +561,7 @@ pub fn run() {
             save_reminder,
             delete_reminder,
             move_reminder,
+            move_reminders,
             toggle_step,
             did_a_bit,
             complete_reminder,

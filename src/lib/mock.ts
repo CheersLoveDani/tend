@@ -145,10 +145,13 @@ export function installMock() {
       }
       case "skip_dose":
         logged.set(args.id, { status: "skipped", at: Date.now() });
-        return null;
+        ledger.delete(`${args.id}:dose`);
+        ledger.set(`${args.id}:skip`, 2);
+        return doseEvent(args.id, xp() - before, before);
       case "undo_dose":
         logged.delete(args.id);
         ledger.delete(`${args.id}:dose`);
+        ledger.delete(`${args.id}:skip`);
         return doseEvent(args.id, xp() - before, before);
       case "med_history":
         return Array.from({ length: args.days }, (_, i) => ({ date: plusDays(i - args.days + 1), scheduled: 2, taken: i === args.days - 1 ? 0 : Math.random() < 0.85 ? 2 : 1, skipped: 0 }));
@@ -186,6 +189,11 @@ export function installMock() {
       case "move_reminder":
         find(args.id).date = args.date;
         return find(args.id);
+      case "move_reminders": {
+        const moving = reminders.filter((r) => args.ids.includes(r.id) && r.date !== args.date);
+        moving.forEach((r) => (r.date = args.date));
+        return moving.length;
+      }
       case "toggle_step": {
         const r = find(args.id);
         const s = r.steps.find((x) => x.id === args.stepId)!;
