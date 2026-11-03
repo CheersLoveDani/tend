@@ -1,10 +1,11 @@
 // Bridge to the Android plugin: alarms, the persistent "still to do" notification,
 // and the unlock screen all run natively from the state we push here.
 import { addPluginListener, invoke } from "@tauri-apps/api/core";
-import { isAndroid, type Reminder, type Snapshot } from "./api";
-import type { Settings } from "./settings";
-import { today } from "./dates";
+import { api, isAndroid, isSomeday, type Reminder, type Snapshot } from "./api";
+import { defaultSettings, endOfToday, type Settings } from "./settings";
+import { plusDays, today } from "./dates";
 import { amountText } from "./meds";
+import { quickAddInput } from "./quickadd";
 
 export interface Permissions {
   notifications: boolean;
@@ -44,7 +45,7 @@ const P = "plugin:tend-native|";
 export function waiting(reminders: Reminder[]): Reminder[] {
   const t = today();
   return reminders
-    .filter((r) => r.status === "open" && r.date <= t)
+    .filter((r) => r.status === "open" && r.date <= t && !isSomeday(r))
     .sort((a, b) => (a.date + (a.time ?? "99")).localeCompare(b.date + (b.time ?? "99")));
 }
 
@@ -60,6 +61,7 @@ export const DOSE_PREFIX = "dose:";
 export async function pushNativeState(snap: Snapshot, s: Settings) {
   if (!isAndroid) return;
   const now = Date.now();
+  const t = today();
   // Medication comes first everywhere: the list, the chime and the unlock screen.
   const doses = snap.doses
     .filter((d) => d.status === "due" && !d.extra)
@@ -72,17 +74,26 @@ export async function pushNativeState(snap: Snapshot, s: Settings) {
       reward: 0,
       dose: true,
       critical: d.critical,
+      dueAt: d.dueAt,
+      chime: true,
     }));
   const pending = [
     ...doses,
-    ...waiting(snap.reminders).map((r) => ({
-      id: r.id,
-      title: r.title,
-      time: r.time,
-      stepsDone: r.steps.filter((x) => x.done).length,
-      stepsTotal: r.steps.length,
-      reward: r.reward,
-    })),
+    ...waiting(snap.reminders).map((r) => {
+      // Only today's timed reminders may chime, and only once their time has come.
+      // Untimed and older ones stay in the silent list.
+      const dueAt = r.time && r.date === t ? epoch(r.date, r.time) : null;
+      return {
+        id: r.id,
+        title: r.title,
+        time: r.time,
+        stepsDone: r.steps.filter((x) => x.done).length,
+        stepsTotal: r.steps.length,
+        reward: r.reward,
+        dueAt,
+        chime: dueAt !== null && dueAt <= now,
+      };
+    }),
   ];
   const doseAlarms = snap.doseAlarms.map((d) => ({
     id: DOSE_PREFIX + d.id,
@@ -93,7 +104,7 @@ export async function pushNativeState(snap: Snapshot, s: Settings) {
     critical: d.critical,
   }));
   const reminderAlarms = snap.reminders
-    .filter((r) => r.status === "open" && r.time)
+    .filter((r) => r.status === "open" && r.time && !isSomeday(r))
     .map((r) => ({
       id: r.id,
       title: r.title,
@@ -114,8 +125,63 @@ export async function pushNativeState(snap: Snapshot, s: Settings) {
       nagCooldownMinutes: s.nagEvery < 0 ? (s.chimeMinutes > 0 ? 0 : 30) : s.nagEvery,
       chimeMinutes: s.chimeMinutes,
       quietHours: s.quietHours,
+      pausedUntil: s.pausedUntil && s.pausedUntil > now ? s.pausedUntil : 0,
+      nagDailyCap: s.nagDailyCap,
+      nudgeAgainMinutes: s.nudgeAgainMinutes,
+      doseNagMinutes: s.doseNagMinutes,
+      doseNagUntilMinutes: s.doseNagUntilMinutes,
+      preWarnMinutes: s.preWarnMinutes,
+      cueStyle: s.cueStyle,
     },
   }).catch((e) => console.warn("native state", e));
+}
+
+/**
+ * Applies actions queued outside the webview (see `PendingAction`). Each one is independent: a
+ * reminder that has since been deleted just gets skipped. Returns the new settings when one of
+ * them changed settings ("Quiet today"), so the store can pick them up.
+ */
+export async function applyActions(actions: PendingAction[]): Promise<Settings | null> {
+  let settings: Settings | null = null;
+  for (const a of actions) {
+    try {
+      switch (a.type) {
+        case "complete":
+          if (a.id.startsWith(DOSE_PREFIX)) await api.takeDose(a.id.slice(DOSE_PREFIX.length));
+          else await api.complete(a.id);
+          break;
+        case "step": {
+          // Read fresh each time: two step taps in a row tick two different steps.
+          const r = (await api.snapshot()).reminders.find((x) => x.id === a.id);
+          const next = r?.steps.find((x) => !x.done);
+          if (next) await api.toggleStep(a.id, next.id, true);
+          else if (r && r.status === "open") await api.complete(a.id);
+          break;
+        }
+        case "tomorrow":
+          await api.move(a.id, plusDays(1));
+          break;
+        case "add": {
+          const input = a.text ? quickAddInput(a.text, new Date(a.at)) : null;
+          if (input) await api.save(input);
+          break;
+        }
+        case "quietToday": {
+          const stored = await api.getSettings().catch(() => ({}));
+          const next = { ...defaultSettings, ...stored, pausedUntil: endOfToday(new Date(a.at)) } as Settings;
+          await api.setSettings(next);
+          settings = next;
+          break;
+        }
+        case "snooze":
+          // Already re-scheduled natively.
+          break;
+      }
+    } catch (e) {
+      console.warn("pending action", a.type, e);
+    }
+  }
+  return settings;
 }
 
 export const native = {

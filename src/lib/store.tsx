@@ -3,7 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { api, type DoseSlot, type Entry, type Med, type MedInput, type Reminder, type ReminderInput, type RewardEvent, type Snapshot } from "./api";
 import { defaultSettings, type Settings } from "./settings";
 import { configureSound, sounds } from "./sound";
-import { DOSE_PREFIX, native, pushNativeState } from "./native";
+import { applyActions, native, pushNativeState } from "./native";
 import { tomorrow } from "./dates";
 import { autoBackup } from "./backup";
 import { earnedText, fitness, fitSupported, type FitData } from "./fitness";
@@ -121,14 +121,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   // Apply "Done" / "Snooze" taps made on Android notifications while we weren't running.
+  // Also widget taps, quick add (share sheet, tile, shortcut, notification reply) and "Quiet today".
   const applyPending = useCallback(async () => {
     const actions = await native.takePendingActions().catch(() => []);
-    for (const a of actions) {
-      if (a.type !== "complete") continue;
-      if (a.id.startsWith(DOSE_PREFIX)) await api.takeDose(a.id.slice(DOSE_PREFIX.length)).catch(() => null);
-      else await api.complete(a.id).catch(() => null);
+    if (!actions.length) return;
+    const changed = await applyActions(actions);
+    if (changed) {
+      settingsRef.current = changed;
+      setSettings(changed);
     }
-    if (actions.length) await refresh();
+    await refresh();
   }, [refresh]);
 
   useEffect(() => {
