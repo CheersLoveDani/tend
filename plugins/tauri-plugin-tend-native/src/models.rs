@@ -19,6 +19,12 @@ pub struct PendingItem {
     /// Reminds even during quiet hours.
     #[serde(default)]
     pub critical: bool,
+    /// Epoch ms of its time today; `None` when untimed or from an earlier day.
+    #[serde(default)]
+    pub due_at: Option<i64>,
+    /// A dose, or a timed reminder already due today: may be chimed about.
+    #[serde(default)]
+    pub chime: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -64,6 +70,45 @@ pub struct NativeState {
     pub chime_minutes: u32,
     #[serde(default)]
     pub quiet_hours: Option<QuietHours>,
+    /// "Quiet for today" until this epoch ms (0 = off). Doses still remind.
+    #[serde(default)]
+    pub paused_until: i64,
+    /// Most unlock screens a day (0 = no limit).
+    #[serde(default)]
+    pub nag_daily_cap: u32,
+    #[serde(default)]
+    pub nudge_again_minutes: u32,
+    #[serde(default)]
+    pub dose_nag_minutes: u32,
+    #[serde(default)]
+    pub dose_nag_until_minutes: u32,
+    #[serde(default)]
+    pub pre_warn_minutes: u32,
+    /// `sound` | `vibrate` | `silent`
+    #[serde(default)]
+    pub cue_style: Option<String>,
+}
+
+/// `{ status: "granted" | "denied" | "unsupported" }`
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarAccess {
+    pub status: String,
+}
+
+impl CalendarAccess {
+    pub fn unsupported() -> Self {
+        Self { status: "unsupported".into() }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarEventsArgs {
+    pub from: i64,
+    pub to: i64,
+    #[serde(default)]
+    pub ids: Vec<String>,
 }
 
 /// Where backups are written (Android: a file the user picked, e.g. in Google Drive).
@@ -163,6 +208,10 @@ pub struct LaunchAction {
 pub enum PendingActionType {
     Complete,
     Snooze,
+    Step,
+    Tomorrow,
+    Add,
+    QuietToday,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -170,9 +219,14 @@ pub enum PendingActionType {
 pub struct PendingAction {
     #[serde(rename = "type")]
     pub kind: PendingActionType,
+    /// Empty for `add` and `quietToday`.
+    #[serde(default)]
     pub id: String,
     /// Epoch milliseconds when the user pressed the button.
     pub at: i64,
+    /// What was typed or shared, for `add`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]

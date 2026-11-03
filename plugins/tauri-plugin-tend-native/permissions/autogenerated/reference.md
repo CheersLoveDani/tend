@@ -19,6 +19,10 @@ Allows all Tend native commands and the plugin event listeners (`action`, `pendi
 - `allow-health-status`
 - `allow-health-request`
 - `allow-health-read`
+- `allow-calendar-status`
+- `allow-calendar-request`
+- `allow-calendar-list`
+- `allow-calendar-events`
 - `allow-register-listener`
 - `allow-remove-listener`
 
@@ -53,6 +57,110 @@ Enables the backup_target command without any pre-configured scope.
 <td>
 
 Denies the backup_target command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`tend-native:allow-calendar-events`
+
+</td>
+<td>
+
+Enables the calendar_events command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`tend-native:deny-calendar-events`
+
+</td>
+<td>
+
+Denies the calendar_events command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`tend-native:allow-calendar-list`
+
+</td>
+<td>
+
+Enables the calendar_list command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`tend-native:deny-calendar-list`
+
+</td>
+<td>
+
+Denies the calendar_list command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`tend-native:allow-calendar-request`
+
+</td>
+<td>
+
+Enables the calendar_request command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`tend-native:deny-calendar-request`
+
+</td>
+<td>
+
+Denies the calendar_request command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`tend-native:allow-calendar-status`
+
+</td>
+<td>
+
+Enables the calendar_status command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`tend-native:deny-calendar-status`
+
+</td>
+<td>
+
+Denies the calendar_status command without any pre-configured scope.
 
 </td>
 </tr>

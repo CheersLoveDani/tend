@@ -94,3 +94,33 @@ pub(crate) async fn health_read<R: Runtime>(app: AppHandle<R>, days: u32) -> Res
 pub(crate) async fn move_to_back<R: Runtime>(app: AppHandle<R>) -> Result<()> {
     app.tend_native().move_to_back()
 }
+
+/// May Tend read the phone's calendars? (`unsupported` on desktop.)
+#[command]
+pub(crate) async fn calendar_status<R: Runtime>(app: AppHandle<R>) -> Result<CalendarAccess> {
+    app.tend_native().calendar_status()
+}
+
+/// Asks for read-only calendar access (or opens the app's settings if it was refused for good).
+#[command]
+pub(crate) async fn calendar_request<R: Runtime>(app: AppHandle<R>) -> Result<CalendarAccess> {
+    app.tend_native().calendar_request()
+}
+
+/// Visible calendars: `{ calendars: [{ id, name, account, color }] }`.
+#[command]
+pub(crate) async fn calendar_list<R: Runtime>(app: AppHandle<R>) -> Result<serde_json::Value> {
+    app.tend_native().calendar_list()
+}
+
+/// Event instances overlapping [from, to) (epoch ms) from `ids` (empty = all visible):
+/// `{ events: [{ id, calendarId, title, start, end, allDay, color, location }] }`.
+#[command]
+pub(crate) async fn calendar_events<R: Runtime>(
+    app: AppHandle<R>,
+    from: i64,
+    to: i64,
+    ids: Option<Vec<String>>,
+) -> Result<serde_json::Value> {
+    app.tend_native().calendar_events(CalendarEventsArgs { from, to, ids: ids.unwrap_or_default() })
+}

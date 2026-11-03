@@ -58,6 +58,10 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             commands::health_status,
             commands::health_request,
             commands::health_read,
+            commands::calendar_status,
+            commands::calendar_request,
+            commands::calendar_list,
+            commands::calendar_events,
         ])
         .setup(|app, api| {
             #[cfg(mobile)]

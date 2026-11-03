@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-calendar-request"
+description = "Enables the calendar_request command without any pre-configured scope."
+commands.allow = ["calendar_request"]
+
+[[permission]]
+identifier = "deny-calendar-request"
+description = "Denies the calendar_request command without any pre-configured scope."
+commands.deny = ["calendar_request"]

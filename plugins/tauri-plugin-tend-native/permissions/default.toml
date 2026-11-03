@@ -18,6 +18,10 @@ permissions = [
   "allow-health-status",
   "allow-health-request",
   "allow-health-read",
+  "allow-calendar-status",
+  "allow-calendar-request",
+  "allow-calendar-list",
+  "allow-calendar-events",
   "allow-register-listener",
   "allow-remove-listener",
 ]

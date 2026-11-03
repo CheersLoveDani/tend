@@ -307,6 +307,54 @@
           "markdownDescription": "Denies the backup_target command without any pre-configured scope."
         },
         {
+          "description": "Enables the calendar_events command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-calendar-events",
+          "markdownDescription": "Enables the calendar_events command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the calendar_events command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-calendar-events",
+          "markdownDescription": "Denies the calendar_events command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the calendar_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-calendar-list",
+          "markdownDescription": "Enables the calendar_list command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the calendar_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-calendar-list",
+          "markdownDescription": "Denies the calendar_list command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the calendar_request command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-calendar-request",
+          "markdownDescription": "Enables the calendar_request command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the calendar_request command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-calendar-request",
+          "markdownDescription": "Denies the calendar_request command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the calendar_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-calendar-status",
+          "markdownDescription": "Enables the calendar_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the calendar_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-calendar-status",
+          "markdownDescription": "Denies the calendar_status command without any pre-configured scope."
+        },
+        {
           "description": "Enables the choose_backup_file command without any pre-configured scope.",
           "type": "string",
           "const": "allow-choose-backup-file",
@@ -499,10 +547,10 @@
           "markdownDescription": "Denies the write_backup command without any pre-configured scope."
         },
         {
-          "description": "Allows all Tend native commands and the plugin event listeners (`action`, `pending-actions`).\n#### This default permission set includes:\n\n- `allow-set-state`\n- `allow-get-permissions`\n- `allow-request-permission`\n- `allow-take-launch-action`\n- `allow-take-pending-actions`\n- `allow-download-update`\n- `allow-install-update`\n- `allow-move-to-back`\n- `allow-choose-backup-file`\n- `allow-backup-target`\n- `allow-write-backup`\n- `allow-open-backup-file`\n- `allow-health-status`\n- `allow-health-request`\n- `allow-health-read`\n- `allow-register-listener`\n- `allow-remove-listener`",
+          "description": "Allows all Tend native commands and the plugin event listeners (`action`, `pending-actions`).\n#### This default permission set includes:\n\n- `allow-set-state`\n- `allow-get-permissions`\n- `allow-request-permission`\n- `allow-take-launch-action`\n- `allow-take-pending-actions`\n- `allow-download-update`\n- `allow-install-update`\n- `allow-move-to-back`\n- `allow-choose-backup-file`\n- `allow-backup-target`\n- `allow-write-backup`\n- `allow-open-backup-file`\n- `allow-health-status`\n- `allow-health-request`\n- `allow-health-read`\n- `allow-calendar-status`\n- `allow-calendar-request`\n- `allow-calendar-list`\n- `allow-calendar-events`\n- `allow-register-listener`\n- `allow-remove-listener`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Allows all Tend native commands and the plugin event listeners (`action`, `pending-actions`).\n#### This default permission set includes:\n\n- `allow-set-state`\n- `allow-get-permissions`\n- `allow-request-permission`\n- `allow-take-launch-action`\n- `allow-take-pending-actions`\n- `allow-download-update`\n- `allow-install-update`\n- `allow-move-to-back`\n- `allow-choose-backup-file`\n- `allow-backup-target`\n- `allow-write-backup`\n- `allow-open-backup-file`\n- `allow-health-status`\n- `allow-health-request`\n- `allow-health-read`\n- `allow-register-listener`\n- `allow-remove-listener`"
+          "markdownDescription": "Allows all Tend native commands and the plugin event listeners (`action`, `pending-actions`).\n#### This default permission set includes:\n\n- `allow-set-state`\n- `allow-get-permissions`\n- `allow-request-permission`\n- `allow-take-launch-action`\n- `allow-take-pending-actions`\n- `allow-download-update`\n- `allow-install-update`\n- `allow-move-to-back`\n- `allow-choose-backup-file`\n- `allow-backup-target`\n- `allow-write-backup`\n- `allow-open-backup-file`\n- `allow-health-status`\n- `allow-health-request`\n- `allow-health-read`\n- `allow-calendar-status`\n- `allow-calendar-request`\n- `allow-calendar-list`\n- `allow-calendar-events`\n- `allow-register-listener`\n- `allow-remove-listener`"
         }
       ]
     }

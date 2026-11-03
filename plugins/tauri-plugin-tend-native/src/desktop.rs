@@ -75,6 +75,23 @@ impl<R: Runtime> TendNative<R> {
         Ok(serde_json::json!({ "days": [], "workouts": [] }))
     }
 
+    /// The phone's calendars are Android-only for now.
+    pub fn calendar_status(&self) -> crate::Result<CalendarAccess> {
+        Ok(CalendarAccess::unsupported())
+    }
+
+    pub fn calendar_request(&self) -> crate::Result<CalendarAccess> {
+        Ok(CalendarAccess::unsupported())
+    }
+
+    pub fn calendar_list(&self) -> crate::Result<serde_json::Value> {
+        Ok(serde_json::json!({ "calendars": [] }))
+    }
+
+    pub fn calendar_events(&self, _args: CalendarEventsArgs) -> crate::Result<serde_json::Value> {
+        Ok(serde_json::json!({ "events": [] }))
+    }
+
     pub fn move_to_back(&self) -> crate::Result<()> {
         Ok(())
     }

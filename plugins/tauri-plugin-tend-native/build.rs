@@ -14,6 +14,10 @@ const COMMANDS: &[&str] = &[
     "health_status",
     "health_request",
     "health_read",
+    "calendar_status",
+    "calendar_request",
+    "calendar_list",
+    "calendar_events",
     // Needed so `addPluginListener('tend-native', ...)` passes the ACL.
     "register_listener",
     "remove_listener",
