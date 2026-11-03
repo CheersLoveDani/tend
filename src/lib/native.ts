@@ -21,10 +21,21 @@ export interface LaunchAction {
   reminderId?: string;
 }
 
+/**
+ * Things done outside the webview (notification buttons, widget, Quick Settings tile, share sheet),
+ * queued natively and applied by the store's `applyPending` the next time the UI runs.
+ * - complete: finish reminder `id` (or take dose `dose:<slot>`)
+ * - step: tick reminder `id`'s next step
+ * - tomorrow: move reminder `id` to tomorrow
+ * - add: create a reminder from `text` (natural language, e.g. "call mum at 6")
+ * - quietToday: turn on "Quiet for today"
+ * - snooze: already handled natively (alarm re-scheduled); informational only
+ */
 export interface PendingAction {
-  type: "complete" | "snooze";
+  type: "complete" | "snooze" | "step" | "tomorrow" | "add" | "quietToday";
   id: string;
   at: number;
+  text?: string;
 }
 
 const P = "plugin:tend-native|";

@@ -242,6 +242,8 @@ export const api = {
     invoke<Peer>("pair_any", { hosts, port, code, device }),
   forgetPeer: (id: string) => invoke<void>("forget_peer", { id }),
   syncNow: () => invoke<SyncOutcome>("sync_now"),
+  /** Moves several reminders at once (use SOMEDAY to park them). */
+  moveMany: (ids: string[], date: string) => invoke<number>("move_reminders", { ids, date }),
   saveMed: (input: MedInput) => invoke<Med>("save_med", { input }),
   deleteMed: (id: string) => invoke<void>("delete_med", { id }),
   addMedStock: (id: string, amount: number) => invoke<Med>("add_med_stock", { id, amount }),
@@ -255,6 +257,10 @@ export const api = {
   exportHealth: () => invoke<string>("export_health"),
   importHealth: (json: string) => invoke<[number, number, number]>("import_health", { json }),
 };
+
+/** Reminders parked with no day ("Someday") carry this date, so older versions just see a far-future task. */
+export const SOMEDAY = "9999-12-31";
+export const isSomeday = (r: Pick<Reminder, "date">) => r.date === SOMEDAY;
 
 export const uid = () =>
   (crypto.randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now().toString(36)).slice(0, 12);
