@@ -17,6 +17,9 @@ function at(ms: number | null) {
   return clock(`${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")}`);
 }
 
+/** Skipping still pays a quarter of the dose's seeds: logging honestly is what matters. */
+export const skipSeeds = (reward: number) => Math.max(1, Math.ceil(reward * 0.25));
+
 /** One dose: take it, skip it, or undo a mistap. */
 export function DoseCard({ d, onOpen }: Props) {
   const store = useStore();
@@ -56,8 +59,12 @@ export function DoseCard({ d, onOpen }: Props) {
         </div>
         {open ? (
           <div className="dose-actions">
-            <button className="btn btn-quiet dose-skip" onClick={() => void store.skipDose(d)}>
-              Skip
+            <button
+              className="btn btn-quiet dose-skip"
+              aria-label={med ? `Skip, ${skipSeeds(med.reward)} seeds` : "Skip"}
+              onClick={() => void store.skipDose(d)}
+            >
+              Skip{med && ` · ${skipSeeds(med.reward)}`}
             </button>
             <motion.button className="btn btn-primary dose-take" whileTap={{ scale: 0.92 }} onClick={() => void store.takeDose(d)}>
               <Check size={16} /> Take

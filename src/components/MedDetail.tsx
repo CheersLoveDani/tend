@@ -22,17 +22,25 @@ export function MedDetail({ med, onEdit, onClose }: Props) {
   const unit = formOf(med.form);
 
   // Re-read the history whenever today's doses change.
-  const todayKey = store.snap?.doses.filter((d) => d.medId === med.id).map((d) => d.status).join();
+  const todayKey = store.snap?.doses
+    .filter((d) => d.medId === med.id)
+    .map((d) => d.status)
+    .join();
   useEffect(() => {
-    void api.medHistory(med.id, 30).then(setDays).catch(() => setDays([]));
+    void api
+      .medHistory(med.id, 30)
+      .then(setDays)
+      .catch(() => setDays([]));
   }, [med.id, todayKey]);
 
-  const scheduled = days.reduce((n, d) => n + d.scheduled, 0);
-  const taken = days.reduce((n, d) => n + Math.min(d.taken, d.scheduled), 0);
-  const rate = scheduled ? Math.round((taken / scheduled) * 100) : null;
+  // Counted in days, not percent: "26 of 30 days" reads kinder than "87%".
+  const dueDays = days.filter((d) => d.scheduled > 0);
+  const fullDays = dueDays.filter((d) => d.taken >= d.scheduled).length;
 
   const togglePause = () =>
-    void store.saveMed({ ...med, id: med.id, stock: med.left, paused: !med.paused }).then(() => store.toast(med.paused ? `${med.name} is back on` : `${med.name} is paused`));
+    void store
+      .saveMed({ ...med, id: med.id, stock: med.left, paused: !med.paused })
+      .then(() => store.toast(med.paused ? `${med.name} is back on` : `${med.name} is paused`));
 
   return (
     <motion.div className="sheet-scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
@@ -68,12 +76,21 @@ export function MedDetail({ med, onEdit, onClose }: Props) {
 
           {med.schedule.kind !== "asNeeded" && (
             <section className="group">
-              <h3>Last 30 days{rate != null && ` · ${rate}% taken`}</h3>
-              <div className="adherence" role="img" aria-label={`${taken} of ${scheduled} doses taken in the last 30 days`}>
+              <h3>Last 30 days{dueDays.length > 0 && ` · taken on ${fullDays} of ${dueDays.length} days`}</h3>
+              <div className="adherence" role="img" aria-label={`All doses taken on ${fullDays} of ${dueDays.length} days in the last 30 days`}>
                 {days.map((d) => {
-                  const state = d.scheduled === 0 ? "none" : d.taken >= d.scheduled ? "all" : d.taken > 0 ? "some" : d.skipped >= d.scheduled ? "skipped" : "missed";
+                  const state =
+                    d.scheduled === 0 ? "none" : d.taken >= d.scheduled ? "all" : d.taken > 0 ? "some" : d.skipped >= d.scheduled ? "skipped" : "missed";
+                  const label =
+                    state === "none"
+                      ? "nothing due"
+                      : state === "missed"
+                        ? "not logged"
+                        : state === "skipped"
+                          ? "skipped"
+                          : `${d.taken} of ${d.scheduled} taken`;
                   return (
-                    <span key={d.date} className={`adh adh-${state}`} title={`${format(parseISO(d.date), "EEE d MMM")}: ${d.taken} of ${d.scheduled}`}>
+                    <span key={d.date} className={`adh adh-${state}`} title={`${format(parseISO(d.date), "EEE d MMM")}: ${label}`}>
                       {state === "all" && <Check size={10} />}
                     </span>
                   );
@@ -92,7 +109,12 @@ export function MedDetail({ med, onEdit, onClose }: Props) {
               <>
                 <p className={`supply-line ${med.low ? "is-low" : ""}`}>
                   <strong>{amountText(med.left, med.form)}</strong> left
-                  {med.daysLeft != null && med.schedule.kind !== "asNeeded" && <> · about {med.daysLeft} {med.daysLeft === 1 ? "day" : "days"}</>}
+                  {med.daysLeft != null && med.schedule.kind !== "asNeeded" && (
+                    <>
+                      {" "}
+                      · about {med.daysLeft} {med.daysLeft === 1 ? "day" : "days"}
+                    </>
+                  )}
                   {med.low && " · time to get more"}
                 </p>
                 <div className="inline-row">
