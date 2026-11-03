@@ -133,6 +133,16 @@ class UnlockNudgeService : Service() {
     }
 
     val now = System.currentTimeMillis()
+    if (state.isPaused(now)) {
+      Log.i("TendNative", "unlock: quiet for today")
+      return
+    }
+    val cal = java.util.Calendar.getInstance()
+    val day = cal.get(java.util.Calendar.YEAR) * 10000 + (cal.get(java.util.Calendar.MONTH) + 1) * 100 + cal.get(java.util.Calendar.DAY_OF_MONTH)
+    if (state.nagDailyCap > 0 && TendStore.nagCount(this, day) >= state.nagDailyCap) {
+      Log.i("TendNative", "unlock: daily cap reached")
+      return
+    }
     val last = TendStore.lastNagAt(this)
     // `last > now` means the clock went backwards: don't let that block nudges forever.
     if (state.nagAfterChime) {
@@ -149,6 +159,7 @@ class UnlockNudgeService : Service() {
       }
     }
     TendStore.setLastNagAt(this, now)
+    TendStore.bumpNagCount(this, day)
 
     // Background activity starts are allowed when the app holds SYSTEM_ALERT_WINDOW.
     if (Settings.canDrawOverlays(this)) {

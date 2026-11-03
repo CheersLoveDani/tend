@@ -10,14 +10,27 @@ import android.content.Intent
 import android.os.Build
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
+import androidx.core.app.RemoteInput
 import androidx.core.content.ContextCompat
 import com.tend.nativeplugin.R
 
 object TendNotifications {
   const val CHANNEL_STILL_TO_DO = "tend_still_to_do"
-  const val CHANNEL_REMINDERS = "tend_reminders"
   const val CHANNEL_NUDGE = "tend_nudge"
-  const val CHANNEL_CHIME = "tend_chime_alert"
+
+  /** Doses and the moment a timed reminder comes due: high importance, separate so muting the gentle cues never silences meds. */
+  const val CHANNEL_ALERTS = "tend_alerts"
+
+  /**
+   * Gentle cues (the chime, the second nudge, heads-ups). Sound and vibration are fixed per
+   * channel on Android 8+, so each cue style gets its own channel.
+   */
+  const val CHANNEL_GENTLE_SOUND = "tend_gentle_sound"
+  const val CHANNEL_GENTLE_VIBRATE = "tend_gentle_vibrate"
+  const val CHANNEL_GENTLE_SILENT = "tend_gentle_silent"
+
+  /** Channels earlier versions created. Their importance can't be changed, so they're replaced. */
+  private val OLD_CHANNELS = listOf("tend_chime", "tend_chime_alert", "tend_reminders")
 
   private const val MAX_INBOX_LINES = 6
 
@@ -27,6 +40,7 @@ object TendNotifications {
   fun ensureChannels(ctx: Context) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
     val nm = nm(ctx)
+    for (old in OLD_CHANNELS) if (nm.getNotificationChannel(old) != null) nm.deleteNotificationChannel(old)
     if (nm.getNotificationChannel(CHANNEL_STILL_TO_DO) == null) {
       nm.createNotificationChannel(
         NotificationChannel(CHANNEL_STILL_TO_DO, "Still to do", NotificationManager.IMPORTANCE_LOW).apply {
@@ -38,10 +52,43 @@ object TendNotifications {
         }
       )
     }
-    if (nm.getNotificationChannel(CHANNEL_REMINDERS) == null) {
+    if (nm.getNotificationChannel(CHANNEL_ALERTS) == null) {
       nm.createNotificationChannel(
-        NotificationChannel(CHANNEL_REMINDERS, "Reminders", NotificationManager.IMPORTANCE_DEFAULT).apply {
-          description = "A nudge at the time you set for a reminder."
+        NotificationChannel(CHANNEL_ALERTS, "Doses & timed reminders", NotificationManager.IMPORTANCE_HIGH).apply {
+          description = "Medication, and the moment a reminder you gave a time comes due."
+          enableVibration(true)
+          vibrationPattern = longArrayOf(0, 250, 150, 250)
+          lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+        }
+      )
+    }
+    if (nm.getNotificationChannel(CHANNEL_GENTLE_SOUND) == null) {
+      nm.createNotificationChannel(
+        NotificationChannel(CHANNEL_GENTLE_SOUND, "Gentle nudges (sound)", NotificationManager.IMPORTANCE_DEFAULT).apply {
+          description = "The occasional chime, a second nudge and heads-ups, with a sound."
+          setShowBadge(false)
+          enableVibration(false)
+        }
+      )
+    }
+    if (nm.getNotificationChannel(CHANNEL_GENTLE_VIBRATE) == null) {
+      nm.createNotificationChannel(
+        NotificationChannel(CHANNEL_GENTLE_VIBRATE, "Gentle nudges (vibrate)", NotificationManager.IMPORTANCE_DEFAULT).apply {
+          description = "The occasional chime, a second nudge and heads-ups, as a short buzz."
+          setShowBadge(false)
+          setSound(null, null)
+          enableVibration(true)
+          vibrationPattern = longArrayOf(0, 200)
+        }
+      )
+    }
+    if (nm.getNotificationChannel(CHANNEL_GENTLE_SILENT) == null) {
+      nm.createNotificationChannel(
+        NotificationChannel(CHANNEL_GENTLE_SILENT, "Gentle nudges (silent)", NotificationManager.IMPORTANCE_LOW).apply {
+          description = "The occasional chime, a second nudge and heads-ups, silently in the shade."
+          setShowBadge(false)
+          setSound(null, null)
+          enableVibration(false)
         }
       )
     }
@@ -54,19 +101,19 @@ object TendNotifications {
         }
       )
     }
-    // 0.1.2 shipped a default-importance chime channel; importance can't be raised later.
-    if (nm.getNotificationChannel("tend_chime") != null) nm.deleteNotificationChannel("tend_chime")
-    if (nm.getNotificationChannel(CHANNEL_CHIME) == null) {
-      nm.createNotificationChannel(
-        NotificationChannel(CHANNEL_CHIME, "Chime", NotificationManager.IMPORTANCE_HIGH).apply {
-          description = "A sound, buzz and pop-up every so often while things are still waiting."
-          setShowBadge(false)
-          enableVibration(true)
-          vibrationPattern = longArrayOf(0, 250, 150, 250)
-          lockscreenVisibility = Notification.VISIBILITY_PRIVATE
-        }
-      )
-    }
+  }
+
+  private fun gentleChannel(cueStyle: String): String = when (cueStyle) {
+    "vibrate" -> CHANNEL_GENTLE_VIBRATE
+    "silent" -> CHANNEL_GENTLE_SILENT
+    else -> CHANNEL_GENTLE_SOUND
+  }
+
+  /** Before Android 8 there are no channels: the same choice is made per notification. */
+  private fun NotificationCompat.Builder.gentleCue(cueStyle: String): NotificationCompat.Builder = when (cueStyle) {
+    "vibrate" -> setDefaults(NotificationCompat.DEFAULT_VIBRATE).setPriority(NotificationCompat.PRIORITY_DEFAULT)
+    "silent" -> setSilent(true).setPriority(NotificationCompat.PRIORITY_LOW)
+    else -> setDefaults(NotificationCompat.DEFAULT_SOUND).setPriority(NotificationCompat.PRIORITY_DEFAULT)
   }
 
   // ---- intents -------------------------------------------------------------------------------
@@ -94,6 +141,14 @@ object TendNotifications {
     )
   }
 
+  fun quickAddPendingIntent(ctx: Context): PendingIntent =
+    PendingIntent.getActivity(
+      ctx,
+      TendIds.RC_QUICK_ADD,
+      QuickAddActivity.intent(ctx),
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    )
+
   private fun reminderActionPendingIntent(
     ctx: Context,
     action: String,
@@ -115,6 +170,17 @@ object TendNotifications {
     )
   }
 
+  private fun quietTodayPendingIntent(ctx: Context): PendingIntent =
+    PendingIntent.getBroadcast(
+      ctx,
+      TendIds.RC_QUIET_TODAY,
+      Intent(ctx, ReminderActionReceiver::class.java).setAction(TendIds.ACTION_QUIET_TODAY),
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    )
+
+  private fun quietTodayAction(ctx: Context) =
+    NotificationCompat.Action.Builder(0, "Quiet today", quietTodayPendingIntent(ctx)).build()
+
   private fun persistentDeletePendingIntent(ctx: Context): PendingIntent {
     val intent = Intent(ctx, PersistentDismissReceiver::class.java)
       .setAction(TendIds.ACTION_PERSISTENT_DISMISSED)
@@ -126,12 +192,32 @@ object TendNotifications {
     )
   }
 
+  /** "Add…" typed straight into the shade. RemoteInput needs a mutable PendingIntent to fill in. */
+  private fun addAction(ctx: Context): NotificationCompat.Action {
+    val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+    } else {
+      PendingIntent.FLAG_UPDATE_CURRENT
+    }
+    val pi = PendingIntent.getBroadcast(
+      ctx,
+      TendIds.RC_ADD,
+      Intent(ctx, ReminderActionReceiver::class.java).setAction(TendIds.ACTION_ADD).setPackage(ctx.packageName),
+      flags
+    )
+    val input = RemoteInput.Builder(TendIds.KEY_ADD_TEXT).setLabel("e.g. call mum at 6").build()
+    return NotificationCompat.Action.Builder(0, "Add…", pi)
+      .addRemoteInput(input)
+      .setAllowGeneratedReplies(false)
+      .build()
+  }
+
   // ---- "still to do" ---------------------------------------------------------------------------
 
-  private fun countPhrase(n: Int, verb: String): String =
+  fun countPhrase(n: Int, verb: String): String =
     if (n == 1) "1 thing $verb" else "$n things $verb"
 
-  private fun lineFor(item: PendingItem): String {
+  fun lineFor(item: PendingItem): String {
     val sb = StringBuilder()
     if (!item.time.isNullOrBlank()) sb.append(item.time).append("  ")
     if (item.dose) sb.append("Take ")
@@ -140,13 +226,19 @@ object TendNotifications {
     return sb.toString()
   }
 
+  private fun short(title: String, max: Int = 18): String =
+    if (title.length <= max) title else title.take(max - 1).trimEnd() + "…"
+
   private fun baseBuilder(ctx: Context, channel: String): NotificationCompat.Builder =
     NotificationCompat.Builder(ctx, channel)
       .setSmallIcon(R.drawable.ic_tend_leaf)
       .setColor(ContextCompat.getColor(ctx, R.color.tend_accent))
 
-  /** Used both as a plain notification and as the unlock service's foreground notification. */
-  fun buildPersistent(ctx: Context, state: NativeState): Notification {
+  /**
+   * Used both as a plain notification and as the unlock service's foreground notification.
+   * [added] is shown under the reply field right after an "Add…" (it also stops the spinner).
+   */
+  fun buildPersistent(ctx: Context, state: NativeState, added: CharSequence? = null): Notification {
     val n = state.pending.size
     val title = if (n == 0) "All clear for now" else countPhrase(n, "still waiting")
     val text = if (n == 0) "Nothing waiting. Nice." else state.pending.joinToString(" · ") { it.title }
@@ -175,82 +267,145 @@ object TendNotifications {
       .setPublicVersion(publicVersion)
       .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
       .setDeleteIntent(persistentDeletePendingIntent(ctx))
+      .addAction(addAction(ctx))
+    // The first thing with steps left gets a one-tap "next step done".
+    state.pending.firstOrNull { it.hasStepsLeft }?.let { item ->
+      builder.addAction(0, "✓ step · ${short(item.title)}", reminderActionPendingIntent(ctx, TendIds.ACTION_STEP, item.id, item.title, ""))
+    }
+    if (n > 0 && !state.isPaused()) builder.addAction(quietTodayAction(ctx))
+    if (added != null) builder.setRemoteInputHistory(arrayOf(added))
     activityPendingIntent(ctx, TendIds.RC_OPEN, TendIds.LAUNCH_OPEN, null)?.let { builder.setContentIntent(it) }
     return builder.build()
   }
 
   @SuppressLint("MissingPermission")
-  fun postPersistent(ctx: Context, state: NativeState) {
+  fun postPersistent(ctx: Context, state: NativeState, added: CharSequence? = null) {
     ensureChannels(ctx)
-    nm(ctx).notify(TendIds.PERSISTENT_NOTIFICATION_ID, buildPersistent(ctx, state))
+    nm(ctx).notify(TendIds.PERSISTENT_NOTIFICATION_ID, buildPersistent(ctx, state, added))
   }
 
   fun cancelPersistent(ctx: Context) {
     nm(ctx).cancel(TendIds.PERSISTENT_NOTIFICATION_ID)
   }
 
-  // ---- timed reminders -------------------------------------------------------------------------
+  // ---- timed reminders and doses ---------------------------------------------------------------
 
+  /**
+   * A reminder's or dose's own notification. [gentle]: the follow-up nudge, on the gentle channel
+   * in the user's cue style. [fullScreen]: doses only, and only while the screen is off.
+   */
   @SuppressLint("MissingPermission")
-  fun postReminder(ctx: Context, id: String, title: String, body: String, silent: Boolean, dose: Boolean = false) {
+  fun postReminder(
+    ctx: Context,
+    id: String,
+    title: String,
+    body: String,
+    silent: Boolean,
+    dose: Boolean = false,
+    gentle: Boolean = false,
+    cueStyle: String = "sound",
+    fullScreen: Boolean = false
+  ) {
     ensureChannels(ctx)
-    val builder = baseBuilder(ctx, CHANNEL_REMINDERS)
+    val builder = baseBuilder(ctx, if (gentle) gentleChannel(cueStyle) else CHANNEL_ALERTS)
       .setContentTitle(title)
       .setAutoCancel(true)
       .setCategory(NotificationCompat.CATEGORY_REMINDER)
-      .setPriority(NotificationCompat.PRIORITY_DEFAULT)
       .setShowWhen(true)
       .setWhen(System.currentTimeMillis())
-      .setSilent(silent)
-      .addAction(0, if (dose) "Taken" else "Done", reminderActionPendingIntent(ctx, TendIds.ACTION_DONE, id, title, body))
-      .addAction(0, "Snooze 15 min", reminderActionPendingIntent(ctx, TendIds.ACTION_SNOOZE, id, title, body))
+    if (gentle) {
+      builder.gentleCue(cueStyle)
+    } else {
+      builder.setPriority(NotificationCompat.PRIORITY_HIGH)
+        .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)
+    }
+    if (silent) builder.setSilent(true)
+    if (dose) {
+      builder
+        .addAction(0, "Taken", reminderActionPendingIntent(ctx, TendIds.ACTION_DONE, id, title, body))
+        .addAction(0, "Snooze 15 min", reminderActionPendingIntent(ctx, TendIds.ACTION_SNOOZE, id, title, body))
+    } else {
+      builder
+        .addAction(0, "Done", reminderActionPendingIntent(ctx, TendIds.ACTION_DONE, id, title, body))
+        .addAction(0, "1 h", reminderActionPendingIntent(ctx, TendIds.ACTION_SNOOZE_HOUR, id, title, body))
+        .addAction(0, "Tomorrow", reminderActionPendingIntent(ctx, TendIds.ACTION_TOMORROW, id, title, body))
+    }
     if (body.isNotBlank()) {
       builder.setContentText(body).setStyle(NotificationCompat.BigTextStyle().bigText(body))
     }
     activityPendingIntent(ctx, TendIds.stableHash("open-reminder", id), TendIds.LAUNCH_REMINDER, id)
       ?.let { builder.setContentIntent(it) }
+    if (fullScreen && dose && !silent) {
+      // A full-screen intent is what makes Android wake a sleeping screen. Doses only, and only
+      // while the screen is off: when the phone is in use, a pop-up is enough.
+      val pm = ctx.getSystemService(Context.POWER_SERVICE) as PowerManager
+      if (!pm.isInteractive && canUseFullScreenIntent(ctx)) {
+        activityPendingIntent(ctx, TendIds.RC_NAG, TendIds.LAUNCH_NAG, null)?.let { builder.setFullScreenIntent(it, true) }
+      }
+    }
     nm(ctx).notify(TendIds.reminderNotificationId(id), builder.build())
   }
 
   fun cancelReminder(ctx: Context, id: String) {
     nm(ctx).cancel(TendIds.reminderNotificationId(id))
+    nm(ctx).cancel(TendIds.preWarnNotificationId(id))
   }
+
+  /** "In 10 min: leave for the dentist." Gentle, and gone by the time the reminder itself arrives. */
+  @SuppressLint("MissingPermission")
+  fun postPreWarn(ctx: Context, state: NativeState, id: String, title: String, dueAt: Long) {
+    ensureChannels(ctx)
+    val minutes = ((dueAt - System.currentTimeMillis() + 30_000L) / 60_000L).coerceAtLeast(1L)
+    val builder = baseBuilder(ctx, gentleChannel(state.cueStyle))
+      .setContentTitle("In $minutes min: $title")
+      .setContentText("A heads-up so it doesn't arrive out of nowhere.")
+      .setAutoCancel(true)
+      .setCategory(NotificationCompat.CATEGORY_REMINDER)
+      .setShowWhen(false)
+      .setLocalOnly(true)
+      .setTimeoutAfter((dueAt - System.currentTimeMillis()).coerceAtLeast(60_000L))
+      .gentleCue(state.cueStyle)
+    activityPendingIntent(ctx, TendIds.stableHash("open-reminder", id), TendIds.LAUNCH_REMINDER, id)
+      ?.let { builder.setContentIntent(it) }
+    nm(ctx).notify(TendIds.preWarnNotificationId(id), builder.build())
+  }
+
+  fun cancelPreWarn(ctx: Context, id: String) {
+    nm(ctx).cancel(TendIds.preWarnNotificationId(id))
+  }
+
+  private fun canUseFullScreenIntent(ctx: Context): Boolean =
+    Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE || nm(ctx).canUseFullScreenIntent()
 
   // ---- periodic chime -------------------------------------------------------------------------
 
+  /** The gentle "still waiting" cue about [items] (doses and timed reminders already due). Never wakes the screen. */
   @SuppressLint("MissingPermission")
-  fun postChime(ctx: Context, state: NativeState) {
+  fun postChime(ctx: Context, state: NativeState, items: List<PendingItem>) {
     ensureChannels(ctx)
-    val n = state.pending.size
+    val channel = gentleChannel(state.cueStyle)
+    val n = items.size
     val title = countPhrase(n, "still waiting")
-    val text = state.pending.take(3).joinToString(" · ") { it.title }
+    val text = items.take(3).joinToString(" · ") { it.title }
     // What shows on a secure lock screen: just the count, never the titles.
-    val publicVersion = baseBuilder(ctx, CHANNEL_CHIME)
+    val publicVersion = baseBuilder(ctx, channel)
       .setContentTitle(title)
       .setContentText("Open Tend to see them")
       .build()
-    val builder = baseBuilder(ctx, CHANNEL_CHIME)
+    val builder = baseBuilder(ctx, channel)
       .setContentTitle(title)
       .setContentText(text)
       .setAutoCancel(true)
       .setOnlyAlertOnce(false)
       .setCategory(NotificationCompat.CATEGORY_REMINDER)
-      .setPriority(NotificationCompat.PRIORITY_HIGH)
-      .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)
+      .gentleCue(state.cueStyle)
       .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
       .setPublicVersion(publicVersion)
       .setLocalOnly(true)
+      .addAction(quietTodayAction(ctx))
       // The next chime replaces it anyway; don't leave a stale one behind.
       .setTimeoutAfter(state.chimeIntervalMs.coerceAtLeast(60_000L))
-    activityPendingIntent(ctx, TendIds.RC_NAG, TendIds.LAUNCH_NAG, null)?.let { pi ->
-      builder.setContentIntent(pi)
-      // A full-screen intent is what makes Android wake a sleeping screen. Only use it while
-      // the screen is off: when the phone is in use, a pop-up is enough.
-      val pm = ctx.getSystemService(Context.POWER_SERVICE) as PowerManager
-      val fullScreenAllowed =
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE || nm(ctx).canUseFullScreenIntent()
-      if (!pm.isInteractive && fullScreenAllowed) builder.setFullScreenIntent(pi, true)
-    }
+    activityPendingIntent(ctx, TendIds.RC_NAG, TendIds.LAUNCH_NAG, null)?.let { builder.setContentIntent(it) }
     nm(ctx).notify(TendIds.CHIME_NOTIFICATION_ID, builder.build())
   }
 

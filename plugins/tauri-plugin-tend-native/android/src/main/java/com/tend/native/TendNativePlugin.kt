@@ -58,15 +58,24 @@ class DownloadUpdateArgs {
   lateinit var url: String
 }
 
+@InvokeArg
+class CalendarEventsArgs {
+  var from: Long = 0
+  var to: Long = 0
+  var ids: Array<String> = emptyArray()
+}
+
 @TauriPlugin(
   permissions = [
-    Permission(strings = [Manifest.permission.POST_NOTIFICATIONS], alias = TendNativePlugin.ALIAS_NOTIFICATIONS)
+    Permission(strings = [Manifest.permission.POST_NOTIFICATIONS], alias = TendNativePlugin.ALIAS_NOTIFICATIONS),
+    Permission(strings = [Manifest.permission.READ_CALENDAR], alias = TendNativePlugin.ALIAS_CALENDAR)
   ]
 )
 class TendNativePlugin(private val activity: Activity) : Plugin(activity) {
 
   companion object {
     const val ALIAS_NOTIFICATIONS = "notifications"
+    const val ALIAS_CALENDAR = "calendar"
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -90,6 +99,7 @@ class TendNativePlugin(private val activity: Activity) : Plugin(activity) {
     super.load(webView)
     instance = WeakReference(this)
     TendNotifications.ensureChannels(activity)
+    TendShortcuts.publish(activity)
     activity.intent?.let { intent ->
       readAction(intent)?.let { synchronized(this) { launchAction = it } }
     }
@@ -338,6 +348,81 @@ class TendNativePlugin(private val activity: Activity) : Plugin(activity) {
       return
     }
     health(invoke) { TendHealth.read(activity, days) }
+  }
+
+  // ---- calendar (read-only) ---------------------------------------------------------------------
+
+  private fun calendarStatusJson(): JSObject =
+    JSObject().put("status", if (TendCalendar.granted(activity)) "granted" else "denied")
+
+  @Command
+  fun calendarStatus(invoke: Invoke) {
+    invoke.resolve(calendarStatusJson())
+  }
+
+  @Command
+  fun calendarRequest(invoke: Invoke) {
+    if (TendCalendar.granted(activity)) {
+      invoke.resolve(calendarStatusJson())
+    } else if (getPermissionState(ALIAS_CALENDAR) != PermissionState.DENIED) {
+      requestPermissionForAlias(ALIAS_CALENDAR, invoke, "onCalendarPermission")
+    } else {
+      // "Don't ask again": only the app's settings page can change it now.
+      activity.runOnUiThread {
+        try {
+          startActivityForResult(
+            invoke,
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + activity.packageName)),
+            "onCalendarSettings"
+          )
+        } catch (e: Exception) {
+          invoke.resolve(calendarStatusJson())
+        }
+      }
+    }
+  }
+
+  @PermissionCallback
+  private fun onCalendarPermission(invoke: Invoke) {
+    invoke.resolve(calendarStatusJson())
+  }
+
+  @ActivityCallback
+  private fun onCalendarSettings(invoke: Invoke, @Suppress("UNUSED_PARAMETER") result: ActivityResult) {
+    invoke.resolve(calendarStatusJson())
+  }
+
+  /** Runs a calendar query off the main thread. */
+  private fun calendarQuery(invoke: Invoke, work: () -> JSONObject) {
+    if (!TendCalendar.granted(activity)) {
+      invoke.reject("Calendar access is off")
+      return
+    }
+    Thread {
+      try {
+        invoke.resolve(JSObject(work().toString()))
+      } catch (e: Exception) {
+        invoke.reject("Couldn't read the calendar: ${e.message ?: e.javaClass.simpleName}")
+      }
+    }.start()
+  }
+
+  @Command
+  fun calendarList(invoke: Invoke) = calendarQuery(invoke) { TendCalendar.list(activity) }
+
+  @Command
+  fun calendarEvents(invoke: Invoke) {
+    val args = try {
+      invoke.parseArgs(CalendarEventsArgs::class.java)
+    } catch (e: Exception) {
+      invoke.reject("missing `from` / `to`")
+      return
+    }
+    if (args.to <= args.from) {
+      invoke.resolve(JSObject().put("events", org.json.JSONArray()))
+      return
+    }
+    calendarQuery(invoke) { TendCalendar.events(activity, args.from, args.to, args.ids.toList()) }
   }
 
   /** Back on the app's home screen: leave like Android does, keeping the app alive. */

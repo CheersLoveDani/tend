@@ -18,6 +18,8 @@
     <!-- Steps and workouts from Health Connect, read while Tend is open. -->
     <uses-permission android:name="android.permission.health.READ_STEPS" />
     <uses-permission android:name="android.permission.health.READ_EXERCISE" />
+    <!-- Today's events from the phone's calendars (Google Calendar included), read-only. -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
 
     <queries>
         <package android:name="com.google.android.apps.healthdata" />
@@ -34,7 +36,7 @@
             android:name="com.tend.native.ChimeReceiver"
             android:exported="false" />
 
-        <!-- "Done" / "Snooze 15 min" notification buttons. -->
+        <!-- Notification buttons: Done / 1 h / Tomorrow / Snooze, ✓ step, Add…, Quiet today. -->
         <receiver
             android:name="com.tend.native.ReminderActionReceiver"
             android:exported="false" />
@@ -64,6 +66,59 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Shows the user's own still-to-do reminder list right after they unlock the device, at their request (ADHD accessibility aid). The service only listens for the screen-unlock broadcast; it does no background work." />
         </service>
+
+        <!-- Quick add without opening the app: share sheet (text), Quick Settings tile, shortcut, widget "+". -->
+        <activity
+            android:name="com.tend.native.QuickAddActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:label="Add to Tend"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:windowSoftInputMode="stateAlwaysVisible|adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.tend.native.action.QUICK_ADD" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- Quick Settings tile: shows what's next, tap to add something. -->
+        <service
+            android:name="com.tend.native.TendTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tend_leaf"
+            android:label="Tend"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="true" />
+        </service>
+
+        <!-- Home-screen widget with today's list. -->
+        <receiver
+            android:name="com.tend.native.TendWidgetProvider"
+            android:exported="true"
+            android:label="Tend · today">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/tend_widget_info" />
+        </receiver>
+
+        <!-- A widget row was tapped. -->
+        <receiver
+            android:name="com.tend.native.WidgetTapReceiver"
+            android:exported="false" />
 
         <!-- Why Tend reads steps and workouts. Health Connect requires it before it will ask. -->
         <activity

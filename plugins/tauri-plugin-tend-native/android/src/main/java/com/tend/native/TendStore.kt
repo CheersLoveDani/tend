@@ -15,6 +15,9 @@ object TendStore {
   private const val KEY_LAST_CHIME_AT = "last_chime_at"
   private const val KEY_NEXT_CHIME_AT = "next_chime_at"
   private const val KEY_BACKUP_URI = "backup_uri"
+  private const val KEY_EXTRA_ALARMS = "extra_alarms"
+  private const val KEY_NAG_DAY = "nag_day"
+  private const val KEY_NAG_COUNT = "nag_count"
 
   private fun prefs(ctx: Context): SharedPreferences =
     ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -54,12 +57,59 @@ object TendStore {
     saveScheduledAlarmIds(ctx, scheduledAlarmIds(ctx) - id)
   }
 
-  /** type: "complete" | "snooze" */
+  /** type: complete | snooze | step | tomorrow | add (with [text]) | quietToday. See native.ts. */
   @Synchronized
-  fun addPendingAction(ctx: Context, type: String, id: String, at: Long) {
+  fun addPendingAction(ctx: Context, type: String, id: String, at: Long, text: String? = null) {
     val arr = peekPendingActions(ctx)
-    arr.put(JSONObject().put("type", type).put("id", id).put("at", at))
-    prefs(ctx).edit().putString(KEY_PENDING_ACTIONS, arr.toString()).apply()
+    val action = JSONObject().put("type", type).put("id", id).put("at", at)
+    if (text != null) action.put("text", text)
+    arr.put(action)
+    // commit, not apply: a share / quick-add activity may finish and its process die right after.
+    prefs(ctx).edit().putString(KEY_PENDING_ACTIONS, arr.toString()).commit()
+  }
+
+  /** Follow-up alarms Tend lines up itself (snooze, the second nudge, dose re-reminders). */
+  @Synchronized
+  fun extraAlarms(ctx: Context): List<AlarmItem> {
+    val raw = prefs(ctx).getString(KEY_EXTRA_ALARMS, null) ?: return emptyList()
+    return try {
+      val arr = JSONArray(raw)
+      (0 until arr.length()).mapNotNull { i -> arr.optJSONObject(i)?.let { AlarmItem.fromJson(it) } }
+    } catch (e: Exception) {
+      emptyList()
+    }
+  }
+
+  @Synchronized
+  fun saveExtraAlarms(ctx: Context, alarms: List<AlarmItem>) {
+    val arr = JSONArray()
+    alarms.forEach { arr.put(it.toJson()) }
+    prefs(ctx).edit().putString(KEY_EXTRA_ALARMS, arr.toString()).apply()
+  }
+
+  @Synchronized
+  fun putExtraAlarm(ctx: Context, alarm: AlarmItem) {
+    saveExtraAlarms(ctx, extraAlarms(ctx).filter { it.key != alarm.key } + alarm)
+  }
+
+  @Synchronized
+  fun removeExtraAlarms(ctx: Context, predicate: (AlarmItem) -> Boolean) {
+    val all = extraAlarms(ctx)
+    val kept = all.filterNot(predicate)
+    if (kept.size != all.size) saveExtraAlarms(ctx, kept)
+  }
+
+  /** How many times the unlock screen has shown on [day] (yyyymmdd). */
+  @Synchronized
+  fun nagCount(ctx: Context, day: Int): Int {
+    val p = prefs(ctx)
+    return if (p.getInt(KEY_NAG_DAY, 0) == day) p.getInt(KEY_NAG_COUNT, 0) else 0
+  }
+
+  @Synchronized
+  fun bumpNagCount(ctx: Context, day: Int) {
+    val n = nagCount(ctx, day) + 1
+    prefs(ctx).edit().putInt(KEY_NAG_DAY, day).putInt(KEY_NAG_COUNT, n).apply()
   }
 
   @Synchronized

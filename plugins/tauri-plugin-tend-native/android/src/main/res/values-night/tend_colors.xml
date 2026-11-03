@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="tend_widget_bg">#1F241E</color>
+    <color name="tend_widget_text">#E6EBE3</color>
+    <color name="tend_widget_muted">#9AA595</color>
+</resources>

@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tend_widget_description">Today\'s list. Tap a row when it\'s done, or + to add something.</string>
+</resources>

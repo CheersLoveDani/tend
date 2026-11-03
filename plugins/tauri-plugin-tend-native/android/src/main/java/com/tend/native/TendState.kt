@@ -15,8 +15,17 @@ data class PendingItem(
   /** A medication dose: listed first, and chimed about until it's taken. */
   val dose: Boolean = false,
   /** Reminds even during quiet hours. */
-  val critical: Boolean = false
+  val critical: Boolean = false,
+  /** Epoch ms of its time today, or null when it has no time today (untimed, or from an earlier day). */
+  val dueAt: Long? = null,
+  /** JS's view at push time: a dose, or a timed reminder already due today. */
+  val chime: Boolean = false
 ) {
+  /** Worth a chime: doses, and timed reminders whose time has come today. Never untimed or old items. */
+  fun chimesAt(now: Long): Boolean = dose || chime || (dueAt != null && dueAt <= now)
+
+  val hasStepsLeft: Boolean get() = stepsTotal > 0 && stepsDone < stepsTotal
+
   fun toJson(): JSONObject = JSONObject()
     .put("id", id)
     .put("title", title)
@@ -26,6 +35,8 @@ data class PendingItem(
     .put("reward", reward)
     .put("dose", dose)
     .put("critical", critical)
+    .put("dueAt", dueAt ?: JSONObject.NULL)
+    .put("chime", chime)
 
   companion object {
     fun fromJson(o: JSONObject) = PendingItem(
@@ -36,20 +47,32 @@ data class PendingItem(
       stepsTotal = o.optInt("stepsTotal", 0),
       reward = o.optDouble("reward", 0.0).let { if (it.isNaN()) 0.0 else it },
       dose = o.optBoolean("dose", false),
-      critical = o.optBoolean("critical", false)
+      critical = o.optBoolean("critical", false),
+      dueAt = if (o.has("dueAt") && !o.isNull("dueAt")) o.optLong("dueAt") else null,
+      chime = o.optBoolean("chime", false)
     )
   }
 }
 
-/** A timed reminder to fire at [at] (epoch ms). */
+/**
+ * A timed reminder to fire at [at] (epoch ms).
+ * [kind]: `main` (pushed from JS, at the reminder's time) or one Tend lines up natively:
+ * `pre` (heads-up before), `again` (the one follow-up nudge), `nag` (dose re-reminder),
+ * `snooze` (from a notification button). [dueAt] is when the thing was originally due.
+ */
 data class AlarmItem(
   val id: String,
   val title: String,
   val body: String,
   val at: Long,
   val dose: Boolean = false,
-  val critical: Boolean = false
+  val critical: Boolean = false,
+  val kind: String = KIND_MAIN,
+  val dueAt: Long = at
 ) {
+  /** Identifies the scheduled alarm. Main alarms keep the bare id, as before 0.3. */
+  val key: String get() = keyOf(kind, id)
+
   fun toJson(): JSONObject = JSONObject()
     .put("id", id)
     .put("title", title)
@@ -57,16 +80,32 @@ data class AlarmItem(
     .put("at", at)
     .put("dose", dose)
     .put("critical", critical)
+    .put("kind", kind)
+    .put("dueAt", dueAt)
 
   companion object {
-    fun fromJson(o: JSONObject) = AlarmItem(
-      id = o.optString("id"),
-      title = o.optString("title"),
-      body = o.optString("body", ""),
-      at = o.optLong("at", 0L),
-      dose = o.optBoolean("dose", false),
-      critical = o.optBoolean("critical", false)
-    )
+    const val KIND_MAIN = "main"
+    const val KIND_PRE = "pre"
+    const val KIND_AGAIN = "again"
+    const val KIND_NAG = "nag"
+    const val KIND_SNOOZE = "snooze"
+    val ALL_KINDS = listOf(KIND_MAIN, KIND_PRE, KIND_AGAIN, KIND_NAG, KIND_SNOOZE)
+
+    fun keyOf(kind: String, id: String): String = if (kind == KIND_MAIN) id else "$kind|$id"
+
+    fun fromJson(o: JSONObject): AlarmItem {
+      val at = o.optLong("at", 0L)
+      return AlarmItem(
+        id = o.optString("id"),
+        title = o.optString("title"),
+        body = o.optString("body", ""),
+        at = at,
+        dose = o.optBoolean("dose", false),
+        critical = o.optBoolean("critical", false),
+        kind = o.optString("kind", KIND_MAIN).ifEmpty { KIND_MAIN },
+        dueAt = o.optLong("dueAt", at).let { if (it <= 0L) at else it }
+      )
+    }
   }
 }
 
@@ -118,17 +157,38 @@ data class NativeState(
   val nagCooldownMinutes: Int,
   /** Sound a gentle notification every N minutes while things are waiting (0 = off). */
   val chimeMinutes: Int,
-  val quietHours: QuietHours?
+  val quietHours: QuietHours?,
+  /** "Quiet for today": until this epoch ms, no chimes, no unlock screen, no non-dose nudges (0 = off). */
+  val pausedUntil: Long = 0L,
+  /** Most unlock screens a day (0 = no limit). */
+  val nagDailyCap: Int = 0,
+  /** A timed reminder nudges at its time, once more after this many minutes (0 = never), then stays quiet. */
+  val nudgeAgainMinutes: Int = 0,
+  /** Doses re-remind every N minutes until [doseNagUntilMinutes] after they were due (0 = once). */
+  val doseNagMinutes: Int = 0,
+  val doseNagUntilMinutes: Int = 0,
+  /** Heads-up this many minutes before a timed reminder (0 = off). Not for doses. */
+  val preWarnMinutes: Int = 0,
+  /** How gentle cues arrive: `sound`, `vibrate` or `silent`. */
+  val cueStyle: String = "sound"
 ) {
   /** The unlock listener only makes sense when there is something to nudge about. */
   val wantsUnlockService: Boolean get() = nagOnUnlock && pending.isNotEmpty()
 
   val wantsPersistentNotification: Boolean get() = persistentNotification && pending.isNotEmpty()
 
-  /** Doses keep chiming even when the chime is off for everything else. */
-  val wantsChime: Boolean get() = pending.isNotEmpty() && (chimeMinutes > 0 || pending.any { it.dose })
+  fun isPaused(ms: Long = System.currentTimeMillis()): Boolean = pausedUntil > ms
 
-  val chimeIntervalMs: Long get() = (if (chimeMinutes > 0) chimeMinutes else 15).toLong() * 60_000L
+  /** Things the chime may mention right now (doses and timed reminders whose time has come). */
+  fun chimeItems(now: Long = System.currentTimeMillis()): List<PendingItem> = pending.filter { it.chimesAt(now) }
+
+  /**
+   * The gentle periodic chime runs while something timed is (or will be) due today. Untimed and
+   * older items stay in the silent list. Doses have their own re-reminders on top.
+   */
+  val wantsChime: Boolean get() = chimeMinutes > 0 && pending.any { it.dose || it.chime || it.dueAt != null }
+
+  val chimeIntervalMs: Long get() = (if (chimeMinutes > 0) chimeMinutes else 60).toLong() * 60_000L
 
   /** A critical dose is waiting: quiet hours don't apply. */
   val hasCriticalDose: Boolean get() = pending.any { it.dose && it.critical }
@@ -140,9 +200,10 @@ data class NativeState(
   fun isQuietAt(ms: Long): Boolean =
     quietHours?.contains(Calendar.getInstance().apply { timeInMillis = ms }) ?: false
 
-  /** The next chime slot after [fromMs], pushed past quiet hours. */
+  /** The next chime slot after [fromMs], pushed past "Quiet for today" and quiet hours. */
   fun nextChimeAfter(fromMs: Long): Long {
-    val at = fromMs + chimeIntervalMs
+    var at = fromMs + chimeIntervalMs
+    if (isPaused(at)) at = pausedUntil + 60_000L
     if (!isQuietFor(at)) return at
     return quietHours?.nextEnd(at) ?: at
   }
@@ -161,10 +222,27 @@ data class NativeState(
       .put("nagCooldownMinutes", nagCooldownMinutes)
       .put("chimeMinutes", chimeMinutes)
       .put("quietHours", quietHours?.toJson() ?: JSONObject.NULL)
+      .put("pausedUntil", pausedUntil)
+      .put("nagDailyCap", nagDailyCap)
+      .put("nudgeAgainMinutes", nudgeAgainMinutes)
+      .put("doseNagMinutes", doseNagMinutes)
+      .put("doseNagUntilMinutes", doseNagUntilMinutes)
+      .put("preWarnMinutes", preWarnMinutes)
+      .put("cueStyle", cueStyle)
   }
 
   companion object {
     val EMPTY = NativeState(emptyList(), emptyList(), false, false, false, 0, 0, null)
+    val CUE_STYLES = setOf("sound", "vibrate", "silent")
+
+    /** Local 23:59:59.999 today, the same as `endOfToday()` in settings.ts. */
+    fun endOfToday(now: Long = System.currentTimeMillis()): Long = Calendar.getInstance().apply {
+      timeInMillis = now
+      set(Calendar.HOUR_OF_DAY, 23)
+      set(Calendar.MINUTE, 59)
+      set(Calendar.SECOND, 59)
+      set(Calendar.MILLISECOND, 999)
+    }.timeInMillis
 
     fun fromJson(o: JSONObject): NativeState {
       val pending = mutableListOf<PendingItem>()
@@ -188,7 +266,14 @@ data class NativeState(
         nagAfterChime = o.optBoolean("nagAfterChime", false),
         nagCooldownMinutes = o.optInt("nagCooldownMinutes", 0).coerceAtLeast(0),
         chimeMinutes = o.optInt("chimeMinutes", 0).coerceAtLeast(0),
-        quietHours = quiet
+        quietHours = quiet,
+        pausedUntil = o.optLong("pausedUntil", 0L).coerceAtLeast(0L),
+        nagDailyCap = o.optInt("nagDailyCap", 0).coerceAtLeast(0),
+        nudgeAgainMinutes = o.optInt("nudgeAgainMinutes", 0).coerceAtLeast(0),
+        doseNagMinutes = o.optInt("doseNagMinutes", 0).coerceAtLeast(0),
+        doseNagUntilMinutes = o.optInt("doseNagUntilMinutes", 0).coerceAtLeast(0),
+        preWarnMinutes = o.optInt("preWarnMinutes", 0).coerceAtLeast(0),
+        cueStyle = o.optString("cueStyle", "sound").let { if (it in CUE_STYLES) it else "sound" }
       )
     }
   }
