@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
+import { useState } from "react";
 import { useStore } from "../lib/store";
 import { waiting } from "../lib/native";
 import { clock, dayName, today } from "../lib/dates";
@@ -11,32 +12,40 @@ import { GoalBars } from "../components/GoalBars";
 /** The "before you dive in" screen shown on phone unlock while things are waiting. */
 export function Nag() {
   const store = useStore();
+  const buttons = store.settings.unlockButtons;
+  // "Not now" just lets a row go for this visit; nothing is recorded or moved.
+  const [letGo, setLetGo] = useState<string[]>([]);
   const doses = (store.snap?.doses ?? []).filter((d) => d.status === "due");
-  const tasks = waiting(store.snap?.reminders ?? []);
+  const tasks = waiting(store.snap?.reminders ?? []).filter((r) => !letGo.includes(r.id));
   const shown = tasks.slice(0, Math.max(2, 5 - doses.length));
   const count = doses.length + tasks.length;
   const close = () => store.setNag(false);
 
   return (
     <motion.div className="nag" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} role="dialog" aria-label="Things still waiting">
-      <motion.div className="nag-inner" initial={{ y: 30 }} animate={{ y: 0 }} transition={{ type: "spring", stiffness: 200, damping: 24 }}>
+      <motion.div
+        className="nag-inner"
+        initial={{ y: store.reduceMotion ? 0 : 30 }}
+        animate={{ y: 0 }}
+        transition={{ type: "spring", stiffness: 200, damping: 24 }}
+      >
         <p className="view-kicker">Before you dive in</p>
         <h1>
           {doses.length > 0
             ? doses.length === 1
-              ? "Your medicine first"
-              : `${doses.length} doses to take first`
+              ? "Your medicine is ready"
+              : `${doses.length} doses are ready`
             : count === 0
               ? "All clear."
               : count === 1
-                ? "One thing is still waiting"
-                : `${count} things are still waiting`}
+                ? "One thing is waiting"
+                : `${count} things are waiting`}
         </h1>
         <p className="view-sub">
           {doses.length > 0
-            ? "Take it now and tap Take, so it's off your mind."
+            ? "Whenever you're ready. Taken or skipped, either one clears it."
             : count
-              ? "Pick one tiny step if you've got a moment. Or don't — it'll keep."
+              ? "A tiny step is here if you want one. Or not now, and it'll keep."
               : "Nothing left for today. Enjoy your phone."}
         </p>
 
@@ -57,10 +66,10 @@ export function Nag() {
               return (
                 <motion.li
                   key={r.id}
-                  layout
-                  initial={{ opacity: 0, x: -16 }}
+                  layout={!store.reduceMotion}
+                  initial={{ opacity: 0, x: store.reduceMotion ? 0 : -16 }}
                   animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 40 }}
+                  exit={{ opacity: 0, x: store.reduceMotion ? 0 : 40 }}
                   transition={{ delay: store.reduceMotion ? 0 : i * 0.05 }}
                 >
                   <SwipeRow
@@ -68,6 +77,8 @@ export function Nag() {
                     doneLabel={next ? next.title : "Done"}
                     onDone={() => (next ? store.toggleStep(r, next.id, true) : store.complete(r))}
                     onLater={() => store.notToday(r)}
+                    onSkip={() => setLetGo((ids) => [...ids, r.id])}
+                    buttons={buttons}
                     reduceMotion={store.reduceMotion}
                   >
                     <div className="nag-item">
@@ -87,7 +98,7 @@ export function Nag() {
             })}
           </AnimatePresence>
         </ul>
-        {shown.length > 0 && <p className="hint swipe-hint">Swipe right when it's done, left to save it for tomorrow.</p>}
+        {shown.length > 0 && !buttons && <p className="hint swipe-hint">Swipe right when it's done, left for tomorrow. Or tap for buttons.</p>}
         {tasks.length > shown.length && <p className="hint">and {tasks.length - shown.length} more in Today.</p>}
 
         {/* Just for a glance: steps never make this screen appear on their own. */}
@@ -102,11 +113,10 @@ export function Nag() {
               className="link"
               onClick={() => {
                 close();
-                store.updateSettings({ nagOnUnlock: false });
-                store.toast("Unlock screen paused. Turn it back on in Settings.", () => store.updateSettings({ nagOnUnlock: true }));
+                store.quietToday();
               }}
             >
-              Pause this screen
+              Quiet for today
             </button>
           )}
         </div>

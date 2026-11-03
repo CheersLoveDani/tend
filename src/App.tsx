@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { StoreProvider, useStore } from "./lib/store";
+import { StoreProvider, toastMs, useStore, type Toast } from "./lib/store";
 import type { Entry, EntryKind, Med, Reminder } from "./lib/api";
 import { Today } from "./views/Today";
 import { Upcoming } from "./views/Upcoming";
@@ -24,6 +24,9 @@ import { isAndroid } from "./lib/api";
 import { appUpdater, appVersion, type UpdateState } from "./lib/updater";
 import { native } from "./lib/native";
 import { onBackButtonPress } from "@tauri-apps/api/app";
+import { QuickAdd } from "./views/QuickAdd";
+import { StormyDay } from "./components/StormyDay";
+import { closeTopOverlay } from "./lib/backStack";
 
 type Tab = "today" | "meds" | "upcoming" | "garden" | "settings";
 
@@ -139,12 +142,12 @@ function Shell() {
   const [medOpen, setMedOpen] = useState<string | null>(null);
   const [entry, setEntry] = useState<{ kind: EntryKind; initial?: Entry } | null>(null);
   const sheetOpen = !!(editing || medEditing || medOpen || entry);
-  // Logging the weather inside takes you to the garden to watch the tree respond.
+  // Logging the weather in the Garden lets you watch the tree respond. From Today it answers in
+  // place instead (changing tabs on input is disorienting, WCAG 3.2.2).
   const [moment, setMoment] = useState<WeatherMoment | null>(null);
   const goGarden = useRef<(w: Weather) => void>(() => {});
   goGarden.current = (w) => {
-    setTab("garden");
-    setMoment({ key: Date.now(), weather: w, quote: pickQuote(w) });
+    if (tab === "garden") setMoment({ key: Date.now(), weather: w, quote: pickQuote(w) });
   };
   useEffect(() => {
     if (tab !== "garden") setMoment(null);
@@ -161,6 +164,7 @@ function Shell() {
   const back = useRef<() => void>(() => {});
   back.current = () => {
     if (!settings.onboarded) return void native.moveToBack();
+    if (closeTopOverlay()) return;
     if (store.nag) return store.setNag(false);
     if (offerShown) return dismissOffer();
     if (entry) return setEntry(null);
@@ -318,6 +322,7 @@ function Shell() {
       <AnimatePresence>
         {offerShown && <UpdateOffer key="update" version={offer!} onClose={dismissOffer} />}
       </AnimatePresence>
+      <StormyDay />
       <Toasts />
       <RewardLayer />
     </div>
@@ -353,21 +358,61 @@ function Toasts() {
     <div className="toasts" aria-live="polite">
       <AnimatePresence>
         {toasts.map((t) => (
-          <motion.div key={t.id} className="toast" layout initial={{ opacity: 0, y: 20, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.96 }}>
-            <span>{t.text}</span>
-            {t.undo && (
-              <button className="link" onClick={t.undo}>
-                Undo
-              </button>
-            )}
-          </motion.div>
+          <ToastItem key={t.id} t={t} />
         ))}
       </AnimatePresence>
     </div>
   );
 }
 
+/** One toast. Its clock stops while it's hovered or focused, so Undo is never a race. */
+function ToastItem({ t }: { t: Toast }) {
+  const { dismissToast, reduceMotion } = useStore();
+  const [held, setHeld] = useState({ hover: false, focus: false });
+  const left = useRef(toastMs(t));
+  useEffect(() => {
+    if (held.hover || held.focus) return;
+    const started = Date.now();
+    const timer = window.setTimeout(() => dismissToast(t.id), left.current);
+    return () => {
+      window.clearTimeout(timer);
+      left.current = Math.max(1500, left.current - (Date.now() - started));
+    };
+  }, [held.hover, held.focus, t.id, dismissToast]);
+
+  return (
+    <motion.div
+      className="toast"
+      layout={!reduceMotion}
+      initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 20, scale: 0.96 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, scale: reduceMotion ? 1 : 0.96 }}
+      onPointerEnter={() => setHeld((h) => ({ ...h, hover: true }))}
+      onPointerLeave={() => setHeld((h) => ({ ...h, hover: false }))}
+      onFocus={() => setHeld((h) => ({ ...h, focus: true }))}
+      onBlur={() => setHeld((h) => ({ ...h, focus: false }))}
+    >
+      <span>{t.text}</span>
+      {t.undo && (
+        <button
+          className="link"
+          onClick={() => {
+            t.undo!();
+            dismissToast(t.id);
+          }}
+        >
+          Undo
+        </button>
+      )}
+    </motion.div>
+  );
+}
+
+/** The desktop hotkey's little quick-add window loads the same page with ?quick=1. */
+const QUICK = new URLSearchParams(location.search).has("quick");
+
 export default function App() {
+  if (QUICK) return <QuickAdd />;
   return (
     <StoreProvider>
       <Shell />
