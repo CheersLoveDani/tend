@@ -3,7 +3,8 @@ import { useStore } from "../lib/store";
 import { waiting } from "../lib/native";
 import { clock, dayName, today } from "../lib/dates";
 import { earned } from "../lib/rewards";
-import { Check, Moon, Seed } from "../components/Icons";
+import { Seed } from "../components/Icons";
+import { SwipeRow } from "../components/SwipeRow";
 import { DoseCard } from "../components/DoseCard";
 import { GoalBars } from "../components/GoalBars";
 
@@ -62,36 +63,31 @@ export function Nag() {
                   exit={{ opacity: 0, x: 40 }}
                   transition={{ delay: store.reduceMotion ? 0 : i * 0.05 }}
                 >
-                  <div className="nag-item">
-                    <div className="nag-text">
-                      <strong>{r.title}</strong>
-                      <span>
-                        {r.date < today() ? `from ${dayName(r.date).toLowerCase()}` : r.time ? clock(r.time) : "today"}
-                        {r.steps.length > 0 && ` · ${r.steps.filter((s) => s.done).length}/${r.steps.length} steps`}
-                        {" · "}
-                        <Seed size={11} /> {r.reward - earned(r)} to gather
-                      </span>
+                  <SwipeRow
+                    label={r.title}
+                    doneLabel={next ? next.title : "Done"}
+                    onDone={() => (next ? store.toggleStep(r, next.id, true) : store.complete(r))}
+                    onLater={() => store.notToday(r)}
+                    reduceMotion={store.reduceMotion}
+                  >
+                    <div className="nag-item">
+                      <div className="nag-text">
+                        <strong>{r.title}</strong>
+                        <span>
+                          {r.date < today() ? `from ${dayName(r.date).toLowerCase()}` : r.time ? clock(r.time) : "today"}
+                          {r.steps.length > 0 && ` · ${r.steps.filter((s) => s.done).length}/${r.steps.length} steps`}
+                          {" · "}
+                          <Seed size={11} /> {r.reward - earned(r)} to gather
+                        </span>
+                      </div>
                     </div>
-                    <div className="nag-actions">
-                      {next ? (
-                        <button className="btn btn-soft" onClick={() => void store.toggleStep(r, next.id, true)}>
-                          <Check size={15} /> {next.title}
-                        </button>
-                      ) : (
-                        <button className="btn btn-soft" onClick={() => void store.complete(r)}>
-                          <Check size={15} /> Done
-                        </button>
-                      )}
-                      <button className="btn btn-quiet btn-icon" aria-label={`Not today: ${r.title}`} onClick={() => void store.notToday(r)}>
-                        <Moon size={16} />
-                      </button>
-                    </div>
-                  </div>
+                  </SwipeRow>
                 </motion.li>
               );
             })}
           </AnimatePresence>
         </ul>
+        {shown.length > 0 && <p className="hint swipe-hint">Swipe right when it's done, left to save it for tomorrow.</p>}
         {tasks.length > shown.length && <p className="hint">and {tasks.length - shown.length} more in Today.</p>}
 
         {/* Just for a glance: steps never make this screen appear on their own. */}

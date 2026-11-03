@@ -1692,15 +1692,72 @@ h3 {
   color: var(--pollen);
   vertical-align: -1px;
 }
-.nag-actions {
-  display: flex;
-  gap: 6px;
-  justify-content: space-between;
+/* Unlock screen rows: swipe right to confirm, left for tomorrow. */
+.swipe {
+  position: relative;
+  border-radius: var(--radius-l);
+  isolation: isolate;
 }
-.nag-actions .btn-soft {
-  flex: 1;
+.swipe-card {
+  position: relative;
+  z-index: 1;
+  touch-action: pan-y;
+  cursor: grab;
+  border-radius: var(--radius-l);
+}
+.swipe-card:active {
+  cursor: grabbing;
+}
+.swipe-card:focus-visible {
+  outline: 2px solid var(--moss);
+  outline-offset: 2px;
+}
+.swipe-bg {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 20px;
+  border-radius: var(--radius-l);
+  font-weight: 700;
+  font-size: 15px;
+  overflow: hidden;
+  transition: background 0.18s, color 0.18s;
+}
+.swipe-bg span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.swipe-bg svg {
+  flex: none;
+  transition: transform 0.18s;
+}
+.swipe-done {
   justify-content: flex-start;
-  text-align: left;
+  background: var(--moss-soft);
+  color: var(--moss);
+}
+.swipe-done.is-armed {
+  background: var(--moss);
+  color: var(--paper);
+}
+.swipe-later {
+  justify-content: flex-end;
+  background: color-mix(in srgb, var(--dusk) 22%, var(--paper));
+  color: var(--dusk);
+}
+.swipe-later.is-armed {
+  background: var(--dusk);
+  color: var(--paper);
+}
+.swipe-bg.is-armed svg {
+  transform: scale(1.25);
+}
+.swipe-hint {
+  text-align: center;
+  margin-top: 0;
 }
 .nag-foot {
   display: grid;

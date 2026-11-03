@@ -122,7 +122,10 @@ export const native = {
         }),
   request: (kind: PermissionKind) => invoke<Permissions>(`${P}request_permission`, { kind }),
   takeLaunchAction: () =>
-    isAndroid ? invoke<LaunchAction>(`${P}take_launch_action`) : Promise.resolve<LaunchAction>({ action: null }),
+    isAndroid
+      ? invoke<LaunchAction>(`${P}take_launch_action`)
+      : // Browser preview: ?nag opens the unlock screen.
+        Promise.resolve<LaunchAction>({ action: "__TEND_MOCK_FIT__" in window && new URLSearchParams(location.search).has("nag") ? "nag" : null }),
   takePendingActions: async () =>
     isAndroid ? (await invoke<{ actions: PendingAction[] }>(`${P}take_pending_actions`)).actions : [],
   onAction: (cb: (a: LaunchAction) => void) =>
