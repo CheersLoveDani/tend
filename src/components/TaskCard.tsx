@@ -1,11 +1,15 @@
 import { AnimatePresence, motion } from "motion/react";
-import { useState } from "react";
-import type { Reminder } from "../lib/api";
+import { useRef, useState } from "react";
+import { isSomeday, type Reminder } from "../lib/api";
 import { useStore } from "../lib/store";
 import { clock, dayName, partOfDay, today } from "../lib/dates";
 import { bitValue, earned, finishValue, MAX_BITS, stepValue } from "../lib/rewards";
 import { exerciseOf } from "../lib/fitness";
 import { Check, Chevron, Clock, Moon, Repeat, Seed, Sprout, Trash } from "./Icons";
+import { MoveMenu } from "./MoveMenu";
+
+/** Holding a card this long (touch) opens "Move to…". */
+const LONG_PRESS_MS = 500;
 
 interface Props {
   r: Reminder;
@@ -16,6 +20,12 @@ interface Props {
 export function TaskCard({ r, onEdit, compact }: Props) {
   const store = useStore();
   const [open, setOpen] = useState(false);
+  const [moving, setMoving] = useState(false);
+  // Long-press on touch opens "Move to…"; the click that follows the press must not also expand the card.
+  const press = useRef<{ timer: number; x: number; y: number; fired: boolean } | null>(null);
+  const cancelPress = () => {
+    if (press.current) window.clearTimeout(press.current.timer);
+  };
   const done = r.status === "done";
   const got = earned(r);
   const pct = Math.min(100, (got / r.reward) * 100);
@@ -25,6 +35,7 @@ export function TaskCard({ r, onEdit, compact }: Props) {
 
   const meta: string[] = [];
   if (fromBefore) meta.push(`from ${dayName(r.date).toLowerCase()}`);
+  if (!done && isSomeday(r)) meta.push("someday");
   if (r.time) meta.push(r.date === today() ? `${clock(r.time)}, ${partOfDay(r.time)}` : clock(r.time));
   if (r.steps.length) meta.push(`${stepsDone} of ${r.steps.length} steps`);
 
@@ -76,7 +87,41 @@ export function TaskCard({ r, onEdit, compact }: Props) {
           )}
         </motion.button>
 
-        <button className="card-main" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        <button
+          className="card-main"
+          onClick={() => {
+            if (press.current?.fired) return void (press.current = null);
+            setOpen((o) => !o);
+          }}
+          aria-expanded={open}
+          onPointerDown={(e) => {
+            if (done || e.pointerType !== "touch") return;
+            const at = { x: e.clientX, y: e.clientY };
+            press.current = {
+              ...at,
+              fired: false,
+              timer: window.setTimeout(() => {
+                if (!press.current) return;
+                press.current.fired = true;
+                navigator.vibrate?.(12);
+                setMoving(true);
+              }, LONG_PRESS_MS),
+            };
+          }}
+          onPointerMove={(e) => {
+            const p = press.current;
+            if (p && !p.fired && Math.hypot(e.clientX - p.x, e.clientY - p.y) > 10) cancelPress();
+          }}
+          onPointerUp={cancelPress}
+          onPointerCancel={cancelPress}
+          onContextMenu={(e) => {
+            // Right-click on desktop; also Android's own long-press signal.
+            if (done) return;
+            e.preventDefault();
+            if (press.current) press.current.fired = true;
+            setMoving(true);
+          }}
+        >
           <span className="card-title">{r.title}</span>
           {(meta.length > 0 || r.repeat || r.exercise) && (
             <span className="card-meta">
@@ -94,17 +139,34 @@ export function TaskCard({ r, onEdit, compact }: Props) {
               )}
             </span>
           )}
-          {!compact && !done && next && !open && <span className="card-next">Next: {next.title}</span>}
         </button>
 
         <div className={`reward-chip ${done ? "is-earned" : ""}`} title={`${got} of ${r.reward} seeds`}>
           <Seed size={14} />
           <span>{done ? r.reward : got > 0 ? `${got}/${r.reward}` : r.reward}</span>
         </div>
+        {!done && (
+          <button className="card-more" aria-label={`Move "${r.title}" to another day`} title="Move to…" onClick={() => setMoving(true)}>
+            ⋯
+          </button>
+        )}
         <motion.span className="card-chevron" animate={{ rotate: open ? 90 : 0 }} aria-hidden>
           <Chevron size={16} />
         </motion.span>
       </div>
+
+      {/* The next step can be ticked right here, without opening the card. */}
+      {!compact && !done && next && !open && (
+        <button className="card-next-tick" onClick={() => void store.toggleStep(r, next.id, true)} aria-label={`Tick off the next step: ${next.title}`}>
+          <span className="mini-box" aria-hidden />
+          <span>
+            Next: <span className="card-next-title">{next.title}</span>
+          </span>
+          <span className="step-value">
+            <Seed size={11} /> {stepValue(r)}
+          </span>
+        </button>
+      )}
 
       {!done && got > 0 && (
         <div className="card-progress" aria-hidden>
@@ -190,9 +252,14 @@ export function TaskCard({ r, onEdit, compact }: Props) {
                   {r.bits >= MAX_BITS ? "Plenty of bits logged" : `I did a bit (+${bitValue(r)})`}
                 </button>
               )}
-              {!done && (
+              {!done && r.date <= today() && (
                 <button className="btn btn-quiet" onClick={() => void store.notToday(r)}>
-                  <Moon size={16} /> Not today
+                  <Moon size={16} /> Tomorrow
+                </button>
+              )}
+              {!done && (
+                <button className="btn btn-quiet" onClick={() => setMoving(true)}>
+                  Move…
                 </button>
               )}
               <button className="btn btn-quiet" onClick={() => onEdit(r)}>
@@ -205,6 +272,7 @@ export function TaskCard({ r, onEdit, compact }: Props) {
           </motion.div>
         )}
       </AnimatePresence>
+      <AnimatePresence>{moving && <MoveMenu key="move" r={r} onClose={() => setMoving(false)} />}</AnimatePresence>
     </motion.article>
   );
 }

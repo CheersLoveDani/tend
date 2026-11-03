@@ -7,7 +7,7 @@ import { useStore } from "../lib/store";
 import { clock, dayName, plusDays, today, ymd } from "../lib/dates";
 import { stepValue } from "../lib/rewards";
 import { sounds } from "../lib/sound";
-import { EXERCISES, exerciseOf } from "../lib/fitness";
+import { EXERCISES, exerciseOf, fitSupported } from "../lib/fitness";
 import { Calendar, Close, Minus, Plus, Seed, Sparkle, Steps } from "./Icons";
 
 interface Props {
@@ -48,7 +48,7 @@ const suggestCache = new Map<string, Suggestion>();
 const ideaCache = new Map<string, StepIdea[]>();
 
 /** Pulls "tomorrow at 5pm" out of a typed title. */
-function parseWhen(text: string) {
+export function parseWhen(text: string) {
   const res = chrono.en.GB.parse(text, new Date(), { forwardDate: true })[0];
   if (!res) return null;
   const d = res.start.date();
@@ -70,6 +70,11 @@ export function Editor({ initial, defaultDate, onClose }: Props) {
   const [title, setTitle] = useState(initial?.title ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [showNotes, setShowNotes] = useState(!!initial?.notes);
+  const [showSteps, setShowSteps] = useState(!!initial?.steps.length);
+  const [showWorkout, setShowWorkout] = useState(!!initial?.exercise);
+  const [showReward, setShowReward] = useState(false);
+  // "✕ keep words in title": the user says the date words were part of the name.
+  const [keepWords, setKeepWords] = useState(false);
   const [date, setDate] = useState(initial?.date ?? defaultDate ?? today());
   const [time, setTime] = useState<string | null>(initial?.time ?? null);
   const [repeat, setRepeat] = useState<Repeat | null>(initial?.repeat ?? null);
@@ -78,18 +83,46 @@ export function Editor({ initial, defaultDate, onClose }: Props) {
   const [stepDraft, setStepDraft] = useState("");
   const [reward, setReward] = useState(initial?.reward ?? 15);
   const [suggestion, setSuggestion] = useState<Suggestion | null>(
-    initial?.suggested ? { reward: initial.suggested, effort: initial.suggested / 5, source: "memory", millis: 0, reason: "Suggested when you planted it" } : null,
+    initial?.suggested
+      ? { reward: initial.suggested, effort: initial.suggested / 5, source: "memory", millis: 0, reason: "Suggested when you planted it" }
+      : null,
   );
   const [thinking, setThinking] = useState(false);
   const [touched, setTouched] = useState(!!initial);
   const [saving, setSaving] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
-  const when = useMemo(() => (initial ? null : parseWhen(title)), [title, initial]);
+  const when = useMemo(() => (initial || keepWords ? null : parseWhen(title)), [title, initial, keepWords]);
+  // Workouts only make sense when the phone can see them.
+  const canWorkout = !!store.settings.fitSince && fitSupported();
   const [ideas, setIdeas] = useState<StepIdea[]>([]);
 
   useEffect(() => {
     titleRef.current?.focus();
   }, []);
+
+  // A parsed "tomorrow at 10" fills in When (still visible, so it can be changed); if the words go
+  // away again, When goes back to what it was.
+  const base = useRef({ date, time });
+  const fromParse = useRef(false);
+  useEffect(() => {
+    if (when) {
+      setDate(when.date);
+      setTime(when.time);
+      fromParse.current = true;
+    } else if (fromParse.current) {
+      setDate(base.current.date);
+      setTime(base.current.time);
+      fromParse.current = false;
+    }
+  }, [when?.date, when?.time]);
+  const pickDate = (d: string) => {
+    setDate(d);
+    fromParse.current = false;
+  };
+  const pickTime = (t: string | null) => {
+    setTime(t);
+    fromParse.current = false;
+  };
 
   // Ask the tiny model for a value once typing settles; it loads, scores and unloads.
   useEffect(() => {
@@ -102,19 +135,27 @@ export function Editor({ initial, defaultDate, onClose }: Props) {
       setReward(cached.reward);
       return;
     }
-    const t = window.setTimeout(async () => {
-      setThinking(true);
-      try {
-        const s = await api.suggest(text, notes, steps.map((x) => x.title), store.settings.useModel);
-        suggestCache.set(key, s);
-        setSuggestion(s);
-        if (!touched) setReward(s.reward);
-      } catch {
-        /* suggestions are optional */
-      } finally {
-        setThinking(false);
-      }
-    }, isAndroid ? 1400 : 800);
+    const t = window.setTimeout(
+      async () => {
+        setThinking(true);
+        try {
+          const s = await api.suggest(
+            text,
+            notes,
+            steps.map((x) => x.title),
+            store.settings.useModel,
+          );
+          suggestCache.set(key, s);
+          setSuggestion(s);
+          if (!touched) setReward(s.reward);
+        } catch {
+          /* suggestions are optional */
+        } finally {
+          setThinking(false);
+        }
+      },
+      isAndroid ? 1400 : 800,
+    );
     return () => window.clearTimeout(t);
   }, [title, steps, touched, when?.cleaned]);
 
@@ -130,31 +171,35 @@ export function Editor({ initial, defaultDate, onClose }: Props) {
       setIdeas(cached);
       return;
     }
-    const t = window.setTimeout(async () => {
-      // The reward suggestion runs first; retry briefly if the model is still busy with it.
-      for (let i = 0; i < 4; i++) {
-        try {
-          const found = await api.suggestSteps(text);
-          ideaCache.set(text, found);
-          setIdeas(found);
-          return;
-        } catch (e) {
-          if (!String(e).includes("busy")) return;
-          await new Promise((r) => setTimeout(r, 400));
+    const t = window.setTimeout(
+      async () => {
+        // The reward suggestion runs first; retry briefly if the model is still busy with it.
+        for (let i = 0; i < 4; i++) {
+          try {
+            const found = await api.suggestSteps(text);
+            ideaCache.set(text, found);
+            setIdeas(found);
+            return;
+          } catch (e) {
+            if (!String(e).includes("busy")) return;
+            await new Promise((r) => setTimeout(r, 400));
+          }
         }
-      }
-    }, isAndroid ? 1600 : 1000);
+      },
+      isAndroid ? 1600 : 1000,
+    );
     return () => window.clearTimeout(t);
   }, [title, steps.length, when?.cleaned]);
 
   function useIdea(idea: StepIdea) {
     sounds.step(1);
     setSteps(idea.steps.map((t) => ({ id: uid(), title: t, done: false })));
+    setShowSteps(true);
     setIdeas([]);
   }
 
-  const effectiveDate = when?.date ?? date;
-  const effectiveTime = when?.time ?? time;
+  const effectiveDate = date;
+  const effectiveTime = time;
   const nudge = suggestion ? reward - suggestion.reward : 0;
 
   function bump(by: number) {
@@ -234,61 +279,74 @@ export function Editor({ initial, defaultDate, onClose }: Props) {
               className="title-input"
               placeholder="Call the dentist tomorrow at 10"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                if (!e.target.value.trim()) setKeepWords(false);
+              }}
               onKeyDown={(e) => e.key === "Enter" && !e.ctrlKey && void save()}
             />
           </label>
           <AnimatePresence>
             {when && (
               <motion.p className="parsed" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
-                <Calendar size={14} /> {dayName(when.date)}
-                {when.time && `, ${clock(when.time)}`} — picked up from “{when.matched}”
+                <Calendar size={14} />
+                <span>
+                  {dayName(when.date)}
+                  {when.time && `, ${clock(when.time)}`}, from “{when.matched}”
+                </span>
+                <button className="link parsed-undo" onClick={() => setKeepWords(true)}>
+                  ✕ keep words in title
+                </button>
               </motion.p>
             )}
           </AnimatePresence>
 
-          {!when && (
-            <section className="group">
-              <h3>When</h3>
-              <div className="day-strip" role="radiogroup" aria-label="Day">
-                {week.map((d) => (
-                  <button key={d} role="radio" aria-checked={date === d} className={`day ${date === d ? "is-on" : ""}`} onClick={() => setDate(d)}>
-                    <span className="day-name">{shortDay(d)}</span>
-                    <span className="day-num">{Number(d.slice(8))}</span>
-                    {date === d && <motion.span layoutId="day-pill" className="pill-bg" />}
-                  </button>
-                ))}
-                <label className={`day day-pick ${!week.includes(date) ? "is-on" : ""}`}>
-                  <span className="day-name">{week.includes(date) ? "Later" : dayName(date)}</span>
-                  <Calendar size={16} />
-                  <input type="date" value={date} min={today()} onChange={(e) => e.target.value && setDate(e.target.value)} aria-label="Pick a date" />
-                </label>
-              </div>
-              <div className="chips">
-                <button className={`chip ${time === null ? "is-on" : ""}`} onClick={() => setTime(null)}>
-                  Any time
+          <section className="group">
+            <h3>When</h3>
+            <div className="day-strip" role="radiogroup" aria-label="Day">
+              {week.map((d) => (
+                <button key={d} role="radio" aria-checked={date === d} className={`day ${date === d ? "is-on" : ""}`} onClick={() => pickDate(d)}>
+                  <span className="day-name">{shortDay(d)}</span>
+                  <span className="day-num">{Number(d.slice(8))}</span>
+                  {date === d && <motion.span layoutId="day-pill" className="pill-bg" />}
                 </button>
-                {TIMES.map((t) => (
-                  <button key={t.value} className={`chip ${time === t.value ? "is-on" : ""}`} onClick={() => setTime(t.value)}>
-                    {t.label}
-                  </button>
-                ))}
-                <input
-                  type="time"
-                  className={`chip chip-time ${time && !TIMES.some((t) => t.value === time) ? "is-on" : ""}`}
-                  value={time ?? ""}
-                  onChange={(e) => setTime(e.target.value || null)}
-                  aria-label="Exact time"
-                />
-              </div>
-            </section>
-          )}
+              ))}
+              <label className={`day day-pick ${!week.includes(date) ? "is-on" : ""}`}>
+                <span className="day-name">{week.includes(date) ? "Later" : dayName(date)}</span>
+                <Calendar size={16} />
+                <input type="date" value={date} min={today()} onChange={(e) => e.target.value && pickDate(e.target.value)} aria-label="Pick a date" />
+              </label>
+            </div>
+            <div className="chips">
+              <button className={`chip ${time === null ? "is-on" : ""}`} onClick={() => pickTime(null)}>
+                Any time
+              </button>
+              {TIMES.map((t) => (
+                <button key={t.value} className={`chip ${time === t.value ? "is-on" : ""}`} onClick={() => pickTime(t.value)}>
+                  {t.label}
+                </button>
+              ))}
+              <input
+                type="time"
+                className={`chip chip-time ${time && !TIMES.some((t) => t.value === time) ? "is-on" : ""}`}
+                value={time ?? ""}
+                onChange={(e) => pickTime(e.target.value || null)}
+                aria-label="Exact time"
+              />
+            </div>
+          </section>
 
           <section className="group">
             <h3>Repeat</h3>
             <div className="segmented" role="radiogroup" aria-label="Repeat">
               {REPEATS.map((r) => (
-                <button key={r.label} role="radio" aria-checked={repeat === r.value} className={repeat === r.value ? "is-on" : ""} onClick={() => setRepeat(r.value)}>
+                <button
+                  key={r.label}
+                  role="radio"
+                  aria-checked={repeat === r.value}
+                  className={repeat === r.value ? "is-on" : ""}
+                  onClick={() => setRepeat(r.value)}
+                >
                   {repeat === r.value && <motion.span layoutId="repeat-pill" className="pill-bg" />}
                   <span>{r.label}</span>
                 </button>
@@ -296,156 +354,210 @@ export function Editor({ initial, defaultDate, onClose }: Props) {
             </div>
           </section>
 
-          <section className="group">
-            <h3>
-              <Steps size={15} /> Tiny steps
-            </h3>
-            <p className="hint">Breaking it down makes starting easier — each step pays seeds as you go.</p>
-            <Reorder.Group axis="y" values={steps} onReorder={setSteps} className="step-edit">
-              <AnimatePresence initial={false}>
-                {steps.map((s, i) => (
-                  <Reorder.Item key={s.id} value={s} className="step-edit-item" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
-                    <span className="step-num">{i + 1}</span>
-                    <input
-                      value={s.title}
-                      onChange={(e) => setSteps((all) => all.map((x) => (x.id === s.id ? { ...x, title: e.target.value } : x)))}
-                      aria-label={`Step ${i + 1}`}
-                    />
-                    <span className="step-value">
-                      <Seed size={11} /> {stepValue({ reward, steps })}
-                    </span>
-                    <button className="btn btn-quiet btn-icon" aria-label={`Remove step ${i + 1}`} onClick={() => setSteps((all) => all.filter((x) => x.id !== s.id))}>
-                      <Close size={14} />
-                    </button>
-                  </Reorder.Item>
-                ))}
-              </AnimatePresence>
-            </Reorder.Group>
-            <AnimatePresence>
-              {ideas.length > 0 && steps.length === 0 && (
-                <motion.div className="ideas" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
-                  {ideas.map((idea, i) => (
-                    <motion.button
-                      key={idea.from + i}
-                      className="idea"
-                      onClick={() => useIdea(idea)}
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.06 }}
-                    >
-                      <span className="idea-from">
-                        <Sparkle size={13} /> {idea.source === "yours" ? `Like your "${idea.from}"` : `A way to break down "${idea.from}"`}
-                      </span>
-                      <ol>
-                        {idea.steps.map((st) => (
-                          <li key={st}>{st}</li>
-                        ))}
-                      </ol>
-                      <span className="idea-use">Use these steps</span>
-                    </motion.button>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
-            <div className="step-add">
-              <input
-                placeholder={steps.length ? "Another step" : "First tiny step, e.g. find the letter"}
-                value={stepDraft}
-                onChange={(e) => setStepDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addStep();
-                  }
-                }}
-              />
-              <button className="btn btn-soft btn-icon" onClick={addStep} aria-label="Add step" disabled={!stepDraft.trim()}>
-                <Plus size={16} />
-              </button>
-            </div>
-          </section>
-
-          <section className="group exercise-pick">
-            <h3>Workout</h3>
-            <p className="hint">
-              {exercise
-                ? `Ticks itself off when your phone logs a ${exercise.minutes}-minute ${exerciseOf(exercise.types)?.noun ?? "workout"} on the day.${store.settings.fitSince ? "" : " Connect steps & workouts in Settings first."}`
-                : "If this is exercise, Tend can tick it off for you when your phone logs it."}
-            </p>
-            <div className="chips">
-              <button className={`chip ${exercise === null ? "is-on" : ""}`} onClick={() => setExercise(null)}>
-                Not a workout
-              </button>
-              {EXERCISES.map((x) => {
-                const on = !!exercise && exerciseOf(exercise.types)?.key === x.key;
-                return (
-                  <button key={x.key} className={`chip ${on ? "is-on" : ""}`} onClick={() => setExercise({ types: x.types, minutes: exercise?.minutes ?? 20 })}>
-                    {x.label}
+          {/* Extras stay folded until asked for, so a quick reminder is just a name and a day. */}
+          {(!showSteps || !showNotes || (canWorkout && !showWorkout)) && (
+            <div className="extras">
+              <div className="chips extras-chips">
+                {!showSteps && (
+                  <button className="chip chip-add" onClick={() => setShowSteps(true)}>
+                    <Plus size={14} /> Steps
                   </button>
-                );
-              })}
-            </div>
-            {exercise && (
-              <div className="chips" role="radiogroup" aria-label="Minutes">
-                {MINUTES.map((m) => (
-                  <button key={m} role="radio" aria-checked={exercise.minutes === m} className={`chip ${exercise.minutes === m ? "is-on" : ""}`} onClick={() => setExercise({ ...exercise, minutes: m })}>
-                    {m} min
+                )}
+                {!showNotes && (
+                  <button className="chip chip-add" onClick={() => setShowNotes(true)}>
+                    <Plus size={14} /> Note
                   </button>
-                ))}
+                )}
+                {canWorkout && !showWorkout && (
+                  <button className="chip chip-add" onClick={() => setShowWorkout(true)}>
+                    <Plus size={14} /> Workout
+                  </button>
+                )}
               </div>
-            )}
-          </section>
+            </div>
+          )}
+          {/* Fixed space for the step idea, so nothing jumps under your thumb when it arrives. */}
+          {steps.length === 0 && (
+            <div className="idea-slot" aria-live="polite">
+              <AnimatePresence>
+                {ideas[0] && (
+                  <motion.button
+                    key={ideas[0].from}
+                    className="idea-line"
+                    onClick={() => useIdea(ideas[0])}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    title={ideas[0].steps.join(" → ")}
+                  >
+                    <Sparkle size={14} />
+                    <span className="idea-line-text">
+                      Use {ideas[0].steps.length} tiny steps
+                      {ideas[0].source === "yours" ? ` like your "${ideas[0].from}"` : `: ${ideas[0].steps[0].toLowerCase()}, …`}
+                    </span>
+                  </motion.button>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
 
-          {showNotes ? (
+          {showSteps && (
+            <section className="group">
+              <h3>
+                <Steps size={15} /> Tiny steps
+              </h3>
+              <p className="hint">Breaking it down makes starting easier — each step pays seeds as you go.</p>
+              <Reorder.Group axis="y" values={steps} onReorder={setSteps} className="step-edit">
+                <AnimatePresence initial={false}>
+                  {steps.map((s, i) => (
+                    <Reorder.Item
+                      key={s.id}
+                      value={s}
+                      className="step-edit-item"
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                    >
+                      <span className="step-num">{i + 1}</span>
+                      <input
+                        value={s.title}
+                        onChange={(e) => setSteps((all) => all.map((x) => (x.id === s.id ? { ...x, title: e.target.value } : x)))}
+                        aria-label={`Step ${i + 1}`}
+                      />
+                      <span className="step-value">
+                        <Seed size={11} /> {stepValue({ reward, steps })}
+                      </span>
+                      <button
+                        className="btn btn-quiet btn-icon"
+                        aria-label={`Remove step ${i + 1}`}
+                        onClick={() => setSteps((all) => all.filter((x) => x.id !== s.id))}
+                      >
+                        <Close size={14} />
+                      </button>
+                    </Reorder.Item>
+                  ))}
+                </AnimatePresence>
+              </Reorder.Group>
+              <div className="step-add">
+                <input
+                  placeholder={steps.length ? "Another step" : "First tiny step, e.g. find the letter"}
+                  value={stepDraft}
+                  onChange={(e) => setStepDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addStep();
+                    }
+                  }}
+                />
+                <button className="btn btn-soft btn-icon" onClick={addStep} aria-label="Add step" disabled={!stepDraft.trim()}>
+                  <Plus size={16} />
+                </button>
+              </div>
+            </section>
+          )}
+
+          {showWorkout && (
+            <section className="group exercise-pick">
+              <h3>Workout</h3>
+              <p className="hint">
+                {exercise
+                  ? `Ticks itself off when your phone logs a ${exercise.minutes}-minute ${exerciseOf(exercise.types)?.noun ?? "workout"} on the day.${store.settings.fitSince ? "" : " Connect steps & workouts in Settings first."}`
+                  : "If this is exercise, Tend can tick it off for you when your phone logs it."}
+              </p>
+              <div className="chips">
+                <button className={`chip ${exercise === null ? "is-on" : ""}`} onClick={() => setExercise(null)}>
+                  Not a workout
+                </button>
+                {EXERCISES.map((x) => {
+                  const on = !!exercise && exerciseOf(exercise.types)?.key === x.key;
+                  return (
+                    <button
+                      key={x.key}
+                      className={`chip ${on ? "is-on" : ""}`}
+                      onClick={() => setExercise({ types: x.types, minutes: exercise?.minutes ?? 20 })}
+                    >
+                      {x.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {exercise && (
+                <div className="chips" role="radiogroup" aria-label="Minutes">
+                  {MINUTES.map((m) => (
+                    <button
+                      key={m}
+                      role="radio"
+                      aria-checked={exercise.minutes === m}
+                      className={`chip ${exercise.minutes === m ? "is-on" : ""}`}
+                      onClick={() => setExercise({ ...exercise, minutes: m })}
+                    >
+                      {m} min
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
+          {showNotes && (
             <textarea className="notes" placeholder="Anything that helps future you" value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} />
-          ) : (
-            <button className="link" onClick={() => setShowNotes(true)}>
-              Add a note
-            </button>
           )}
 
           <section className="group reward-pick">
-            <h3>Reward</h3>
-            <div className="reward-row">
-              <button className="round" onClick={() => bump(-5)} aria-label="Fewer seeds">
-                <Minus size={18} />
-              </button>
-              <div className="reward-value">
-                <Seed size={22} />
-                <AnimatePresence mode="popLayout" initial={false}>
-                  <motion.span key={reward} initial={{ y: 14, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -14, opacity: 0 }} transition={{ type: "spring", stiffness: 400, damping: 30 }}>
-                    {reward}
-                  </motion.span>
-                </AnimatePresence>
-              </div>
-              <button className="round" onClick={() => bump(5)} aria-label="More seeds">
-                <Plus size={18} />
-              </button>
-            </div>
-            <div className="suggest-line" aria-live="polite">
-              {thinking ? (
-                <span className="thinking">
-                  <Sparkle size={14} /> Thinking about it…
-                </span>
-              ) : suggestion ? (
-                <>
-                  <span>
-                    <Sparkle size={14} /> Suggested {suggestion.reward}
-                    {suggestion.reason && ` — ${suggestion.reason}`}
-                  </span>
-                  {nudge !== 0 && (
-                    <span className="nudge">
-                      You nudged it {nudge > 0 ? "up" : "down"} {Math.abs(nudge)}. Tend will remember that next time.
-                      <button className="link" onClick={() => setReward(suggestion.reward)}>
-                        Use {suggestion.reward}
-                      </button>
-                    </span>
+            <button className="reward-line" onClick={() => setShowReward((v) => !v)} aria-expanded={showReward}>
+              <Seed size={16} />
+              <span>
+                <strong>{reward} seeds</strong>
+                <span className="muted"> · {thinking ? "thinking about it…" : showReward ? "done" : "tap to change"}</span>
+              </span>
+            </button>
+            {showReward && (
+              <>
+                <div className="reward-row">
+                  <button className="round" onClick={() => bump(-5)} aria-label="Fewer seeds">
+                    <Minus size={18} />
+                  </button>
+                  <div className="reward-value">
+                    <Seed size={22} />
+                    <AnimatePresence mode="popLayout" initial={false}>
+                      <motion.span
+                        key={reward}
+                        initial={{ y: 14, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        exit={{ y: -14, opacity: 0 }}
+                        transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                      >
+                        {reward}
+                      </motion.span>
+                    </AnimatePresence>
+                  </div>
+                  <button className="round" onClick={() => bump(5)} aria-label="More seeds">
+                    <Plus size={18} />
+                  </button>
+                </div>
+                <div className="suggest-line" aria-live="polite">
+                  {suggestion ? (
+                    <>
+                      <span>
+                        <Sparkle size={14} /> Suggested {suggestion.reward}
+                        {suggestion.reason && ` — ${suggestion.reason}`}
+                      </span>
+                      {nudge !== 0 && (
+                        <span className="nudge">
+                          You nudged it {nudge > 0 ? "up" : "down"} {Math.abs(nudge)}. Tend will remember that next time.
+                          <button className="link" onClick={() => setReward(suggestion.reward)}>
+                            Use {suggestion.reward}
+                          </button>
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="muted">Type a name and Tend will suggest a value.</span>
                   )}
-                </>
-              ) : (
-                <span className="muted">Type a name and Tend will suggest a value.</span>
-              )}
-            </div>
+                </div>
+              </>
+            )}
           </section>
         </div>
 
