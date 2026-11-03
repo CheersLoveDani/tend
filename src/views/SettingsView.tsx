@@ -4,13 +4,15 @@ import { motion } from "motion/react";
 import { api, isAndroid, type Hello, type SyncInfo } from "../lib/api";
 import { useStore } from "../lib/store";
 import { native, type PermissionKind, type Permissions } from "../lib/native";
-import { sounds } from "../lib/sound";
-import { Minus, Plus, Sync } from "../components/Icons";
+import { configureSound, preview, SOUND_NAMES, sounds, type SoundName } from "../lib/sound";
+import { endOfToday, isPaused, NUDGE_PRESETS, PRESET_TEXT, type Settings } from "../lib/settings";
+import { calendar, type CalendarAccess, type DeviceCalendar } from "../lib/calendar";
+import { Chevron, Minus, Plus, Sync } from "../components/Icons";
 import { appUpdater, appVersion } from "../lib/updater";
 import { backup, type BackupSource, type BackupStatus } from "../lib/backup";
 import { fitness, fitSupported, minuteMilestones, stepMilestones, type FitStatus } from "../lib/fitness";
-import { today } from "../lib/dates";
-import { format, formatDistanceToNow, parseISO } from "date-fns";
+import { clock, today } from "../lib/dates";
+import { format, formatDistanceToNow, isToday, parseISO } from "date-fns";
 import QRCode from "qrcode";
 import { Format, checkPermissions as scanPermissions, requestPermissions as requestScan, scan } from "@tauri-apps/plugin-barcode-scanner";
 import { disable as disableAutostart, enable as enableAutostart, isEnabled as autostartEnabled } from "@tauri-apps/plugin-autostart";
@@ -46,10 +48,29 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function Choice<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
+function Choice<T extends string>({
+  label,
+  hint,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  hint?: string;
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (v: T) => void;
+}) {
   return (
     <div className="row">
-      <span className="row-label">{label}</span>
+      {hint ? (
+        <span className="row-text">
+          <span className="row-label">{label}</span>
+          <span className="row-hint">{hint}</span>
+        </span>
+      ) : (
+        <span className="row-label">{label}</span>
+      )}
       <div className="segmented small" role="radiogroup" aria-label={label}>
         {options.map((o) => (
           <button key={o.value} role="radio" aria-checked={value === o.value} className={value === o.value ? "is-on" : ""} onClick={() => onChange(o.value)}>
@@ -117,7 +138,16 @@ function HealthData() {
           <span className="row-hint">From a Tend export file. Adds to what's here; nothing is removed.</span>
         </span>
         <span className="row-actions">
-          <button className="btn btn-quiet" disabled={busy} onClick={() => void navigator.clipboard?.readText().then(importText).catch(() => toast("Couldn't read the clipboard"))}>
+          <button
+            className="btn btn-quiet"
+            disabled={busy}
+            onClick={() =>
+              void navigator.clipboard
+                ?.readText()
+                .then(importText)
+                .catch(() => toast("Couldn't read the clipboard"))
+            }
+          >
             Paste
           </button>
           <label className={`btn btn-soft file-btn ${busy ? "is-disabled" : ""}`}>
@@ -204,18 +234,35 @@ function BackupSettings() {
             <span className="row-hint">At least 8 characters. Write it down: without it a backup can't be opened, by anyone.</span>
           </span>
           <div className="pass-form">
-            <input className="field-input" type="password" autoComplete="new-password" placeholder="Passphrase" value={pass} onChange={(e) => setPass(e.target.value)} />
-            <input className="field-input" type="password" autoComplete="new-password" placeholder="Same again" value={pass2} onChange={(e) => setPass2(e.target.value)} />
+            <input
+              className="field-input"
+              type="password"
+              autoComplete="new-password"
+              placeholder="Passphrase"
+              value={pass}
+              onChange={(e) => setPass(e.target.value)}
+            />
+            <input
+              className="field-input"
+              type="password"
+              autoComplete="new-password"
+              placeholder="Same again"
+              value={pass2}
+              onChange={(e) => setPass2(e.target.value)}
+            />
             <button
               className="btn btn-primary"
               disabled={busy || !passOk}
               onClick={() =>
-                void step(async () => {
-                  await backup.setPassphrase(pass);
-                  setPass("");
-                  setPass2("");
-                  setChanging(false);
-                }, changing ? "New passphrase set. Older backups still open with the old one." : "Passphrase set")
+                void step(
+                  async () => {
+                    await backup.setPassphrase(pass);
+                    setPass("");
+                    setPass2("");
+                    setChanging(false);
+                  },
+                  changing ? "New passphrase set. Older backups still open with the old one." : "Passphrase set",
+                )
               }
             >
               Save
@@ -257,7 +304,14 @@ function BackupSettings() {
         {source ? (
           <div className="pass-form">
             <span className="row-hint">{source.name}</span>
-            <input className="field-input" type="password" autoComplete="current-password" placeholder="Its passphrase" value={restorePass} onChange={(e) => setRestorePass(e.target.value)} />
+            <input
+              className="field-input"
+              type="password"
+              autoComplete="current-password"
+              placeholder="Its passphrase"
+              value={restorePass}
+              onChange={(e) => setRestorePass(e.target.value)}
+            />
             <span className="row-actions">
               <button className="btn btn-quiet" onClick={() => (setSource(null), setRestorePass(""))}>
                 Cancel
@@ -296,7 +350,25 @@ function BackupSettings() {
   );
 }
 
-function Stepper({ label, hint, value, step, min, max, unit, onChange }: { label: string; hint?: string; value: number; step: number; min: number; max: number; unit: string; onChange: (v: number) => void }) {
+function Stepper({
+  label,
+  hint,
+  value,
+  step,
+  min,
+  max,
+  unit,
+  onChange,
+}: {
+  label: string;
+  hint?: string;
+  value: number;
+  step: number;
+  min: number;
+  max: number;
+  unit: string;
+  onChange: (v: number) => void;
+}) {
   const set = (v: number) => {
     sounds.tap();
     onChange(Math.min(max, Math.max(min, v)));
@@ -327,7 +399,14 @@ function MovementSettings() {
   const { settings: s, updateSettings, syncFit, toast } = useStore();
   const [st, setSt] = useState<FitStatus | null>(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => void fitness.status().then(setSt).catch(() => null), []);
+  useEffect(
+    () =>
+      void fitness
+        .status()
+        .then(setSt)
+        .catch(() => null),
+    [],
+  );
 
   // Read straight away after connecting or turning off, once the new setting has landed.
   const prevSince = useRef(s.fitSince);
@@ -354,7 +433,11 @@ function MovementSettings() {
     <>
       <Stepper
         label="Daily step goal"
-        hint={`${lead(stepPlan).map((m) => `${m.pct}%`).join(", ")} pay ${lead(stepPlan)[0].seeds} each, the goal pays ${stepPlan.find((m) => m.pct === 100)!.seeds}, and every extra quarter pays ${stepPlan.at(-1)!.seeds}.`}
+        hint={`${lead(stepPlan)
+          .map((m) => `${m.pct}%`)
+          .join(
+            ", ",
+          )} pay ${lead(stepPlan)[0].seeds} each, the goal pays ${stepPlan.find((m) => m.pct === 100)!.seeds}, and every extra quarter pays ${stepPlan.at(-1)!.seeds}.`}
         value={s.stepGoal}
         step={500}
         min={1000}
@@ -427,7 +510,9 @@ function MovementSettings() {
           <span className="row-label">Steps & workouts</span>
           <span className="row-hint">{hint}</span>
           {on && (!st!.steps || !st!.workouts) && (
-            <span className="row-hint warn">{st!.steps ? "Workouts aren't allowed, so only steps count." : "Steps aren't allowed, so only workouts count."}</span>
+            <span className="row-hint warn">
+              {st!.steps ? "Workouts aren't allowed, so only steps count." : "Steps aren't allowed, so only workouts count."}
+            </span>
           )}
           {s.fitSince && st?.status === "available" && !allowed && (
             <span className="row-hint warn">Health Connect access was removed. Connect again to keep counting.</span>
@@ -461,13 +546,528 @@ function MovementSettings() {
   );
 }
 
-const PERMS: { kind: PermissionKind; label: string; hint: string }[] = [
-  { kind: "notifications", label: "Notifications", hint: "Needed for reminders and the 'still to do' notification." },
-  { kind: "exactAlarm", label: "On-time alarms", hint: "Lets reminders arrive at the exact minute." },
-  { kind: "overlay", label: "Show over other apps", hint: "Lets the 'before you dive in' screen appear when you unlock." },
-  { kind: "fullScreenIntent", label: "Full-screen reminders", hint: "Backup way to show the unlock screen." },
-  { kind: "batteryUnrestricted", label: "Keep running in the background", hint: "Stops Android from silencing Tend. It only wakes for your reminders." },
+/** Each permission, and whether something the user has switched on needs it. */
+const NEEDS: { kind: PermissionKind; label: string; why: string; when: (s: Settings, p: Permissions, timed: boolean) => boolean }[] = [
+  { kind: "notifications", label: "Notifications", why: "Reminders arrive as notifications.", when: () => true },
+  { kind: "exactAlarm", label: "On-time alarms", why: "So timed reminders and doses arrive at the exact minute.", when: (_, __, timed) => timed },
+  { kind: "overlay", label: "Show over other apps", why: "The unlock screen needs this to appear when you unlock.", when: (s) => s.nagOnUnlock },
+  // Only a fallback for the unlock screen, so it's offered only when the main way isn't allowed.
+  { kind: "fullScreenIntent", label: "Full-screen reminders", why: "A backup way to show the unlock screen.", when: (s, p) => s.nagOnUnlock && !p.overlay },
+  {
+    kind: "batteryUnrestricted",
+    label: "Run in the background",
+    why: "Stops Android from silencing Tend. It only wakes for your reminders.",
+    when: (s) => s.chimeMinutes > 0 || s.nagOnUnlock,
+  },
 ];
+
+/** Only the permissions that something switched on actually needs, each with a "Fix" button. Nothing when all is well. */
+export function PermissionBanner() {
+  const { settings: s, snap } = useStore();
+  const [perms, setPerms] = useState<Permissions | null>(null);
+
+  // Allowing usually happens in Android's own settings, so look again on the way back.
+  useEffect(() => {
+    if (!isAndroid) return;
+    const load = () =>
+      document.visibilityState === "visible" &&
+      void native
+        .permissions()
+        .then(setPerms)
+        .catch(() => null);
+    load();
+    document.addEventListener("visibilitychange", load);
+    return () => document.removeEventListener("visibilitychange", load);
+  }, []);
+
+  if (!isAndroid || !perms) return null;
+  const timed = !!snap && (snap.meds.some((m) => !m.paused) || snap.reminders.some((r) => r.status === "open" && !!r.time));
+  const missing = NEEDS.filter((n) => !perms[n.kind] && n.when(s, perms, timed));
+  if (missing.length === 0) return null;
+
+  return (
+    <motion.section className="perm-banner" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} aria-label="Permissions Tend needs">
+      <p className="perm-banner-title">{missing.length === 1 ? "One thing needs a yes from Android" : `${missing.length} things need a yes from Android`}</p>
+      {missing.map((n) => (
+        <div className="perm-row" key={n.kind}>
+          <span className="row-text">
+            <span className="row-label">{n.label}</span>
+            <span className="row-hint">{n.why}</span>
+          </span>
+          <button
+            className="btn btn-soft"
+            onClick={() =>
+              void native
+                .request(n.kind)
+                .then(setPerms)
+                .catch(() => null)
+            }
+          >
+            Fix
+          </button>
+        </div>
+      ))}
+    </motion.section>
+  );
+}
+
+/** "midnight", "18:30", or "Tue 08:00". */
+function untilText(ms: number) {
+  const d = new Date(ms);
+  if (d.getHours() === 23 && d.getMinutes() === 59) return isToday(d) ? "midnight" : `${format(d, "EEE")} midnight`;
+  const t = clock(format(d, "HH:mm"));
+  return isToday(d) ? t : `${format(d, "EEE")} ${t}`;
+}
+
+const presetOf = (s: Settings) =>
+  (Object.keys(NUDGE_PRESETS) as (keyof typeof NUDGE_PRESETS)[]).find((k) =>
+    Object.entries(NUDGE_PRESETS[k]).every(([f, v]) => s[f as keyof Settings] === v),
+  ) ?? "custom";
+
+/** Everything about when and how Tend gets your attention. First in Settings because it matters most. */
+function NudgeSettings({ autostart, setAutostart }: { autostart: boolean | null; setAutostart: (v: boolean) => void }) {
+  const { settings: s, updateSettings: set, toast } = useStore();
+  const [fine, setFine] = useState(false);
+  const paused = isPaused(s);
+  const preset = presetOf(s);
+
+  return (
+    <>
+      {isAndroid && (
+        <Choice
+          label="Start from"
+          hint={PRESET_TEXT.find((p) => p.value === preset)?.hint ?? "Your own mix. Pick one to start again from it."}
+          value={preset}
+          onChange={(v) => v !== "custom" && set(NUDGE_PRESETS[v])}
+          options={PRESET_TEXT.map((p) => ({ value: p.value, label: p.label }))}
+        />
+      )}
+      <Toggle
+        label="Quiet for today"
+        hint={
+          paused ? `Quiet until ${untilText(s.pausedUntil!)}. Doses still remind.` : "Hush chimes and the unlock screen until tomorrow. Doses still remind."
+        }
+        checked={paused}
+        onChange={(v) => set({ pausedUntil: v ? endOfToday() : null })}
+      />
+      <Choice
+        label="Gentle chime"
+        hint="A sound and buzz while something's time has passed. Things without a time wait quietly."
+        value={String(s.chimeMinutes)}
+        onChange={(v) => set({ chimeMinutes: Number(v) })}
+        options={[
+          { value: "0", label: "Off" },
+          ...(s.chimeMinutes === 15 ? [{ value: "15", label: "Every 15 min" }] : []),
+          { value: "30", label: "Every 30 min" },
+          { value: "60", label: "Hourly" },
+        ]}
+      />
+      {isAndroid && (
+        <>
+          <Toggle
+            label="Show what's waiting when I unlock"
+            hint="A calm screen before you dive into your phone."
+            checked={s.nagOnUnlock}
+            onChange={(v) => set({ nagOnUnlock: v })}
+          />
+          {s.nagOnUnlock && (
+            <>
+              <Choice
+                label="At most"
+                value={String(s.nagEvery < 0 && s.chimeMinutes === 0 ? 30 : s.nagEvery)}
+                onChange={(v) => set({ nagEvery: Number(v) })}
+                options={[
+                  ...(s.chimeMinutes > 0 ? [{ value: "-1", label: "After a chime" }] : []),
+                  { value: "0", label: "Every unlock" },
+                  { value: "30", label: "Every 30 min" },
+                  { value: "60", label: "Hourly" },
+                ]}
+              />
+              <Choice
+                label="Times a day"
+                value={String(s.nagDailyCap)}
+                onChange={(v) => set({ nagDailyCap: Number(v) })}
+                options={[
+                  { value: "3", label: "Up to 3" },
+                  { value: "6", label: "Up to 6" },
+                  { value: "10", label: "Up to 10" },
+                  { value: "0", label: "No limit" },
+                ]}
+              />
+              <Toggle
+                label="Use buttons instead of swiping"
+                hint="Each row on the unlock screen shows Done, Tomorrow and Not now buttons."
+                checked={s.unlockButtons}
+                onChange={(v) => set({ unlockButtons: v })}
+              />
+            </>
+          )}
+          <Toggle
+            label="Keep a 'still to do' notification"
+            hint="A silent notification that stays while things are waiting. It comes back if swiped away."
+            checked={s.persistentNotification}
+            onChange={(v) => set({ persistentNotification: v })}
+          />
+        </>
+      )}
+      {!isAndroid && autostart !== null && (
+        <Toggle
+          label="Start with Windows"
+          hint="Tend waits quietly in the tray so reminders arrive on time."
+          checked={autostart}
+          onChange={(v) =>
+            void (v ? enableAutostart() : disableAutostart()).then(() => setAutostart(v)).catch(() => toast("Couldn't change that. Try again in a moment."))
+          }
+        />
+      )}
+      <Toggle
+        label="Quiet hours"
+        hint={s.quietHours ? `No nudges from ${s.quietHours.start} to ${s.quietHours.end}.` : "Nudges can arrive at any time."}
+        checked={!!s.quietHours}
+        onChange={(v) => set({ quietHours: v ? { start: "22:30", end: "07:30" } : null })}
+      />
+      {s.quietHours && (
+        <div className="row">
+          <span className="row-label">From</span>
+          <span className="time-pair">
+            <input
+              type="time"
+              value={s.quietHours.start}
+              onChange={(e) => set({ quietHours: { ...s.quietHours!, start: e.target.value } })}
+              aria-label="Quiet hours start"
+            />
+            <span>to</span>
+            <input
+              type="time"
+              value={s.quietHours.end}
+              onChange={(e) => set({ quietHours: { ...s.quietHours!, end: e.target.value } })}
+              aria-label="Quiet hours end"
+            />
+          </span>
+        </div>
+      )}
+      {isAndroid && (
+        <>
+          <button className="row disclosure" aria-expanded={fine} onClick={() => setFine(!fine)}>
+            <span className="row-text">
+              <span className="row-label">Fine-tune</span>
+              <span className="row-hint">How nudges sound, repeats, heads-ups and dose reminders.</span>
+            </span>
+            <Chevron size={16} className={fine ? "is-open" : ""} />
+          </button>
+          {fine && (
+            <div className="disclosure-body">
+              <Choice
+                label="How nudges arrive"
+                hint="For everything except doses."
+                value={s.cueStyle}
+                onChange={(v) => set({ cueStyle: v })}
+                options={[
+                  { value: "sound", label: "Sound" },
+                  { value: "vibrate", label: "Buzz only" },
+                  { value: "silent", label: "Silent" },
+                ]}
+              />
+              <Choice
+                label="Remind me again"
+                hint="A timed reminder nudges at its time, once more after this, then rests."
+                value={String(s.nudgeAgainMinutes)}
+                onChange={(v) => set({ nudgeAgainMinutes: Number(v) })}
+                options={[
+                  { value: "0", label: "Never" },
+                  { value: "15", label: "15 min" },
+                  { value: "30", label: "30 min" },
+                  { value: "60", label: "1 hour" },
+                ]}
+              />
+              <Choice
+                label="Heads-up before"
+                hint="A quiet note before a timed reminder, to help with switching."
+                value={String(s.preWarnMinutes)}
+                onChange={(v) => set({ preWarnMinutes: Number(v) })}
+                options={[
+                  { value: "0", label: "Off" },
+                  { value: "5", label: "5 min" },
+                  { value: "10", label: "10 min" },
+                  { value: "15", label: "15 min" },
+                ]}
+              />
+              <Choice
+                label="Dose reminders repeat"
+                hint="Until the dose is taken or skipped."
+                value={String(s.doseNagMinutes)}
+                onChange={(v) => set({ doseNagMinutes: Number(v) })}
+                options={[
+                  { value: "0", label: "Once" },
+                  { value: "15", label: "Every 15 min" },
+                  { value: "30", label: "Every 30 min" },
+                  { value: "60", label: "Hourly" },
+                ]}
+              />
+              {s.doseNagMinutes > 0 && (
+                <Choice
+                  label="For up to"
+                  value={String(s.doseNagUntilMinutes)}
+                  onChange={(v) => set({ doseNagUntilMinutes: Number(v) })}
+                  options={[
+                    { value: "60", label: "1 hour" },
+                    { value: "120", label: "2 hours" },
+                    { value: "240", label: "4 hours" },
+                  ]}
+                />
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+/** The phone's calendars on Today (read-only), and the stormy-day offer. */
+function DaySettings() {
+  const { settings: s, updateSettings: set, toast } = useStore();
+  const [status, setStatus] = useState<CalendarAccess["status"] | null>(null);
+  const [cals, setCals] = useState<DeviceCalendar[] | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(
+    () =>
+      void calendar
+        .status()
+        .then((r) => setStatus(r.status))
+        .catch(() => setStatus("unsupported")),
+    [],
+  );
+  useEffect(() => {
+    if (s.calendarEnabled && status === "granted")
+      void calendar
+        .calendars()
+        .then(setCals)
+        .catch(() => setCals([]));
+  }, [s.calendarEnabled, status]);
+
+  async function enable(v: boolean) {
+    if (!v) return set({ calendarEnabled: false });
+    setBusy(true);
+    try {
+      const r = await calendar.request();
+      setStatus(r.status);
+      if (r.status === "granted") set({ calendarEnabled: true });
+      else toast("Tend needs calendar access to show events. It only reads them, and nothing leaves your phone.");
+    } catch {
+      toast("Couldn't reach the calendar just now. Try again in a moment.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const all = cals?.map((c) => c.id) ?? [];
+  const shown = (id: string) => s.calendarIds.length === 0 || s.calendarIds.includes(id);
+  function toggleCal(id: string) {
+    const cur = s.calendarIds.length ? s.calendarIds : all;
+    const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
+    if (next.length === 0) return toast("Keep at least one, or turn the calendar off.");
+    set({ calendarIds: next.length === all.length ? [] : next });
+  }
+
+  return (
+    <>
+      {status === "unsupported" || !isAndroid ? (
+        <div className="row">
+          <span className="row-text">
+            <span className="row-label">Calendar</span>
+            <span className="row-hint">Calendar needs the phone app for now. On your phone, Tend can show today's events from Google Calendar and others.</span>
+          </span>
+        </div>
+      ) : (
+        <>
+          <Toggle
+            label="Show my calendar on Today"
+            hint="Today's events from your phone's calendars, including Google Calendar. Tend only reads them, and nothing leaves your phone."
+            checked={s.calendarEnabled && status === "granted"}
+            onChange={(v) => !busy && void enable(v)}
+          />
+          {s.calendarEnabled && status === "denied" && (
+            <div className="row">
+              <span className="row-hint warn">Calendar access was turned off. Allow it again to see events.</span>
+              <button className="btn btn-soft" disabled={busy} onClick={() => void enable(true)}>
+                Allow
+              </button>
+            </div>
+          )}
+          {s.calendarEnabled && status === "granted" && cals && cals.length > 1 && (
+            <div className="row stack">
+              <span className="row-text">
+                <span className="row-label">Which calendars</span>
+              </span>
+              <div className="chips">
+                {cals.map((c) => (
+                  <button
+                    key={c.id}
+                    className={`chip cal-chip ${shown(c.id) ? "is-on" : ""}`}
+                    aria-pressed={shown(c.id)}
+                    title={c.account}
+                    onClick={() => toggleCal(c.id)}
+                  >
+                    <span className="cal-dot" style={{ background: c.color }} />
+                    {c.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+      <Toggle
+        label="Offer a lighter day when it's stormy"
+        hint="When you check in with thunder, Tend can offer to keep just one thing and let the rest wait until tomorrow. Doses never move."
+        checked={s.stormyLightDay}
+        onChange={(v) => set({ stormyLightDay: v })}
+      />
+    </>
+  );
+}
+
+/** Reward sounds, each one previewable and switchable on its own. */
+function SoundSettings() {
+  const { settings: s, updateSettings: set } = useStore();
+  const [open, setOpen] = useState(false);
+  const mute = (name: SoundName, on: boolean) => {
+    const next = on ? s.mutedSounds.filter((n) => n !== name) : [...s.mutedSounds, name];
+    configureSound({ muted: next });
+    set({ mutedSounds: next });
+  };
+  return (
+    <>
+      <Toggle label="Sounds" hint="Soft woodblock and marimba, made on the spot." checked={s.sound} onChange={(v) => set({ sound: v })} />
+      {s.sound && (
+        <>
+          <div className="row">
+            <span className="row-label">Volume</span>
+            <input
+              type="range"
+              min={0.1}
+              max={1}
+              step={0.05}
+              value={s.volume}
+              onChange={(e) => set({ volume: Number(e.target.value) })}
+              onPointerUp={() => preview("step")}
+              aria-label="Volume"
+            />
+          </div>
+          <button className="row disclosure" aria-expanded={open} onClick={() => setOpen(!open)}>
+            <span className="row-text">
+              <span className="row-label">Choose sounds</span>
+              <span className="row-hint">
+                {s.mutedSounds.length === 0
+                  ? "All on."
+                  : `${SOUND_NAMES.filter((n) => s.mutedSounds.includes(n.name))
+                      .map((n) => n.label)
+                      .join(", ")} off.`}
+              </span>
+            </span>
+            <Chevron size={16} className={open ? "is-open" : ""} />
+          </button>
+          {open && (
+            <div className="disclosure-body">
+              {SOUND_NAMES.map((n) => {
+                const on = !s.mutedSounds.includes(n.name);
+                return (
+                  <div className="row sound-row" key={n.name}>
+                    <span className="row-text">
+                      <span className="row-label">{n.label}</span>
+                      <span className="row-hint">{n.hint}</span>
+                    </span>
+                    <button className="btn btn-quiet" aria-label={`Play ${n.label}`} onClick={() => preview(n.name)}>
+                      Play
+                    </button>
+                    <button role="switch" aria-checked={on} aria-label={n.label} className={`switch ${on ? "is-on" : ""}`} onClick={() => mute(n.name, !on)}>
+                      <motion.span className="switch-knob" layout transition={{ type: "spring", stiffness: 500, damping: 32 }} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+/** The on-device suggestion model: one row, Download or Remove. Using it and having it are the same thing. */
+function ModelRow() {
+  const { settings: s, updateSettings: set, toast } = useStore();
+  const [model, setModel] = useState<{ present: boolean; size: number } | null>(null);
+  const [dl, setDl] = useState<[number, number] | null>(null);
+
+  useEffect(() => {
+    void api
+      .modelStatus()
+      .then(setModel)
+      .catch(() => null);
+    const un = listen<[number, number]>("model-progress", (e) => setDl(e.payload));
+    return () => void un.then((f) => f());
+  }, []);
+
+  async function download() {
+    set({ useModel: true, modelConsent: true });
+    setDl([0, model?.size ?? 1]);
+    try {
+      await api.downloadModel();
+      setModel(await api.modelStatus());
+      toast("The suggestion helper is ready. It only wakes up to suggest seeds and steps.");
+    } catch {
+      toast("The download stopped. Try again when the connection is steady.");
+    }
+    setDl(null);
+  }
+
+  async function remove() {
+    set({ useModel: false, modelConsent: false });
+    await api.deleteModel().catch(() => null);
+    setModel(await api.modelStatus().catch(() => null));
+  }
+
+  const mb = Math.round((model?.size ?? 35e6) / 1e6);
+  const on = !!model?.present && s.useModel;
+  return (
+    <div className="row">
+      <span className="row-text">
+        <span className="row-label">Suggestion helper</span>
+        <span className="row-hint">
+          {on
+            ? "Runs on your device. It wakes for a split second to suggest seeds and steps, then unloads."
+            : model?.present
+              ? "Downloaded but not in use, so Tend makes a simple guess."
+              : `About ${mb} MB, downloaded once${isAndroid ? ", best on Wi-Fi" : ""}. It runs on your device and nothing is sent anywhere. Until then Tend makes a simple guess.`}
+        </span>
+        {dl && (
+          <span className="progress-line">
+            <motion.span animate={{ width: `${(dl[0] / Math.max(1, dl[1])) * 100}%` }} />
+          </span>
+        )}
+      </span>
+      {model?.present ? (
+        <span className="row-actions">
+          {!s.useModel && (
+            <button className="btn btn-soft" onClick={() => set({ useModel: true, modelConsent: true })}>
+              Use it
+            </button>
+          )}
+          <button className="btn btn-quiet" onClick={() => void remove()}>
+            Remove
+          </button>
+        </span>
+      ) : (
+        <button className="btn btn-soft" disabled={!!dl} onClick={() => void download()}>
+          {dl ? `${Math.round((dl[0] / Math.max(1, dl[1])) * 100)}%` : "Download"}
+        </button>
+      )}
+    </div>
+  );
+}
 
 /** What the desktop's QR code carries: every address, the port, the code and who it is. */
 function pairPayload(info: SyncInfo) {
@@ -558,29 +1158,36 @@ function UpdatesGroup() {
 
 export function SettingsView() {
   const { settings: s, updateSettings: set, toast, refresh } = useStore();
-  const [perms, setPerms] = useState<Permissions | null>(null);
   const [sync, setSync] = useState<SyncInfo | null>(null);
   const [hosts, setHosts] = useState<Hello[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [pairHost, setPairHost] = useState("");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
-  const [model, setModel] = useState<{ present: boolean; size: number } | null>(null);
-  const [dl, setDl] = useState<[number, number] | null>(null);
   const [autostart, setAutostart] = useState<boolean | null>(null);
 
   useEffect(() => {
-    void native.permissions().then(setPerms).catch(() => null);
-    void api.syncInfo().then(setSync).catch(() => null);
-    void api.modelStatus().then(setModel).catch(() => null);
-    if (!isAndroid) void autostartEnabled().then(setAutostart).catch(() => null);
-    const un = listen<[number, number]>("model-progress", (e) => setDl(e.payload));
-    const t = window.setInterval(() => void api.syncInfo().then(setSync).catch(() => null), 15000);
-    return () => {
-      void un.then((f) => f());
-      window.clearInterval(t);
-    };
+    void api
+      .syncInfo()
+      .then(setSync)
+      .catch(() => null);
+    if (!isAndroid)
+      void autostartEnabled()
+        .then(setAutostart)
+        .catch(() => null);
+    const t = window.setInterval(
+      () =>
+        void api
+          .syncInfo()
+          .then(setSync)
+          .catch(() => null),
+      15000,
+    );
+    return () => window.clearInterval(t);
   }, []);
+
+  // Keeps per-sound muting live even before the store passes it along on start.
+  useEffect(() => configureSound({ muted: s.mutedSounds }), [s.mutedSounds]);
 
   async function find() {
     setSearching(true);
@@ -644,18 +1251,6 @@ export function SettingsView() {
     await refresh();
   }
 
-  async function download() {
-    setDl([0, model?.size ?? 1]);
-    try {
-      await api.downloadModel();
-      setModel(await api.modelStatus());
-      toast("The tiny model is ready. It only wakes up to suggest rewards.");
-    } catch (e) {
-      toast(`Download stopped: ${e}`);
-    }
-    setDl(null);
-  }
-
   const servers = sync?.peers.filter((p) => !p.isClient) ?? [];
   const clients = sync?.peers.filter((p) => p.isClient) ?? [];
 
@@ -665,29 +1260,24 @@ export function SettingsView() {
         <h1>Settings</h1>
       </header>
 
-      <Group title="Sound and motion">
-        <Toggle label="Reward sounds" hint="Soft woodblock and marimba." checked={s.sound} onChange={(v) => set({ sound: v })} />
-        {s.sound && (
-          <div className="row">
-            <span className="row-label">Volume</span>
-            <input
-              type="range"
-              min={0.1}
-              max={1}
-              step={0.05}
-              value={s.volume}
-              onChange={(e) => set({ volume: Number(e.target.value) })}
-              onPointerUp={() => sounds.step(2)}
-              aria-label="Volume"
-            />
-          </div>
-        )}
+      <PermissionBanner />
+
+      <Group title="Nudges">
+        <NudgeSettings autostart={autostart} setAutostart={setAutostart} />
+      </Group>
+
+      <Group title="Your day">
+        <DaySettings />
+      </Group>
+
+      <Group title="Look and feel">
+        <SoundSettings />
         <Choice
           label="Reduce motion"
           value={s.reduceMotion}
           onChange={(v) => set({ reduceMotion: v })}
           options={[
-            { value: "system", label: "Like my device" },
+            { value: "system", label: "Match my phone" },
             { value: "on", label: "On" },
             { value: "off", label: "Off" },
           ]}
@@ -697,7 +1287,7 @@ export function SettingsView() {
           value={s.theme}
           onChange={(v) => set({ theme: v })}
           options={[
-            { value: "system", label: "Auto" },
+            { value: "system", label: "Match my phone" },
             { value: "light", label: "Day" },
             { value: "dark", label: "Night" },
           ]}
@@ -711,136 +1301,24 @@ export function SettingsView() {
           checked={s.surpriseBonuses}
           onChange={(v) => set({ surpriseBonuses: v })}
         />
-        <Toggle label="Use the tiny model" hint="Suggests reward values on this device. Off uses a simple estimate." checked={s.useModel} onChange={(v) => set({ useModel: v })} />
-        <div className="row">
-          <span className="row-text">
-            <span className="row-label">Tiny model</span>
-            <span className="row-hint">
-              {model?.present
-                ? "Downloaded. Wakes for a split second to suggest seeds and steps, then unloads."
-                : `About ${Math.round((model?.size ?? 0) / 1e6)} MB, downloaded once. Until then Tend estimates.`}
-            </span>
-            {dl && (
-              <span className="progress-line">
-                <motion.span animate={{ width: `${(dl[0] / Math.max(1, dl[1])) * 100}%` }} />
-              </span>
-            )}
-          </span>
-          {model?.present ? (
-            <button className="btn btn-quiet" onClick={() => void api.deleteModel().then(() => api.modelStatus().then(setModel))}>
-              Remove
-            </button>
-          ) : (
-            <button className="btn btn-soft" disabled={!!dl} onClick={() => void download()}>
-              {dl ? `${Math.round((dl[0] / Math.max(1, dl[1])) * 100)}%` : "Download"}
-            </button>
-          )}
-        </div>
-      </Group>
-
-      <Group title="Backup">
-        <BackupSettings />
-      </Group>
-
-      <Group title="Medicine">
-        <HealthData />
+        <ModelRow />
       </Group>
 
       <Group title="Movement">
         <MovementSettings />
       </Group>
 
-      <Group title="Reminders">
-        <Choice
-          label="Chime while things wait"
-          value={String(s.chimeMinutes)}
-          onChange={(v) => set({ chimeMinutes: Number(v) })}
-          options={[
-            { value: "0", label: "Off" },
-            { value: "15", label: "15 min" },
-            { value: "30", label: "30 min" },
-            { value: "60", label: "Hour" },
-          ]}
-        />
-        {isAndroid && (
-          <>
-            <Toggle
-              label="Keep a 'still to do' notification"
-              hint="A quiet notification that stays while things are waiting. It comes back if swiped away."
-              checked={s.persistentNotification}
-              onChange={(v) => set({ persistentNotification: v })}
-            />
-            <Toggle
-              label="Show what's waiting when I unlock"
-              hint="A calm screen before you dive into your phone."
-              checked={s.nagOnUnlock}
-              onChange={(v) => set({ nagOnUnlock: v })}
-            />
-            {s.nagOnUnlock && (
-              <Choice
-                label="Show it"
-                value={String(s.nagEvery < 0 && s.chimeMinutes === 0 ? 30 : s.nagEvery)}
-                onChange={(v) => set({ nagEvery: Number(v) })}
-                options={[
-                  ...(s.chimeMinutes > 0 ? [{ value: "-1", label: "Each chime" }] : []),
-                  { value: "0", label: "Every unlock" },
-                  { value: "30", label: "30 min" },
-                  { value: "60", label: "Hour" },
-                ]}
-              />
-            )}
-          </>
-        )}
-        {!isAndroid && autostart !== null && (
-          <Toggle
-            label="Start with Windows"
-            hint="Tend waits quietly in the tray so reminders arrive on time."
-            checked={autostart}
-            onChange={(v) => void (v ? enableAutostart() : disableAutostart()).then(() => setAutostart(v)).catch((e) => toast(String(e)))}
-          />
-        )}
-        <Toggle
-          label="Quiet hours"
-          hint={s.quietHours ? `No nudges from ${s.quietHours.start} to ${s.quietHours.end}.` : "Nudges can arrive at any time."}
-          checked={!!s.quietHours}
-          onChange={(v) => set({ quietHours: v ? { start: "22:30", end: "07:30" } : null })}
-        />
-        {s.quietHours && (
-          <div className="row">
-            <span className="row-label">From</span>
-            <span className="time-pair">
-              <input type="time" value={s.quietHours.start} onChange={(e) => set({ quietHours: { ...s.quietHours!, start: e.target.value } })} aria-label="Quiet hours start" />
-              <span>to</span>
-              <input type="time" value={s.quietHours.end} onChange={(e) => set({ quietHours: { ...s.quietHours!, end: e.target.value } })} aria-label="Quiet hours end" />
-            </span>
-          </div>
-        )}
+      <Group title="Your data">
+        <BackupSettings />
+        <HealthData />
       </Group>
-
-      {isAndroid && perms && (
-        <Group title="Phone permissions">
-          {PERMS.map((p) => (
-            <div className="row" key={p.kind}>
-              <span className="row-text">
-                <span className="row-label">{p.label}</span>
-                <span className="row-hint">{p.hint}</span>
-              </span>
-              {perms[p.kind] ? (
-                <span className="ok">Allowed</span>
-              ) : (
-                <button className="btn btn-soft" onClick={() => void native.request(p.kind).then(setPerms).catch(() => null)}>
-                  Allow
-                </button>
-              )}
-            </div>
-          ))}
-        </Group>
-      )}
 
       <Group title="Sync between devices">
         {sync?.hosting && (
           <div className="pair-host">
-            <p className="row-hint">On your phone, open Tend → Settings → Sync and scan this code, or type the 6 digits. Both devices need to be on the same Wi-Fi.</p>
+            <p className="row-hint">
+              On your phone, open Tend → Settings → Sync between devices and scan this code, or type the 6 digits. Both devices need to be on the same Wi-Fi.
+            </p>
             <div className="pair-both">
               <PairQr info={sync} />
               <div className="pair-code" aria-label={`Pairing code ${sync.code}`}>
