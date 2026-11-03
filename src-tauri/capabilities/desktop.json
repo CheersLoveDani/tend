@@ -3,6 +3,6 @@
   "identifier": "desktop",
   "description": "Desktop-only permissions",
   "platforms": ["windows", "linux", "macOS"],
-  "windows": ["main"],
-  "permissions": ["autostart:default", "updater:default", "process:allow-restart", "dialog:allow-open"]
+  "windows": ["main", "quick"],
+  "permissions": ["autostart:default", "updater:default", "process:allow-restart", "dialog:allow-open", "core:window:allow-hide"]
 }

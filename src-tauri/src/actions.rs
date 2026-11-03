@@ -8,6 +8,9 @@ use crate::db::{Db, now_ms};
 use crate::model::{LedgerEntry, Reminder, ReminderInput, RewardEvent};
 use crate::rewards::{self, MAX_BITS};
 
+/// Parked with no date. Never overdue, never notified; the UI lists these separately.
+pub const SOMEDAY: &str = "9999-12-31";
+
 pub fn today() -> String {
     chrono::Local::now().format("%Y-%m-%d").to_string()
 }
@@ -126,21 +129,11 @@ fn event(db: &Db, kind: &str, gained: i64, bonus: i64, xp_before: i64, r: Remind
     })
 }
 
-/// Creates the next occurrence of a repeating reminder (idempotent across devices).
-fn spawn_next(db: &Db, r: &Reminder) -> Result<()> {
-    let Some(repeat) = r.repeat.as_deref() else { return Ok(()) };
-    let mut date = next_date(&r.date, repeat)?;
-    // Don't create a pile of occurrences in the past if it was finished late.
-    let today = today();
-    while date < today {
-        date = next_date(&date, repeat)?;
-    }
-    let id = format!("{}@{}", r.series_id, date);
-    if db.get_reminder(&id)?.is_some() {
-        return Ok(());
-    }
+/// A fresh, unstarted copy of a repeating reminder on `date`. The id is derived from the series
+/// and date so every device creating the same occurrence agrees on it.
+fn occurrence(r: &Reminder, date: String) -> Reminder {
     let mut next = r.clone();
-    next.id = id;
+    next.id = format!("{}@{}", r.series_id, date);
     next.date = date;
     next.status = "open".into();
     next.bits = 0;
@@ -151,7 +144,57 @@ fn spawn_next(db: &Db, r: &Reminder) -> Result<()> {
     for s in &mut next.steps {
         s.done = false;
     }
-    db.save_reminder(&mut next)
+    next
+}
+
+/// First occurrence after `from` that isn't in the past.
+fn next_on_or_after(from: &str, repeat: &str, today: &str) -> Result<String> {
+    let mut date = next_date(from, repeat)?;
+    while date.as_str() < today {
+        date = next_date(&date, repeat)?;
+    }
+    Ok(date)
+}
+
+/// Creates the next occurrence of a repeating reminder (idempotent across devices).
+fn spawn_next(db: &Db, r: &Reminder) -> Result<()> {
+    let Some(repeat) = r.repeat.as_deref() else { return Ok(()) };
+    let today = today();
+    // A parked (Someday) habit that gets done carries on from today, not from year 9999.
+    let from = if r.date == SOMEDAY { today.as_str() } else { r.date.as_str() };
+    // Don't create a pile of occurrences in the past if it was finished late.
+    let date = next_on_or_after(from, repeat, &today)?;
+    let id = format!("{}@{}", r.series_id, date);
+    if db.get_reminder(&id)?.is_some() {
+        return Ok(());
+    }
+    db.save_reminder(&mut occurrence(r, date))
+}
+
+/// Moves unfinished repeating reminders from past days to their next occurrence, so a daily habit
+/// keeps coming back even when it wasn't done. The old occurrence is retired (seeds already earned
+/// on it stay earned) and a fresh one takes its place. Safe to run any time; returns how many moved.
+pub fn roll_forward(db: &Db) -> Result<usize> {
+    let today = today();
+    let mut moved = 0;
+    for mut r in db.reminders_live(&today)? {
+        let Some(repeat) = r.repeat.clone() else { continue };
+        if r.status != "open" || r.deleted || r.date.as_str() >= today.as_str() {
+            continue;
+        }
+        // A bad date or unknown repeat from an older/newer peer: leave it alone.
+        let Ok(date) = next_on_or_after(&r.date, &repeat, &today) else { continue };
+        let id = format!("{}@{}", r.series_id, date);
+        // The series already went on (e.g. this one was reopened after being done); leave it be.
+        if db.get_reminder(&id)?.is_some() {
+            continue;
+        }
+        db.save_reminder(&mut occurrence(&r, date))?;
+        r.deleted = true;
+        db.save_reminder(&mut r)?;
+        moved += 1;
+    }
+    Ok(moved)
 }
 
 fn finish(db: &Db, r: &mut Reminder, surprise: bool) -> Result<(i64, i64)> {
@@ -268,6 +311,23 @@ pub fn move_to(db: &Db, id: &str, date: &str) -> Result<Reminder> {
     Ok(r)
 }
 
+/// Moves several reminders to `date` (SOMEDAY parks them). Returns how many actually moved;
+/// ids that no longer exist are skipped.
+pub fn move_many(db: &Db, ids: &[String], date: &str) -> Result<usize> {
+    parse_date(date)?;
+    let mut moved = 0;
+    for id in ids {
+        let Some(mut r) = db.get_reminder(id)? else { continue };
+        if r.deleted || r.date == date {
+            continue;
+        }
+        r.date = date.to_string();
+        db.save_reminder(&mut r)?;
+        moved += 1;
+    }
+    Ok(moved)
+}
+
 pub fn delete(db: &Db, id: &str) -> Result<()> {
     let mut r = load(db, id)?;
     r.deleted = true;
@@ -351,6 +411,92 @@ mod tests {
         let all = db.reminders_live("0000-00-00").unwrap();
         assert_eq!(all.len(), 2);
         assert!(all.iter().any(|x| x.status == "open" && x.steps.iter().all(|s| !s.done)));
+    }
+
+    fn days_ago(n: i64) -> String {
+        (chrono::Local::now().date_naive() - Duration::days(n)).format("%Y-%m-%d").to_string()
+    }
+
+    #[test]
+    fn move_many_and_someday() {
+        let db = db();
+        let a = upsert(&db, input(0)).unwrap();
+        let b = upsert(&db, input(0)).unwrap();
+        let ids = vec![a.id.clone(), b.id.clone(), "gone".to_string()];
+        assert!(move_many(&db, &ids, "not a date").is_err());
+        assert_eq!(move_many(&db, &ids, SOMEDAY).unwrap(), 2);
+        // Already there: nothing to move.
+        assert_eq!(move_many(&db, &ids, SOMEDAY).unwrap(), 0);
+        let live = db.reminders_live(&today()).unwrap();
+        assert_eq!(live.iter().filter(|r| r.date == SOMEDAY).count(), 2);
+        assert_eq!(move_many(&db, &ids[..1], &today()).unwrap(), 1);
+        assert_eq!(db.get_reminder(&a.id).unwrap().unwrap().date, today());
+    }
+
+    #[test]
+    fn someday_repeating_spawns_from_today() {
+        let db = db();
+        let mut i = input(0);
+        i.repeat = Some("daily".into());
+        i.date = SOMEDAY.into();
+        let r = upsert(&db, i).unwrap();
+        complete(&db, &r.id, false).unwrap();
+        let tomorrow = next_date(&today(), "daily").unwrap();
+        let next = db.get_reminder(&format!("{}@{tomorrow}", r.series_id)).unwrap().unwrap();
+        assert_eq!(next.status, "open");
+        // Rolling never touches Someday ones.
+        let mut j = input(0);
+        j.repeat = Some("daily".into());
+        j.date = SOMEDAY.into();
+        upsert(&db, j).unwrap();
+        assert_eq!(roll_forward(&db).unwrap(), 0);
+    }
+
+    #[test]
+    fn rolls_unfinished_habits_forward() {
+        let db = db();
+        let mut i = input(2);
+        i.repeat = Some("daily".into());
+        i.date = days_ago(3);
+        let r = upsert(&db, i).unwrap();
+        toggle_step(&db, &r.id, "s0", true, false).unwrap();
+        let earned = db.total_xp().unwrap();
+        assert!(earned > 0);
+        // A one-off overdue task stays where it is.
+        let mut once = input(0);
+        once.date = days_ago(2);
+        let once = upsert(&db, once).unwrap();
+
+        assert_eq!(roll_forward(&db).unwrap(), 1);
+        assert_eq!(roll_forward(&db).unwrap(), 0);
+        let live = db.reminders_live("0000-00-00").unwrap();
+        assert_eq!(live.len(), 2);
+        let rolled = live.iter().find(|x| x.series_id == r.series_id).unwrap();
+        assert_eq!(rolled.date, today());
+        assert_eq!(rolled.id, format!("{}@{}", r.series_id, today()));
+        assert!(rolled.steps.iter().all(|s| !s.done));
+        assert_eq!(rolled.bits, 0);
+        assert!(db.get_reminder(&r.id).unwrap().unwrap().deleted);
+        assert_eq!(db.get_reminder(&once.id).unwrap().unwrap().date, days_ago(2));
+        // Seeds paid on the old occurrence stay; the new one pays in full.
+        assert_eq!(db.total_xp().unwrap(), earned);
+        let e = complete(&db, &rolled.id, false).unwrap();
+        assert_eq!(e.gained, 30);
+
+        // Two devices rolling the same reminder agree.
+        let a = Db::open(std::path::Path::new(":memory:")).unwrap();
+        let b = Db::open(std::path::Path::new(":memory:")).unwrap();
+        let mut w = input(0);
+        w.repeat = Some("weekly".into());
+        w.date = days_ago(9);
+        upsert(&a, w).unwrap();
+        b.apply_remote(&a.reminders_since(0).unwrap(), &[], &[]).unwrap();
+        roll_forward(&a).unwrap();
+        roll_forward(&b).unwrap();
+        a.apply_remote(&b.reminders_since(0).unwrap(), &[], &[]).unwrap();
+        let live = a.reminders_live("0000-00-00").unwrap();
+        assert_eq!(live.len(), 1);
+        assert_eq!(live[0].date, days_ago(9 - 14));
     }
 
     #[test]
