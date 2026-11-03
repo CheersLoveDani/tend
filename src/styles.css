@@ -3111,3 +3111,522 @@ select.field-input {
   display: grid;
   gap: 18px;
 }
+
+/* ==========================================================================================
+   0.3 streamline — Today & tasks (track A)
+   ========================================================================================== */
+
+/* Unlock screen rows: tap to reveal buttons, or always show them (Settings → unlockButtons). */
+.swipe-track {
+  position: relative;
+  border-radius: var(--radius-l);
+  isolation: isolate;
+}
+.swipe.is-buttons .swipe-card {
+  cursor: default;
+  touch-action: auto;
+}
+.swipe-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 4px 0;
+  overflow: hidden;
+}
+.swipe-buttons .btn {
+  min-height: 44px;
+}
+.swipe-buttons .btn-soft {
+  max-width: 100%;
+}
+.swipe-buttons .btn-soft span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Task card: a ⋯ for "Move to…" (pointer devices; touch long-presses), and a tickable next step. */
+.card-row {
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-auto-columns: auto;
+  grid-auto-flow: column;
+}
+.card-main {
+  -webkit-touch-callout: none;
+}
+.card-more {
+  display: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  color: var(--bark-3);
+  font-size: 20px;
+  line-height: 1;
+}
+.card-more:hover,
+.card-more:focus-visible {
+  background: var(--paper-2);
+  color: var(--bark);
+}
+@media (hover: hover) and (pointer: fine) {
+  .card-more {
+    display: grid;
+    place-items: center;
+  }
+}
+.card-next-tick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% - 66px - 14px);
+  margin: -8px 14px 12px 66px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  text-align: left;
+  font-size: 14px;
+  color: var(--moss);
+}
+.card-next-tick:hover {
+  background: var(--moss-soft);
+}
+.card-next-tick > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+}
+.card-next-title {
+  font-weight: 700;
+}
+.card-next-tick .step-value {
+  color: var(--bark-3);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.mini-box {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  border: 2px solid var(--moss-2);
+}
+.card-next-tick:hover .mini-box {
+  background: color-mix(in srgb, var(--moss) 18%, transparent);
+}
+
+/* Move to… */
+.move-sheet {
+  width: min(420px, 100%);
+}
+.move-title {
+  margin: 0;
+  padding: 0 24px 8px;
+  color: var(--bark-2);
+  overflow-wrap: anywhere;
+}
+.move-options {
+  display: grid;
+  gap: 4px;
+  padding: 4px 12px 12px;
+}
+.move-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+.move-option:hover,
+.move-option:focus-within,
+.move-option:focus-visible {
+  background: var(--paper-2);
+}
+.move-option svg,
+.move-someday {
+  color: var(--moss);
+  flex: none;
+  width: 18px;
+  text-align: center;
+}
+.move-someday {
+  font-size: 18px;
+  line-height: 1;
+}
+.move-sub {
+  margin-left: auto;
+  color: var(--bark-3);
+  font-weight: 400;
+  font-size: 14px;
+}
+.move-pick input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* "Quiet for today" banner. */
+.paused-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: -10px 0 18px;
+  padding: 10px 14px;
+  border-radius: var(--radius-m);
+  background: color-mix(in srgb, var(--dusk) 14%, var(--paper));
+  color: var(--bark-2);
+  font-size: 14px;
+  overflow: hidden;
+}
+.paused-banner svg {
+  color: var(--dusk);
+  flex: none;
+}
+.paused-banner span {
+  flex: 1;
+  min-width: 200px;
+}
+
+/* The weather check-in answers in place on Today. */
+.weather-reaction {
+  position: relative;
+  margin-top: 12px;
+  padding: 14px 44px 14px 18px;
+  border-radius: var(--radius-l);
+  background: var(--paper);
+  box-shadow: var(--shadow);
+  border-left: 4px solid var(--moss);
+}
+.weather-reaction.wq-5,
+.weather-reaction.wq-4 {
+  border-left-color: #f6d77a;
+}
+.weather-reaction.wq-2,
+.weather-reaction.wq-1 {
+  border-left-color: var(--dusk);
+}
+.weather-reaction-line {
+  margin: 0 0 6px;
+  color: var(--bark-2);
+  font-size: 14px;
+}
+.weather-reaction blockquote {
+  margin: 0;
+  font-style: italic;
+  line-height: 1.45;
+}
+.weather-reaction-by {
+  margin: 4px 0 0;
+  color: var(--bark-2);
+  font-size: 13.5px;
+  font-weight: 700;
+}
+.weather-reaction-by::before {
+  content: "— ";
+}
+.weather-reaction-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+}
+
+/* Calendar events: look-only, compact. */
+.cal-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+.cal-event {
+  display: grid;
+  grid-template-columns: 10px 72px 1fr;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 12px;
+  text-align: left;
+  font-size: 15px;
+}
+.cal-event:hover {
+  background: var(--paper);
+}
+.cal-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  align-self: center;
+}
+.cal-time {
+  color: var(--bark-3);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cal-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.cal-more {
+  margin: 0;
+  padding: 0 12px 6px 104px;
+  color: var(--bark-3);
+  font-size: 14px;
+  overflow: hidden;
+}
+
+/* Earlier days, folded below Today. */
+.earlier-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  margin-bottom: 10px;
+}
+.earlier-row .section-toggle {
+  margin: 0 0 0 4px;
+}
+.earlier-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.btn-small {
+  min-height: 36px;
+  padding: 6px 12px;
+  font-size: 14px;
+  border-radius: 10px;
+}
+.earlier > .list {
+  overflow: hidden;
+}
+
+/* Coming up: "+ Plan for another day" and Someday. */
+.plan-another {
+  position: relative;
+  margin: 18px 0 28px;
+}
+.plan-picker {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.someday .hint {
+  margin: -6px 0 10px 4px;
+}
+.someday-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  overflow: hidden;
+}
+.someday-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px 8px 16px;
+  border-radius: var(--radius-m);
+  background: var(--paper);
+  box-shadow: var(--shadow);
+}
+.someday-title {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+/* Editor: When stays visible after a parse; extras fold away; the idea has a reserved slot. */
+.parsed {
+  flex-wrap: wrap;
+}
+.parsed-undo {
+  font-size: 13.5px;
+  padding: 2px 4px;
+  color: var(--bark-2);
+}
+.extras-chips {
+  gap: 8px;
+}
+.chip-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 1.5px dashed var(--line);
+  color: var(--bark-2);
+}
+.chip-add:hover {
+  border-color: var(--moss-2);
+  color: var(--moss);
+}
+.sheet-body > .extras {
+  margin-bottom: -10px;
+}
+.idea-slot {
+  height: 40px;
+  margin: -6px 0 -4px;
+}
+.idea-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  padding: 0 12px;
+  border-radius: 12px;
+  background: var(--moss-soft);
+  color: var(--moss);
+  font-weight: 700;
+  font-size: 14px;
+  text-align: left;
+}
+.idea-line svg {
+  flex: none;
+}
+.idea-line-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reward-pick {
+  padding: 6px 10px;
+}
+.reward-pick:has(.reward-row) {
+  padding-bottom: 16px;
+}
+.reward-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 4px 6px;
+  border-radius: 12px;
+  text-align: left;
+  font-size: 15px;
+}
+.reward-line > svg {
+  color: var(--pollen);
+  flex: none;
+}
+
+/* A level that isn't a new stage: a small card at the top that leaves by itself. */
+.level-note {
+  position: absolute;
+  left: 50%;
+  top: calc(16px + var(--safe-t));
+  translate: -50% 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 18px 8px 10px;
+  border-radius: 20px;
+  background: var(--paper);
+  box-shadow: 0 16px 40px -18px rgba(20, 40, 30, 0.45);
+  max-width: calc(100vw - 32px);
+}
+.level-note > span {
+  display: grid;
+  line-height: 1.3;
+}
+.level-note strong {
+  font-family: var(--font-display);
+  font-size: 17px;
+}
+.level-note span span {
+  color: var(--bark-2);
+  font-size: 14px;
+}
+
+/* Stormy light day. */
+.stormy-sheet {
+  width: min(480px, 100%);
+}
+.stormy-lead {
+  margin: 0;
+  font-size: 17px;
+  color: var(--bark);
+}
+.stormy-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.stormy-pick {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: var(--radius-m);
+  background: var(--paper-2);
+  text-align: left;
+}
+.stormy-pick:hover,
+.stormy-pick:focus-visible {
+  background: var(--moss-soft);
+}
+.stormy-name {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+/* Quick add (desktop hotkey window, index.html?quick=1). */
+html[data-quick],
+html[data-quick] body {
+  background: transparent;
+}
+.quick {
+  box-sizing: border-box;
+  height: 100%;
+  display: grid;
+  align-content: center;
+  gap: 6px;
+  padding: 14px 20px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+.quick-input {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  outline: none;
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 600;
+}
+.quick-input::placeholder {
+  color: var(--bark-3);
+  font-weight: 400;
+}
+.quick-hint {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  color: var(--bark-3);
+  font-size: 13.5px;
+}
+.quick-hint svg {
+  vertical-align: -2px;
+}
+.quick-hint span:last-child svg {
+  color: var(--pollen);
+}

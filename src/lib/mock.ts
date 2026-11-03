@@ -51,6 +51,14 @@ export function installMock() {
     mk("Do the tax return", plusDays(3), 50, ["Find last year's login", "Gather P60", "Fill in income", "Submit"]),
     mk("Water the plants", plusDays(1), 5, [], "18:00"),
   ];
+  // 0.3 preview: an older overdue item, a Someday one, and ?cal / ?buttons / ?quiet switches.
+  reminders.push(mk("Return the library book", plusDays(-4), 10), mk("Learn to juggle", "9999-12-31", 20));
+  if (q.has("cal")) {
+    Object.assign(window, { __TEND_MOCK_CAL__: true });
+    settings.calendarEnabled = true;
+  }
+  if (q.has("buttons")) settings.unlockButtons = true;
+  if (q.has("quiet")) settings.pausedUntil = new Date().setHours(23, 59, 59, 999);
   ledger.set("seed", Number(new URLSearchParams(location.search).get("xp") ?? 130));
   const xp = () => [...ledger.values()].reduce((a, b) => a + b, 0);
   const find = (id: string) => reminders.find((r) => r.id === id)!;
@@ -261,6 +269,22 @@ export function installMock() {
       }
       case "fit_award":
         return { event: { kind: "none", gained: 0, bonus: 0, remaining: 0, before: level(before), after: level(before), reminder: mk("Moving", today(), 0) }, earned: [], counted: args.input.workouts.map((w: { id: string }) => w.id), completed: [] };
+      case "move_reminders":
+        for (const id of args.ids) find(id).date = args.date;
+        return args.ids.length;
+      case "plugin:tend-native|calendar_events": {
+        const at = (d: number, h: number, m = 0) => new Date(new Date().setHours(0, 0, 0, 0) + d * 86_400_000).setHours(h, m);
+        const ev = (id: string, title: string, start: number, end: number, allDay = false, location = "") => ({ id, calendarId: "c1", title, start, end, allDay, color: allDay ? "#8e7cc3" : "#3f8f6b", location });
+        return {
+          events: [
+            ev("e1", "Bin day", at(0, 0), at(1, 0), true),
+            ev("e2", "Stand-up", at(0, 9, 30), at(0, 9, 45), false, "Video call"),
+            ev("e3", "Lunch with Alex", at(0, 12, 30), at(0, 13, 30), false, "The Green Café"),
+            ev("e4", "Physio", at(2, 16), at(2, 17), false, "Riverside Clinic"),
+            ev("e5", "Mum's birthday", at(5, 0), at(6, 0), true),
+          ].filter((e) => e.end > args.from && e.start < args.to),
+        };
+      }
       default:
         return null;
     }

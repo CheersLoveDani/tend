@@ -220,6 +220,9 @@ pub fn toggle_quick(app: &AppHandle) {
             .maximizable(false)
             .minimizable(false)
             .decorations(false)
+            // The page draws its own rounded card on a transparent background.
+            .transparent(true)
+            .shadow(false)
             .always_on_top(true)
             .skip_taskbar(true)
             .center()

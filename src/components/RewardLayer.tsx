@@ -38,6 +38,8 @@ export function RewardLayer() {
   const [floater, setFloater] = useState<{ id: number; x: number; y: number; text: string; sub?: string } | null>(null);
   const [finish, setFinish] = useState<RewardEvent | null>(null);
   const [levelUp, setLevelUp] = useState<RewardEvent | null>(null);
+  // An ordinary level is a small card that leaves by itself; only a new stage gets the full moment.
+  const [levelNote, setLevelNote] = useState<RewardEvent | null>(null);
   const busy = useRef(false);
 
   useEffect(() => {
@@ -62,7 +64,7 @@ export function RewardLayer() {
       window.setTimeout(() => {
         busy.current = false;
         consumeReward();
-        if (leveled) setLevelUp(e);
+        if (leveled) celebrate(e);
       }, 650);
     } else if (e.kind === "finish") {
       sounds.finish();
@@ -75,7 +77,7 @@ export function RewardLayer() {
         setFinish(null);
         busy.current = false;
         consumeReward();
-        if (leveled) setLevelUp(e);
+        if (leveled) celebrate(e);
       }, e.bonus > 0 ? 2300 : 1700);
     } else {
       busy.current = false;
@@ -83,9 +85,21 @@ export function RewardLayer() {
     }
   }, [rewards, finish, levelUp, consumeReward, reduceMotion]);
 
+  function celebrate(e: RewardEvent) {
+    if (e.after.stage !== e.before.stage) setLevelUp(e);
+    else setLevelNote(e);
+  }
+
   useEffect(() => {
     if (levelUp) sounds.levelUp();
   }, [levelUp]);
+
+  useEffect(() => {
+    if (!levelNote) return;
+    sounds.bonus();
+    const t = window.setTimeout(() => setLevelNote(null), 3200);
+    return () => window.clearTimeout(t);
+  }, [levelNote]);
 
   function spawn(origin: { x: number; y: number }, target: { x: number; y: number }, n: number, kinds: Particle["kind"][]) {
     const ps: Particle[] = Array.from({ length: n }, (_, i) => ({
@@ -208,7 +222,7 @@ export function RewardLayer() {
           >
             <motion.div
               className="levelup"
-              initial={{ scale: 0.9, y: 30, opacity: 0 }}
+              initial={reduceMotion ? { opacity: 0 } : { scale: 0.9, y: 30, opacity: 0 }}
               animate={{ scale: 1, y: 0, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               transition={{ type: "spring", stiffness: 180, damping: 20 }}
@@ -216,18 +230,16 @@ export function RewardLayer() {
               role="dialog"
               aria-label={`Level ${levelUp.after.level}`}
             >
+              {/* One slow breath of light, then still: nothing here loops. */}
               <motion.div
                 className="levelup-glow"
-                animate={reduceMotion ? undefined : { scale: [1, 1.08, 1], opacity: [0.6, 0.9, 0.6] }}
-                transition={{ duration: 3, repeat: Infinity }}
+                initial={reduceMotion ? false : { scale: 0.85, opacity: 0.4 }}
+                animate={{ scale: 1, opacity: 0.8 }}
+                transition={{ duration: 1.6, ease: "easeOut" }}
               />
               <Tree level={levelUp.after.level} progress={levelUp.after.intoLevel / levelUp.after.levelSize} size={220} still={reduceMotion} />
               <h2>Level {levelUp.after.level}</h2>
-              <p className="levelup-stage">
-                {levelUp.after.stage !== levelUp.before.stage
-                  ? `Your tree became a ${levelUp.after.stage.toLowerCase()}.`
-                  : `Your ${levelUp.after.stage.toLowerCase()} grew a little more.`}
-              </p>
+              <p className="levelup-stage">Your tree became a {levelUp.after.stage.toLowerCase()}.</p>
               <p className="levelup-total">
                 <Seed size={14} /> {levelUp.after.xp} seeds gathered so far
               </p>
@@ -235,6 +247,26 @@ export function RewardLayer() {
                 Lovely
               </button>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {levelNote && (
+          <motion.div
+            key={levelNote.after.level}
+            className="level-note"
+            role="status"
+            initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ type: "spring", stiffness: 260, damping: 26 }}
+          >
+            <Tree level={levelNote.after.level} progress={levelNote.after.intoLevel / levelNote.after.levelSize} size={44} still />
+            <span>
+              <strong>Level {levelNote.after.level}</strong>
+              <span>Your {levelNote.after.stage.toLowerCase()} grew a little more.</span>
+            </span>
           </motion.div>
         )}
       </AnimatePresence>

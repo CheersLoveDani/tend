@@ -1,14 +1,40 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { api, type DoseSlot, type Entry, type Med, type MedInput, type Reminder, type ReminderInput, type RewardEvent, type Snapshot } from "./api";
-import { defaultSettings, type Settings } from "./settings";
+import { api, SOMEDAY, type DoseSlot, type Entry, type Med, type MedInput, type Reminder, type ReminderInput, type RewardEvent, type Snapshot } from "./api";
+import { defaultSettings, endOfToday, isPaused, type Settings } from "./settings";
 import { configureSound, sounds } from "./sound";
 import { applyActions, native, pushNativeState } from "./native";
-import { tomorrow } from "./dates";
+import { dayName, today, tomorrow } from "./dates";
 import { autoBackup } from "./backup";
 import { earnedText, fitness, fitSupported, type FitData } from "./fitness";
 
 export type Toast = { id: number; text: string; undo?: () => void };
+
+/** How long a toast stays: long enough to read and reach Undo (WCAG 2.2.1), paused while hovered or focused. */
+export const toastMs = (t: Toast) => (t.undo ? 10_000 : 4_000);
+
+/** Turns whatever went wrong (often a raw Rust or IPC string) into a calm sentence. */
+export function friendlyError(e: unknown): string {
+  const raw = (e instanceof Error ? e.message : String(e ?? "")).trim();
+  const low = raw.toLowerCase();
+  if (!raw) return "That didn't work. Nothing was lost, so try again in a moment.";
+  if (/database is locked|\bbusy\b/.test(low)) return "Tend was busy for a second. Try that again.";
+  if (/command .* not found|unknown command|not implemented/.test(low)) return "This version of Tend can't do that yet.";
+  if (/not found|no rows|query returned no/.test(low)) return "That item has changed, maybe on another device. Have another look.";
+  if (/network|connection|timed out|timeout|unreachable|offline|dns/.test(low)) return "Couldn't reach the other device or the internet. It'll try again later.";
+  if (/permission|denied|not allowed/.test(low)) return "Tend doesn't have permission for that yet. You can allow it in Settings.";
+  // Short messages written for people (Rust's own user-facing errors) pass through as they are.
+  if (raw.length <= 90 && !/::|panicked|\.rs:|\{|\}|Error\(/.test(raw)) return raw.replace(/^error:\s*/i, "");
+  return "Something went wrong there. Nothing was lost, so try again in a moment.";
+}
+
+/** A friendly "where it went" for a date, for move toasts. */
+export function movedText(title: string, date: string): string {
+  if (date === SOMEDAY) return `"${title}" is resting in Someday, in Coming up whenever you want it.`;
+  if (date === today()) return `"${title}" is back on today.`;
+  if (date === tomorrow()) return `Moved "${title}" to tomorrow.`;
+  return `Moved "${title}" to ${dayName(date)}.`;
+}
 
 interface Store {
   snap: Snapshot | null;
@@ -32,6 +58,12 @@ interface Store {
   reopen: (r: Reminder) => Promise<void>;
   notToday: (r: Reminder) => Promise<void>;
   moveTo: (r: Reminder, date: string) => Promise<void>;
+  /** Moves several at once (Someday, tomorrow, back to today) with one undo toast. */
+  moveMany: (rs: Reminder[], date: string, text: string) => Promise<void>;
+  /** "Quiet for today": no chimes, nudges or unlock screen until midnight. Doses still remind. */
+  quietToday: () => void;
+  resumeNudges: () => void;
+  dismissToast: (id: number) => void;
   remove: (r: Reminder) => Promise<void>;
   toast: (text: string, undo?: () => void) => void;
   saveMed: (input: MedInput) => Promise<Med | null>;
@@ -69,9 +101,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const toast = useCallback((text: string, undo?: () => void) => {
     const id = Date.now() + Math.random();
+    // Each toast times itself out (Toasts in App.tsx), so hovering or focusing one can hold it.
     setToasts((t) => [...t.slice(-2), { id, text, undo }]);
-    window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), undo ? 6000 : 3200);
   }, []);
+  const dismissToast = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), []);
 
   const refresh = useCallback(async () => {
     try {
@@ -83,7 +116,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const fail = useCallback((e: unknown) => toast(String(e)), [toast]);
+  const fail = useCallback(
+    (e: unknown) => {
+      console.error(e);
+      toast(friendlyError(e));
+    },
+    [toast],
+  );
 
   const reward = useCallback(
     (e: RewardEvent) => {
@@ -139,18 +178,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const merged = { ...defaultSettings, ...stored } as Settings;
       setSettings(merged);
       settingsRef.current = merged;
-      configureSound({ enabled: merged.sound, volume: merged.volume });
+      configureSound({ enabled: merged.sound, volume: merged.volume, muted: merged.mutedSounds });
       await applyPending();
       await refresh();
       void syncFit(true);
       const launch = await native.takeLaunchAction().catch(() => ({ action: null }));
-      if (launch.action === "nag") setNag(true);
+      if (launch.action === "nag" && !isPaused(merged)) setNag(true);
       void api.syncNow().catch(() => null);
       void autoBackup();
     })();
     const unlisten = listen("data-changed", () => void refresh());
     const actionSub = native.onAction((a) => {
-      if (a.action === "nag") setNag(true);
+      if (a.action === "nag" && !isPaused(settingsRef.current)) setNag(true);
       void refresh();
     });
     const pendingSub = native.onPendingActions(() => void applyPending());
@@ -185,7 +224,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setSettings((prev) => {
         const next = { ...prev, ...patch };
         settingsRef.current = next;
-        configureSound({ enabled: next.sound, volume: next.volume });
+        configureSound({ enabled: next.sound, volume: next.volume, muted: next.mutedSounds });
         void api.setSettings(next);
         if (snap) void pushNativeState(snap, next);
         return next;
@@ -224,6 +263,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       refresh,
       updateSettings,
       toast,
+      dismissToast,
+      quietToday: () => {
+        updateSettings({ pausedUntil: endOfToday() });
+        toast("Quiet until tomorrow. Medicine will still remind you.", () => updateSettings({ pausedUntil: null }));
+      },
+      resumeNudges: () => updateSettings({ pausedUntil: null }),
       save: async (input) => {
         try {
           const r = await api.save(input);
@@ -244,17 +289,40 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           await api.move(r.id, tomorrow());
           sounds.tap();
           await refresh();
-          toast(`"${r.title}" is resting until tomorrow`, () =>
-            void api.move(r.id, from).then(refresh),
-          );
+          toast(`Moved "${r.title}" to tomorrow.`, () => void api.move(r.id, from).then(refresh));
         } catch (e) {
           fail(e);
         }
       },
       moveTo: async (r, date) => {
+        const from = r.date;
+        if (from === date) return;
         try {
           await api.move(r.id, date);
+          sounds.tap();
           await refresh();
+          toast(movedText(r.title, date), () => void api.move(r.id, from).then(refresh));
+        } catch (e) {
+          fail(e);
+        }
+      },
+      moveMany: async (rs, date, text) => {
+        if (!rs.length) return;
+        try {
+          await api.moveMany(
+            rs.map((r) => r.id),
+            date,
+          );
+          sounds.tap();
+          await refresh();
+          // Undo puts each one back on its own day.
+          const byDate = new Map<string, string[]>();
+          for (const r of rs) byDate.set(r.date, [...(byDate.get(r.date) ?? []), r.id]);
+          toast(text, () =>
+            void Promise.all([...byDate].map(([d, ids]) => api.moveMany(ids, d)))
+              .then(refresh)
+              .catch(fail),
+          );
         } catch (e) {
           fail(e);
         }
@@ -291,8 +359,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       takeExtra: (m, amount) => run(api.takeExtraDose(m.id, amount)),
       skipDose: async (d) => {
         try {
-          await api.skipDose(d.id);
-          sounds.tap();
+          // Being honest about a skip earns a little too.
+          reward(await api.skipDose(d.id));
           await refresh();
           toast(`Skipped ${d.name}`, () => void api.undoDose(d.id).then(refresh));
         } catch (e) {
@@ -333,7 +401,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       },
     };
-  }, [snap, settings, rewards, toasts, nag, fit, syncFit, systemReduce, refresh, updateSettings, toast, fail, run, reward]);
+  }, [snap, settings, rewards, toasts, nag, fit, syncFit, systemReduce, refresh, updateSettings, toast, dismissToast, fail, run, reward]);
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

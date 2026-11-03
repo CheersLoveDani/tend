@@ -46,17 +46,33 @@ It's designed with AuDHD in mind: see [docs/AUDHD_RESEARCH.md](docs/AUDHD_RESEAR
   as they overflow; the unlock screen shows them too, but never opens just for
   them. A reminder can be a workout ("Run, 20 min") and ticks itself off when
   your phone logs one. Tend only reads, only the last week, only while it's open.
-- **A gentle chime** every 15 minutes while things are waiting (or 30, an hour,
-  or off). It stays silent during quiet hours.
+- **Calm nudges by default.** Pick Quiet, Gentle or Persistent when you start.
+  A timed reminder nudges at its time and once more, then waits quietly; only
+  doses keep reminding until they're taken or skipped (skipping honestly earns a
+  little too). An hourly chime covers doses and things whose time has come, never
+  old untimed chores. "Quiet for today" silences everything but doses, and quiet
+  hours, sound/vibrate/silent and per-sound muting are all in Settings.
+- **Nothing piles up.** Things from earlier days fold into one row with "Bring
+  into today" or "Let them rest" (Someday). Any task can be moved with one menu,
+  repeating habits keep rolling forward, and on a stormy weather check-in Tend
+  can offer to keep just one thing and move the rest to tomorrow.
+- **Your calendar alongside.** On Android, events from calendars synced to the
+  phone (Google Calendar included) show on Today and Coming up. Read-only, and
+  nothing leaves the phone.
 - **Android:**
-  - A quiet "still to do" notification that comes back if you swipe it away.
-  - Exact alarms with *Done* and *Snooze 15 min* buttons.
+  - A quiet "still to do" notification you can type a new task into, tick a
+    step from, or quiet for the day.
+  - Exact alarms with *Done*, *1 h* and *Tomorrow* buttons, and a heads-up a few
+    minutes before.
+  - A home-screen widget, a Quick Settings tile, launcher shortcuts and "Share
+    to Tend" for capturing things without opening the app.
   - A "before you dive in" screen when you unlock your phone while things are
-    waiting. By default it shows once after each chime; it can instead show on
-    every unlock or at most every 30 minutes or hour. It respects quiet hours
-    and has a one-tap way to pause it.
+    waiting: swipe right when done, left for tomorrow, or switch on buttons
+    instead. It shows at most a few times a day.
 - **Desktop:**
-  - Lives in the tray and fires due reminders.
+  - Lives in the tray, which lists today's things (click one to finish it) and
+    fires due reminders.
+  - Ctrl+Alt+Space opens quick add from anywhere.
   - Can start with Windows.
 - **Updates itself.** It checks this repository's releases at launch and every
   six hours, downloads a new version in the background, then asks before
