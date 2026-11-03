@@ -62,6 +62,19 @@ impl<R: Runtime> TendNative<R> {
         Ok(BackupFile::default())
     }
 
+    /// Health Connect is Android-only; seeds earned there reach desktop through sync.
+    pub fn health_status(&self) -> crate::Result<HealthStatus> {
+        Ok(HealthStatus::unsupported())
+    }
+
+    pub fn health_request(&self) -> crate::Result<HealthStatus> {
+        Ok(HealthStatus::unsupported())
+    }
+
+    pub fn health_read(&self, _days: u32) -> crate::Result<serde_json::Value> {
+        Ok(serde_json::json!({ "days": [], "workouts": [] }))
+    }
+
     pub fn move_to_back(&self) -> crate::Result<()> {
         Ok(())
     }

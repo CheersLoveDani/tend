@@ -181,3 +181,27 @@ pub struct PendingActions {
     #[serde(default)]
     pub actions: Vec<PendingAction>,
 }
+
+/// Whether Health Connect is there and what Tend may read from it.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HealthStatus {
+    /// `available` | `update` | `unavailable` | `unsupported`
+    pub status: String,
+    #[serde(default)]
+    pub steps: bool,
+    #[serde(default)]
+    pub workouts: bool,
+}
+
+impl HealthStatus {
+    pub fn unsupported() -> Self {
+        Self { status: "unsupported".into(), steps: false, workouts: false }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HealthReadArgs {
+    pub days: u32,
+}

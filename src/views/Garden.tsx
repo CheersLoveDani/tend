@@ -6,6 +6,7 @@ import { Tree } from "../components/Tree";
 import { Seed } from "../components/Icons";
 import { Sky } from "../components/Sky";
 import { WeatherCheckIn } from "../components/WeatherCheckIn";
+import { MovingCard } from "../components/MovingCard";
 import { todaysWeather, weatherDays, weatherOf, type Quote, type Weather } from "../lib/weather";
 
 /** A check-in just happened: the tree reacts and a quote appears. */
@@ -103,6 +104,8 @@ export function Garden({ moment, onMomentDone }: { moment?: WeatherMoment | null
           </p>
         )}
       </section>
+
+      <MovingCard />
 
       <div className="stats">
         <div className="stat">

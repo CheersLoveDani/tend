@@ -27,6 +27,8 @@ import app.tauri.annotation.TauriPlugin
 import app.tauri.plugin.Invoke
 import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
+import androidx.health.connect.client.PermissionController
+import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import java.io.File
 import java.lang.ref.WeakReference
@@ -44,6 +46,11 @@ class RequestPermissionArgs {
 @InvokeArg
 class WriteBackupArgs {
   lateinit var data: String
+}
+
+@InvokeArg
+class HealthReadArgs {
+  var days: Int = 7
 }
 
 @InvokeArg
@@ -262,6 +269,75 @@ class TendNativePlugin(private val activity: Activity) : Plugin(activity) {
         invoke.reject("Couldn't read that file: ${e.message ?: e.javaClass.simpleName}")
       }
     }.start()
+  }
+
+  // ---- Health Connect (steps and workouts) -------------------------------------------------------
+
+  /** Runs a Health Connect call off the main thread and resolves with what it returns. */
+  private fun health(invoke: Invoke, work: suspend () -> JSObject) {
+    Thread {
+      try {
+        invoke.resolve(runBlocking { work() })
+      } catch (e: Exception) {
+        invoke.reject("Health Connect: ${e.message ?: e.javaClass.simpleName}")
+      }
+    }.start()
+  }
+
+  @Command
+  fun healthStatus(invoke: Invoke) = health(invoke) { TendHealth.statusJson(activity) }
+
+  /** Asks for steps and workouts; installs or updates Health Connect first if that's what's missing. */
+  @Command
+  fun healthRequest(invoke: Invoke) {
+    when (TendHealth.status(activity)) {
+      "available" -> {
+        val intent = PermissionController.createRequestPermissionResultContract()
+          .createIntent(activity, TendHealth.PERMISSIONS)
+        try {
+          startActivityForResult(invoke, intent, "onHealthResult")
+        } catch (e: ActivityNotFoundException) {
+          invoke.reject("Health Connect couldn't be opened")
+        }
+      }
+      "update" -> {
+        val store = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${TendHealth.PROVIDER}&url=healthconnect%3A%2F%2Fonboarding"))
+          .setPackage("com.android.vending")
+        val web = Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=${TendHealth.PROVIDER}"))
+        activity.runOnUiThread {
+          try {
+            startActivityForResult(invoke, store, "onHealthResult")
+          } catch (e: ActivityNotFoundException) {
+            try {
+              startActivityForResult(invoke, web, "onHealthResult")
+            } catch (e2: Exception) {
+              health(invoke) { TendHealth.statusJson(activity) }
+            }
+          }
+        }
+      }
+      else -> health(invoke) { TendHealth.statusJson(activity) }
+    }
+  }
+
+  @ActivityCallback
+  private fun onHealthResult(invoke: Invoke, @Suppress("UNUSED_PARAMETER") result: ActivityResult) {
+    // Re-check rather than trust the result: people can grant one and not the other.
+    health(invoke) { TendHealth.statusJson(activity) }
+  }
+
+  @Command
+  fun healthRead(invoke: Invoke) {
+    val days = try {
+      invoke.parseArgs(HealthReadArgs::class.java).days.coerceIn(1, 30)
+    } catch (e: Exception) {
+      7
+    }
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P || TendHealth.status(activity) != "available") {
+      invoke.reject("Health Connect isn't available")
+      return
+    }
+    health(invoke) { TendHealth.read(activity, days) }
   }
 
   /** Back on the app's home screen: leave like Android does, keeping the app alive. */

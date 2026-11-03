@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Health Connect's library asks for Android 8; it's only used on Android 9+. -->
+    <uses-sdk tools:overrideLibrary="androidx.health.connect.client" />
 
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
@@ -11,6 +15,13 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- Self-update: hand a newer APK from the project's releases to the system installer. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Steps and workouts from Health Connect, read while Tend is open. -->
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
+    <uses-permission android:name="android.permission.health.READ_EXERCISE" />
+
+    <queries>
+        <package android:name="com.google.android.apps.healthdata" />
+    </queries>
 
     <application>
         <!-- A timed reminder is due. -->
@@ -53,6 +64,28 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Shows the user's own still-to-do reminder list right after they unlock the device, at their request (ADHD accessibility aid). The service only listens for the screen-unlock broadcast; it does no background work." />
         </service>
+
+        <!-- Why Tend reads steps and workouts. Health Connect requires it before it will ask. -->
+        <activity
+            android:name="com.tend.native.HealthPrivacyActivity"
+            android:exported="true"
+            android:label="Tend and your activity"
+            android:theme="@android:style/Theme.Material.Light">
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+        </activity>
+        <!-- The same page, as Android 14+ links to it from Health Connect's permission screens. -->
+        <activity-alias
+            android:name="com.tend.native.ViewPermissionUsageActivity"
+            android:exported="true"
+            android:targetActivity="com.tend.native.HealthPrivacyActivity"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
 
         <!-- Shares the downloaded update with the system installer. -->
         <provider

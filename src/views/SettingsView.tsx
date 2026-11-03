@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { motion } from "motion/react";
 import { api, isAndroid, type Hello, type SyncInfo } from "../lib/api";
@@ -8,7 +8,9 @@ import { sounds } from "../lib/sound";
 import { Sync } from "../components/Icons";
 import { appUpdater, appVersion } from "../lib/updater";
 import { backup, type BackupSource, type BackupStatus } from "../lib/backup";
-import { formatDistanceToNow } from "date-fns";
+import { fitness, type FitStatus } from "../lib/fitness";
+import { today } from "../lib/dates";
+import { format, formatDistanceToNow, parseISO } from "date-fns";
 import QRCode from "qrcode";
 import { Format, checkPermissions as scanPermissions, requestPermissions as requestScan, scan } from "@tauri-apps/plugin-barcode-scanner";
 import { disable as disableAutostart, enable as enableAutostart, isEnabled as autostartEnabled } from "@tauri-apps/plugin-autostart";
@@ -286,6 +288,106 @@ function BackupSettings() {
             )}
             <button className="btn btn-soft" disabled={busy} onClick={() => void step(async () => setSource(await backup.pick()))}>
               Choose a backup
+            </button>
+          </span>
+        )}
+      </div>
+    </>
+  );
+}
+
+/** Steps and workouts from Health Connect, where Google Fit and most fitness apps keep them. */
+function MovementSettings() {
+  const { settings: s, updateSettings, syncFit, toast } = useStore();
+  const [st, setSt] = useState<FitStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => void fitness.status().then(setSt).catch(() => null), []);
+
+  // Read straight away after connecting or turning off, once the new setting has landed.
+  const prevSince = useRef(s.fitSince);
+  useEffect(() => {
+    if (prevSince.current === s.fitSince) return;
+    prevSince.current = s.fitSince;
+    void syncFit(true);
+  }, [s.fitSince, syncFit]);
+
+  const rules = "Every 2,000 steps pays seeds, up to 15,000 a day. A workout pays 3 seeds, plus 1 for every 5 minutes.";
+
+  if (!isAndroid) {
+    return (
+      <div className="row">
+        <span className="row-text">
+          <span className="row-label">Steps & workouts</span>
+          <span className="row-hint">Connect them in Tend on your phone. The seeds arrive here when your devices sync.</span>
+        </span>
+      </div>
+    );
+  }
+
+  async function connect() {
+    setBusy(true);
+    try {
+      const r = await fitness.connect();
+      setSt(r);
+      if (r.steps || r.workouts) {
+        if (!s.fitSince) updateSettings({ fitSince: today() });
+        else void syncFit(true);
+      } else if (r.status === "available") {
+        toast("Nothing was allowed. You can try again any time.");
+      }
+    } catch (e) {
+      toast(String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const allowed = !!st && (st.steps || st.workouts);
+  const on = !!s.fitSince && allowed;
+  const hint = !st
+    ? "Checking…"
+    : st.status === "unsupported"
+      ? "Needs Android 9 or newer."
+      : st.status === "unavailable"
+        ? "Health Connect isn't available on this phone."
+        : st.status === "update"
+          ? "Tend reads them from Health Connect. Install or update it first, then come back."
+          : on
+            ? `Counting since ${format(parseISO(s.fitSince!), "d MMM")}. ${rules}`
+            : `From Google Fit, Samsung Health, Fitbit or any app that saves to Health Connect. Tend only reads, and nothing leaves your phone. ${rules}`;
+
+  return (
+    <>
+      <div className="row">
+        <span className="row-text">
+          <span className="row-label">Steps & workouts</span>
+          <span className="row-hint">{hint}</span>
+          {on && (!st!.steps || !st!.workouts) && (
+            <span className="row-hint warn">{st!.steps ? "Workouts aren't allowed, so only steps count." : "Steps aren't allowed, so only workouts count."}</span>
+          )}
+          {s.fitSince && st?.status === "available" && !allowed && (
+            <span className="row-hint warn">Health Connect access was removed. Connect again to keep counting.</span>
+          )}
+        </span>
+        {st?.status === "update" && (
+          <button className="btn btn-soft" disabled={busy} onClick={() => void connect()}>
+            Get Health Connect
+          </button>
+        )}
+        {st?.status === "available" && !on && (
+          <button className="btn btn-primary" disabled={busy} onClick={() => void connect()}>
+            Connect
+          </button>
+        )}
+        {on && (
+          <span className="row-actions">
+            {(!st!.steps || !st!.workouts) && (
+              <button className="btn btn-soft" disabled={busy} onClick={() => void connect()}>
+                Allow both
+              </button>
+            )}
+            <button className="btn btn-quiet" onClick={() => updateSettings({ fitSince: null })}>
+              Turn off
             </button>
           </span>
         )}
@@ -577,6 +679,10 @@ export function SettingsView() {
 
       <Group title="Medicine">
         <HealthData />
+      </Group>
+
+      <Group title="Movement">
+        <MovementSettings />
       </Group>
 
       <Group title="Reminders">

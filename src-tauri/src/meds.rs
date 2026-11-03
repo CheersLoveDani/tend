@@ -607,7 +607,7 @@ fn as_reminder(id: &str, title: &str) -> Reminder {
     }
 }
 
-fn event(db: &Db, kind: &str, gained: i64, bonus: i64, xp_before: i64, id: &str, title: &str) -> Result<RewardEvent> {
+pub(crate) fn event(db: &Db, kind: &str, gained: i64, bonus: i64, xp_before: i64, id: &str, title: &str) -> Result<RewardEvent> {
     Ok(RewardEvent {
         kind: kind.into(),
         gained,

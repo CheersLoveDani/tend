@@ -11,6 +11,9 @@ const COMMANDS: &[&str] = &[
     "backup_target",
     "write_backup",
     "open_backup_file",
+    "health_status",
+    "health_request",
+    "health_read",
     // Needed so `addPluginListener('tend-native', ...)` passes the ACL.
     "register_listener",
     "remove_listener",

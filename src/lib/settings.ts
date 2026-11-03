@@ -14,6 +14,8 @@ export interface Settings {
   useModel: boolean;
   autoUpdate: boolean;
   onboarded: boolean;
+  /** Day steps and workouts started counting (Health Connect), or null when not connected. */
+  fitSince: string | null;
 }
 
 export const defaultSettings: Settings = {
@@ -30,6 +32,7 @@ export const defaultSettings: Settings = {
   useModel: true,
   autoUpdate: true,
   onboarded: false,
+  fitSince: null,
 };
 
 export function inQuietHours(q: Settings["quietHours"], now = new Date()): boolean {

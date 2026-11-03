@@ -1,6 +1,7 @@
 mod actions;
 mod backup;
 mod db;
+mod fitness;
 mod meds;
 mod model;
 mod rewards;
@@ -64,7 +65,7 @@ fn snapshot(state: State<AppState>) -> Res<Snapshot> {
             .unwrap_or_default();
         if let Some(d) = days.iter_mut().find(|d| d.date == date) {
             d.seeds += amount;
-            if kind == "finish" || kind == "dose" {
+            if kind == "finish" || kind == "dose" || kind == "workout" {
                 d.done += 1;
             }
         }
@@ -229,6 +230,16 @@ fn delete_entry(app: AppHandle, state: State<AppState>, id: String) -> Res<()> {
     meds::delete_entry(&state.db.lock().unwrap(), &id).map_err(err)?;
     after_local_change(&app);
     Ok(())
+}
+
+/// Pays seeds for steps and workouts read from Health Connect on the phone.
+#[tauri::command]
+fn fit_award(app: AppHandle, state: State<AppState>, input: fitness::FitInput) -> Res<fitness::FitResult> {
+    let r = fitness::award(&state.db.lock().unwrap(), input).map_err(err)?;
+    if r.event.gained > 0 {
+        after_local_change(&app);
+    }
+    Ok(r)
 }
 
 #[tauri::command]
@@ -554,6 +565,7 @@ pub fn run() {
             med_history,
             save_entry,
             delete_entry,
+            fit_award,
             export_health,
             import_health,
             backup_status,

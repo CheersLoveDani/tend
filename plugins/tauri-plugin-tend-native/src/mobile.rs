@@ -86,6 +86,18 @@ impl<R: Runtime> TendNative<R> {
         self.0.run_mobile_plugin("openBackupFile", ()).map_err(Into::into)
     }
 
+    pub fn health_status(&self) -> crate::Result<HealthStatus> {
+        self.0.run_mobile_plugin("healthStatus", ()).map_err(Into::into)
+    }
+
+    pub fn health_request(&self) -> crate::Result<HealthStatus> {
+        self.0.run_mobile_plugin("healthRequest", ()).map_err(Into::into)
+    }
+
+    pub fn health_read(&self, days: u32) -> crate::Result<serde_json::Value> {
+        self.0.run_mobile_plugin("healthRead", HealthReadArgs { days }).map_err(Into::into)
+    }
+
     pub fn move_to_back(&self) -> crate::Result<()> {
         self.0
             .run_mobile_plugin::<serde_json::Value>("moveToBack", ())

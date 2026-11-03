@@ -1,11 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { api, type DoseSlot, type Entry, type Med, type MedInput, type Reminder, type ReminderInput, type RewardEvent, type Snapshot } from "./api";
+import { api, isAndroid, type DoseSlot, type Entry, type Med, type MedInput, type Reminder, type ReminderInput, type RewardEvent, type Snapshot } from "./api";
 import { defaultSettings, type Settings } from "./settings";
 import { configureSound, sounds } from "./sound";
 import { DOSE_PREFIX, native, pushNativeState } from "./native";
 import { tomorrow } from "./dates";
 import { autoBackup } from "./backup";
+import { earnedText, fitness, type FitData } from "./fitness";
 
 export type Toast = { id: number; text: string; undo?: () => void };
 
@@ -16,6 +17,10 @@ interface Store {
   toasts: Toast[];
   reduceMotion: boolean;
   nag: boolean;
+  /** Recent steps and workouts, when Health Connect is connected. */
+  fit: FitData | null;
+  /** Reads Health Connect and pays any new seeds. Throttled unless `force`. */
+  syncFit: (force?: boolean) => Promise<void>;
   setNag: (v: boolean) => void;
   consumeReward: () => void;
   refresh: () => Promise<void>;
@@ -54,6 +59,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [rewards, setRewards] = useState<RewardEvent[]>([]);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [nag, setNag] = useState(false);
+  const [fit, setFit] = useState<FitData | null>(null);
+  const fitAt = useRef(0);
   const [systemReduce, setSystemReduce] = useState(
     () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
   );
@@ -87,6 +94,30 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const syncFit = useCallback(
+    async (force = false) => {
+      const since = settingsRef.current.fitSince;
+      if (!isAndroid || !since) return setFit(null);
+      if (!force && Date.now() - fitAt.current < 60_000) return;
+      fitAt.current = Date.now();
+      try {
+        const st = await fitness.status();
+        if (st.status !== "available" || (!st.steps && !st.workouts)) return setFit(null);
+        const data = await fitness.read(7);
+        const r = await fitness.award(since, data.days, data.workouts);
+        setFit({ ...data, counted: r.counted });
+        if (r.event.gained > 0) {
+          reward(r.event);
+          toast(earnedText(r));
+          await refresh();
+        }
+      } catch (e) {
+        console.warn("fitness", e);
+      }
+    },
+    [reward, refresh, toast],
+  );
+
   // Apply "Done" / "Snooze" taps made on Android notifications while we weren't running.
   const applyPending = useCallback(async () => {
     const actions = await native.takePendingActions().catch(() => []);
@@ -107,6 +138,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       configureSound({ enabled: merged.sound, volume: merged.volume });
       await applyPending();
       await refresh();
+      void syncFit(true);
       const launch = await native.takeLaunchAction().catch(() => ({ action: null }));
       if (launch.action === "nag") setNag(true);
       void api.syncNow().catch(() => null);
@@ -121,6 +153,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const onVisible = () => {
       if (document.visibilityState === "visible") {
         void applyPending();
+        void syncFit();
         void api.syncNow().then(() => refresh()).catch(() => null);
         void autoBackup();
       }
@@ -141,7 +174,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       window.clearInterval(tick);
       mq.removeEventListener("change", onMq);
     };
-  }, [refresh, applyPending]);
+  }, [refresh, applyPending, syncFit]);
 
   const updateSettings = useCallback(
     (patch: Partial<Settings>) => {
@@ -180,6 +213,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       toasts,
       reduceMotion,
       nag,
+      fit,
+      syncFit,
       setNag,
       consumeReward: () => setRewards((q) => q.slice(1)),
       refresh,
@@ -294,7 +329,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       },
     };
-  }, [snap, settings, rewards, toasts, nag, systemReduce, refresh, updateSettings, toast, fail, run, reward]);
+  }, [snap, settings, rewards, toasts, nag, fit, syncFit, systemReduce, refresh, updateSettings, toast, fail, run, reward]);
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

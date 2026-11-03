@@ -2665,3 +2665,57 @@ select.field-input {
   text-align: center;
   line-height: 1.15;
 }
+
+/* ---------- moving: steps and workouts from Health Connect ---------- */
+.moving-card {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border-radius: var(--radius-l);
+  background: var(--paper);
+  box-shadow: var(--shadow);
+}
+.moving-card .level-bar {
+  width: 100%;
+}
+.moving-steps {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.moving-steps strong {
+  font-family: var(--font-display);
+  font-size: 34px;
+  line-height: 1.1;
+}
+.moving-steps > span {
+  color: var(--bark-2);
+  font-size: 14px;
+}
+.moving-steps .moving-earned {
+  margin-left: auto;
+}
+.moving-earned {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--moss-2);
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.moving-workouts {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--moss-soft);
+  display: grid;
+  gap: 8px;
+}
+.moving-workouts li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}

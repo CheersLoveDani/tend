@@ -71,6 +71,24 @@ pub(crate) async fn open_backup_file<R: Runtime>(app: AppHandle<R>) -> Result<Ba
     app.tend_native().open_backup_file()
 }
 
+/// Is Health Connect installed, and may Tend read steps and workouts?
+#[command]
+pub(crate) async fn health_status<R: Runtime>(app: AppHandle<R>) -> Result<HealthStatus> {
+    app.tend_native().health_status()
+}
+
+/// Asks for steps and workouts (or sends the user to install Health Connect).
+#[command]
+pub(crate) async fn health_request<R: Runtime>(app: AppHandle<R>) -> Result<HealthStatus> {
+    app.tend_native().health_request()
+}
+
+/// Daily step totals and workouts over the last `days` days: `{ days: [...], workouts: [...] }`.
+#[command]
+pub(crate) async fn health_read<R: Runtime>(app: AppHandle<R>, days: u32) -> Result<serde_json::Value> {
+    app.tend_native().health_read(days)
+}
+
 /// Sends the app to the background, like Android's own back on a home screen.
 #[command]
 pub(crate) async fn move_to_back<R: Runtime>(app: AppHandle<R>) -> Result<()> {

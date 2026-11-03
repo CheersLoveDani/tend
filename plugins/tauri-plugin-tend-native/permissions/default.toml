@@ -15,6 +15,9 @@ permissions = [
   "allow-backup-target",
   "allow-write-backup",
   "allow-open-backup-file",
+  "allow-health-status",
+  "allow-health-request",
+  "allow-health-read",
   "allow-register-listener",
   "allow-remove-listener",
 ]

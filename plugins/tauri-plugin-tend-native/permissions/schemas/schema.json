@@ -343,6 +343,42 @@
           "markdownDescription": "Denies the get_permissions command without any pre-configured scope."
         },
         {
+          "description": "Enables the health_read command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-health-read",
+          "markdownDescription": "Enables the health_read command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the health_read command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-health-read",
+          "markdownDescription": "Denies the health_read command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the health_request command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-health-request",
+          "markdownDescription": "Enables the health_request command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the health_request command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-health-request",
+          "markdownDescription": "Denies the health_request command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the health_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-health-status",
+          "markdownDescription": "Enables the health_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the health_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-health-status",
+          "markdownDescription": "Denies the health_status command without any pre-configured scope."
+        },
+        {
           "description": "Enables the install_update command without any pre-configured scope.",
           "type": "string",
           "const": "allow-install-update",
@@ -463,10 +499,10 @@
           "markdownDescription": "Denies the write_backup command without any pre-configured scope."
         },
         {
-          "description": "Allows all Tend native commands and the plugin event listeners (`action`, `pending-actions`).\n#### This default permission set includes:\n\n- `allow-set-state`\n- `allow-get-permissions`\n- `allow-request-permission`\n- `allow-take-launch-action`\n- `allow-take-pending-actions`\n- `allow-download-update`\n- `allow-install-update`\n- `allow-move-to-back`\n- `allow-choose-backup-file`\n- `allow-backup-target`\n- `allow-write-backup`\n- `allow-open-backup-file`\n- `allow-register-listener`\n- `allow-remove-listener`",
+          "description": "Allows all Tend native commands and the plugin event listeners (`action`, `pending-actions`).\n#### This default permission set includes:\n\n- `allow-set-state`\n- `allow-get-permissions`\n- `allow-request-permission`\n- `allow-take-launch-action`\n- `allow-take-pending-actions`\n- `allow-download-update`\n- `allow-install-update`\n- `allow-move-to-back`\n- `allow-choose-backup-file`\n- `allow-backup-target`\n- `allow-write-backup`\n- `allow-open-backup-file`\n- `allow-health-status`\n- `allow-health-request`\n- `allow-health-read`\n- `allow-register-listener`\n- `allow-remove-listener`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Allows all Tend native commands and the plugin event listeners (`action`, `pending-actions`).\n#### This default permission set includes:\n\n- `allow-set-state`\n- `allow-get-permissions`\n- `allow-request-permission`\n- `allow-take-launch-action`\n- `allow-take-pending-actions`\n- `allow-download-update`\n- `allow-install-update`\n- `allow-move-to-back`\n- `allow-choose-backup-file`\n- `allow-backup-target`\n- `allow-write-backup`\n- `allow-open-backup-file`\n- `allow-register-listener`\n- `allow-remove-listener`"
+          "markdownDescription": "Allows all Tend native commands and the plugin event listeners (`action`, `pending-actions`).\n#### This default permission set includes:\n\n- `allow-set-state`\n- `allow-get-permissions`\n- `allow-request-permission`\n- `allow-take-launch-action`\n- `allow-take-pending-actions`\n- `allow-download-update`\n- `allow-install-update`\n- `allow-move-to-back`\n- `allow-choose-backup-file`\n- `allow-backup-target`\n- `allow-write-backup`\n- `allow-open-backup-file`\n- `allow-health-status`\n- `allow-health-request`\n- `allow-health-read`\n- `allow-register-listener`\n- `allow-remove-listener`"
         }
       ]
     }

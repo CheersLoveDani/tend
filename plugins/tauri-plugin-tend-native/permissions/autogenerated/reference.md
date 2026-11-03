@@ -16,6 +16,9 @@ Allows all Tend native commands and the plugin event listeners (`action`, `pendi
 - `allow-backup-target`
 - `allow-write-backup`
 - `allow-open-backup-file`
+- `allow-health-status`
+- `allow-health-request`
+- `allow-health-read`
 - `allow-register-listener`
 - `allow-remove-listener`
 
@@ -128,6 +131,84 @@ Enables the get_permissions command without any pre-configured scope.
 <td>
 
 Denies the get_permissions command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`tend-native:allow-health-read`
+
+</td>
+<td>
+
+Enables the health_read command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`tend-native:deny-health-read`
+
+</td>
+<td>
+
+Denies the health_read command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`tend-native:allow-health-request`
+
+</td>
+<td>
+
+Enables the health_request command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`tend-native:deny-health-request`
+
+</td>
+<td>
+
+Denies the health_request command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`tend-native:allow-health-status`
+
+</td>
+<td>
+
+Enables the health_status command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`tend-native:deny-health-status`
+
+</td>
+<td>
+
+Denies the health_status command without any pre-configured scope.
 
 </td>
 </tr>
