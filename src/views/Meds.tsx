@@ -6,6 +6,7 @@ import { useStore } from "../lib/store";
 import { amountText, displayName, entryText, scheduleText } from "../lib/meds";
 import { DoseCard } from "../components/DoseCard";
 import { MedIcon } from "../components/MedIcon";
+import { LowStockLine } from "../components/LowStockLine";
 import { Check, Plus, Trash } from "../components/Icons";
 
 interface Props {
@@ -22,7 +23,6 @@ export function Meds({ onAddMed, onOpenMed, onEntry }: Props) {
   const doses = snap.doses;
   const left = doses.filter((d) => d.status === "due" || d.status === "upcoming").length;
   const due = doses.filter((d) => d.status === "due").length;
-  const low = snap.meds.filter((m) => m.low && !m.paused);
 
   const diary = useMemo(() => {
     const groups: { day: string; items: Entry[] }[] = [];
@@ -39,7 +39,17 @@ export function Meds({ onAddMed, onOpenMed, onEntry }: Props) {
     <div className="view">
       <header className="view-head">
         <p className="view-kicker">Medicine</p>
-        <h1>{snap.meds.length === 0 ? "Your medicine" : due > 0 ? (due === 1 ? "One dose is due" : `${due} doses are due`) : left > 0 ? "On track today" : "All taken today"}</h1>
+        <h1>
+          {snap.meds.length === 0
+            ? "Your medicine"
+            : due > 0
+              ? due === 1
+                ? "One dose is due"
+                : `${due} doses are due`
+              : left > 0
+                ? "On track today"
+                : "All taken today"}
+        </h1>
         <p className="view-sub">
           {snap.meds.length === 0
             ? "Add what you take and Tend will remind you, count what's left, and give you seeds for every dose."
@@ -51,18 +61,7 @@ export function Meds({ onAddMed, onOpenMed, onEntry }: Props) {
         </p>
       </header>
 
-      {low.length > 0 && (
-        <div className="notice">
-          {low.map((m) => (
-            <button key={m.id} className="notice-row" onClick={() => onOpenMed(m.id)}>
-              <MedIcon icon={m.icon} color={m.color} size={30} />
-              <span>
-                <strong>{m.name}</strong> is running low: {m.left != null ? amountText(m.left, m.form) : "?"} left.
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
+      <LowStockLine onOpenMed={onOpenMed} />
 
       {doses.length > 0 && (
         <section className="list-section">
@@ -85,9 +84,7 @@ export function Meds({ onAddMed, onOpenMed, onEntry }: Props) {
               <MedIcon icon={m.icon} color={m.color} size={44} />
               <span className="med-card-text">
                 <span className="card-title">{displayName(m)}</span>
-                <span className="card-meta">
-                  {m.paused ? "Paused" : scheduleText(m.schedule)}
-                </span>
+                <span className="card-meta">{m.paused ? "Paused" : scheduleText(m.schedule)}</span>
               </span>
               {m.left != null && <span className={`stock-pill ${m.low ? "is-low" : ""}`}>{amountText(m.left, m.form)}</span>}
             </motion.button>

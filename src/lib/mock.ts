@@ -17,7 +17,8 @@ function level(xp: number): LevelInfo {
 
 export function installMock() {
   const ledger = new Map<string, number>();
-  let settings: Record<string, unknown> = { onboarded: true, fitSince: today() };
+  // ?welcome previews onboarding.
+  let settings: Record<string, unknown> = { onboarded: !new URLSearchParams(location.search).has("welcome"), fitSince: today() };
   // Fake Health Connect: ?steps=9500&mins=25 previews the goal bars at any value.
   (window as unknown as Record<string, unknown>).__TEND_MOCK_FIT__ = true;
   const q = new URLSearchParams(location.search);

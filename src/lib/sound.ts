@@ -10,10 +10,14 @@ let wet: GainNode | null = null;
 let idleTimer: number | undefined;
 let volume = 0.7;
 let enabled = true;
+// Tap ticks are pure sensory noise for many people, so they start switched off (settings.mutedSounds).
+let muted = new Set<string>(["tap"]);
 
-export function configureSound(opts: { enabled: boolean; volume: number }) {
-  enabled = opts.enabled;
-  volume = opts.volume;
+/** Any field left out keeps its current value. `muted` names (keys of `sounds`) play nothing. */
+export function configureSound(opts: { enabled?: boolean; volume?: number; muted?: string[] }) {
+  if (opts.enabled !== undefined) enabled = opts.enabled;
+  if (opts.volume !== undefined) volume = opts.volume;
+  if (opts.muted) muted = new Set(opts.muted);
   if (master) master.gain.value = volume;
 }
 
@@ -27,8 +31,10 @@ function impulse(ac: AudioContext, seconds: number) {
   return buf;
 }
 
+let previewing = false;
+
 function audio(): AudioContext | null {
-  if (!enabled) return null;
+  if (!enabled && !previewing) return null;
   if (!ctx) {
     ctx = new AudioContext();
     master = ctx.createGain();
@@ -155,7 +161,7 @@ function chirp(ac: AudioContext, at: number) {
   }
 }
 
-export const sounds = {
+const all = {
   /** Quiet tick for ordinary taps. */
   tap() {
     const ac = audio();
@@ -206,3 +212,31 @@ export const sounds = {
     if (ac) woodblock(ac, 520, ac.currentTime, 0.18);
   },
 };
+
+export type SoundName = keyof typeof all;
+
+/** Every in-app sound with a friendly name, in the order Settings lists them. */
+export const SOUND_NAMES: { name: SoundName; label: string; hint: string }[] = [
+  { name: "tap", label: "Taps", hint: "A quiet tick on buttons and switches" },
+  { name: "step", label: "Steps", hint: "A woodblock note for each step" },
+  { name: "bit", label: "Did a bit", hint: "A soft double knock" },
+  { name: "finish", label: "Finishing", hint: "Marimba and wind chimes" },
+  { name: "bonus", label: "Golden seeds", hint: "A small bird" },
+  { name: "levelUp", label: "Level up", hint: "A deep knock and a long shimmer" },
+  { name: "undo", label: "Undo", hint: "One low knock" },
+];
+
+// Callers keep using `sounds.x()`; muted ones simply do nothing.
+export const sounds = Object.fromEntries(
+  (Object.keys(all) as SoundName[]).map((name) => [name, (...args: never[]) => !muted.has(name) && (all[name] as (...a: never[]) => void)(...args)]),
+) as unknown as typeof all;
+
+/** Play one sound for the Settings list, even if it (or all sound) is switched off. */
+export function preview(name: SoundName) {
+  previewing = true;
+  try {
+    (all[name] as () => void)();
+  } finally {
+    previewing = false;
+  }
+}

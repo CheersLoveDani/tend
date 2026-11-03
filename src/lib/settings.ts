@@ -80,7 +80,7 @@ export const defaultSettings: Settings = {
   doseNagUntilMinutes: 120,
   preWarnMinutes: 10,
   cueStyle: "sound",
-  mutedSounds: [],
+  mutedSounds: ["tap"],
   calendarEnabled: false,
   calendarIds: [],
   stormyLightDay: true,
@@ -94,6 +94,13 @@ export const NUDGE_PRESETS: Record<"quiet" | "gentle" | "persistent", Partial<Se
   gentle: { chimeMinutes: 60, nagOnUnlock: true, nagEvery: 60, nagDailyCap: 6, nudgeAgainMinutes: 30, preWarnMinutes: 10, cueStyle: "sound" },
   persistent: { chimeMinutes: 30, nagOnUnlock: true, nagEvery: -1, nagDailyCap: 0, nudgeAgainMinutes: 15, preWarnMinutes: 10, cueStyle: "sound" },
 };
+
+/** How each preset is described, in onboarding and Settings. */
+export const PRESET_TEXT: { value: keyof typeof NUDGE_PRESETS; label: string; hint: string }[] = [
+  { value: "quiet", label: "Quiet", hint: "No chimes. Things wait in the app and a silent notification. Doses still remind." },
+  { value: "gentle", label: "Gentle", hint: "A soft nudge when something's time comes, once more later, then quiet." },
+  { value: "persistent", label: "Persistent", hint: "Nudges more often and shows what's waiting each time you unlock." },
+];
 
 /** Is "Quiet for today" on right now? */
 export const isPaused = (s: Pick<Settings, "pausedUntil">, now = Date.now()) => !!s.pausedUntil && s.pausedUntil > now;

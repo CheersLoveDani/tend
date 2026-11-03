@@ -2914,3 +2914,200 @@ select.field-input {
   font-weight: 600;
   white-space: nowrap;
 }
+
+/* ======================================================================
+   0.3 track S — settings, onboarding, medicine UI
+   ====================================================================== */
+
+/* Low-stock line (Today and Medicine) */
+.low-stock {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-bottom: 18px;
+  padding: 8px 14px 8px 10px;
+  border-radius: var(--radius-m);
+  background: var(--pollen-soft);
+  color: var(--bark);
+  text-align: left;
+  font-size: 15px;
+}
+.low-stock-text {
+  flex: 1;
+  min-width: 0;
+}
+.low-stock-action {
+  flex: none;
+  color: var(--moss);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+/* What changed */
+.whats-new {
+  width: min(480px, 100%);
+}
+.whats-new .view-kicker {
+  margin: 0 0 2px;
+  font-size: 14px;
+}
+.whats-new-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.whats-new-list li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: start;
+  color: var(--bark-2);
+}
+.whats-new-list svg {
+  margin-top: 3px;
+  color: var(--moss);
+}
+
+/* Permissions: only what's missing and needed */
+.perm-banner {
+  margin-bottom: 22px;
+  padding: 12px 18px 4px;
+  border-radius: var(--radius-l);
+  background: var(--pollen-soft);
+}
+.perm-banner-title {
+  margin: 0 0 2px;
+  font-weight: 700;
+}
+.perm-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 0;
+  flex-wrap: wrap;
+}
+.perm-row + .perm-row {
+  border-top: 1px solid color-mix(in srgb, var(--pollen) 30%, transparent);
+}
+
+/* Disclosures (Fine-tune, Choose sounds, More details) */
+.row.disclosure {
+  width: 100%;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  flex-wrap: nowrap;
+}
+.disclosure svg,
+.more-details svg {
+  flex: none;
+  color: var(--bark-3);
+  transition: transform 0.2s;
+}
+.disclosure svg.is-open,
+.more-details svg.is-open {
+  transform: rotate(90deg);
+}
+.disclosure-body {
+  padding-left: 12px;
+  border-left: 2px solid var(--line);
+  margin-bottom: 4px;
+}
+.settings-card > .disclosure-body:last-child .row:last-child {
+  border-bottom: 0;
+}
+.sound-row {
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+.sound-row .row-text {
+  min-width: 0;
+}
+
+/* Calendar chips */
+.cal-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.cal-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+}
+
+/* Onboarding: presets and the helper question */
+.welcome-small {
+  font-size: 15px !important;
+  color: var(--bark-3) !important;
+}
+.preset-cards {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  margin-top: 6px;
+  text-align: left;
+}
+.preset-card {
+  display: grid;
+  gap: 2px;
+  padding: 12px 16px;
+  border-radius: var(--radius-m);
+  background: var(--paper);
+  border: 2px solid transparent;
+  box-shadow: var(--shadow);
+  text-align: left;
+  color: var(--bark);
+}
+.preset-card.is-on {
+  border-color: var(--moss);
+  background: color-mix(in srgb, var(--moss-soft) 55%, var(--paper));
+}
+.preset-label {
+  font-weight: 700;
+}
+.welcome-helper {
+  width: 100%;
+  margin-top: 8px;
+  text-align: left;
+}
+
+/* MedEditor: unit next to strength, and "More details" */
+.med-head-pair {
+  display: grid;
+  grid-template-columns: 1fr minmax(110px, 40%);
+  gap: 8px;
+}
+.more-details {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  column-gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  margin: 4px 0 8px;
+  border-radius: var(--radius-m);
+  background: var(--paper-2);
+  color: var(--bark);
+  text-align: left;
+}
+.more-details-label {
+  font-weight: 700;
+}
+.more-details .row-hint {
+  grid-column: 1;
+  grid-row: 2;
+}
+.more-details svg {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+.more-details-body {
+  overflow: hidden;
+  display: grid;
+  gap: 18px;
+}
