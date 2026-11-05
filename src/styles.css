@@ -2577,15 +2577,135 @@ select.field-input {
   background: var(--moss-soft);
   color: var(--bark);
 }
+.weather-glyph {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+}
 .weather-icon {
+  display: inline-block;
   font-size: 26px;
   line-height: 1;
 }
 .weather-check.is-compact .weather-pick {
   padding: 8px 2px;
 }
+.weather-check.is-compact .weather-glyph {
+  width: 30px;
+  height: 30px;
+}
 .weather-check.is-compact .weather-icon {
   font-size: 22px;
+}
+/* The ring that spreads out as a face turns into weather. */
+.weather-burst {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid var(--wx-ring, var(--moss));
+  pointer-events: none;
+}
+.wp-5,
+.wp-4 {
+  --wx-ring: var(--pollen);
+}
+.wp-2 {
+  --wx-ring: #6aa6d8;
+}
+.wp-1 {
+  --wx-ring: var(--dusk);
+}
+
+/* Each weather keeps moving a little once it's out. */
+.wx-idle {
+  display: inline-block;
+}
+.wx-5 {
+  animation: wx-sun 9s linear infinite, wx-glow 2.6s ease-in-out infinite;
+}
+.wx-4 {
+  animation: wx-bob 3.2s ease-in-out infinite;
+}
+.wx-3 {
+  animation: wx-drift 4.5s ease-in-out infinite;
+}
+.wx-2 {
+  animation: wx-drip 1.7s ease-in-out infinite;
+}
+.wx-1 {
+  animation: wx-rumble 3.6s ease-in-out infinite;
+}
+@keyframes wx-sun {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes wx-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 0 rgba(255, 196, 0, 0));
+  }
+  50% {
+    filter: drop-shadow(0 0 6px rgba(255, 196, 0, 0.75));
+  }
+}
+@keyframes wx-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+  50% {
+    transform: translateY(-2px) rotate(-4deg);
+  }
+}
+@keyframes wx-drift {
+  0%,
+  100% {
+    transform: translateX(-2px);
+  }
+  50% {
+    transform: translateX(2px);
+  }
+}
+@keyframes wx-drip {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-3deg);
+  }
+  50% {
+    transform: translateY(2px) rotate(3deg);
+  }
+}
+@keyframes wx-rumble {
+  0%,
+  78%,
+  100% {
+    transform: translate(0, 0);
+    filter: none;
+  }
+  80% {
+    transform: translate(-1.5px, 0.5px);
+    filter: brightness(1.6);
+  }
+  83% {
+    transform: translate(1.5px, -0.5px);
+    filter: none;
+  }
+  86% {
+    transform: translate(-1px, 0);
+    filter: brightness(1.4);
+  }
+  89% {
+    transform: translate(0.5px, 0);
+    filter: none;
+  }
+}
+/* Sits in the hero's grid; cancels the gap so an empty slot adds no space. */
+.garden-moment {
+  width: 100%;
+  margin-top: -12px;
 }
 .weather-section .hint {
   margin-top: 10px;
@@ -2718,7 +2838,10 @@ select.field-input {
 .weather-quote figcaption::before {
   content: "— ";
 }
-.weather-check .weather-pick span:last-child {
+/* Room for two lines either way, so a longer weather name never changes the row's height. */
+.weather-check .weather-word {
+  display: block;
+  min-height: 2.3em;
   text-align: center;
   line-height: 1.15;
 }
@@ -3629,4 +3752,48 @@ html[data-quick] body {
 }
 .quick-hint span:last-child svg {
   color: var(--pollen);
+}
+
+/* Desktop mood pop-up (index.html?mood=1): the faces, on the same transparent card as quick add. */
+html[data-mood],
+html[data-mood] body {
+  background: transparent;
+}
+.mood-pop {
+  position: relative;
+  box-sizing: border-box;
+  height: 100%;
+  display: grid;
+  align-content: center;
+  gap: 10px;
+  padding: 14px 18px 16px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+.mood-pop-title {
+  margin: 0;
+  padding-right: 28px;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+}
+.mood-pop-title small {
+  display: block;
+  /* Two lines reserved: a longer line after picking mustn't nudge the faces. */
+  min-height: 2.5em;
+  margin-top: 2px;
+  color: var(--bark-3);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 400;
+}
+.mood-pop .weather-pick {
+  box-shadow: none;
+  background: var(--paper-2);
+}
+.mood-pop-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
 }

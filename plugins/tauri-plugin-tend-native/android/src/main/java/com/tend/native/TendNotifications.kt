@@ -103,14 +103,14 @@ object TendNotifications {
     }
   }
 
-  private fun gentleChannel(cueStyle: String): String = when (cueStyle) {
+  internal fun gentleChannel(cueStyle: String): String = when (cueStyle) {
     "vibrate" -> CHANNEL_GENTLE_VIBRATE
     "silent" -> CHANNEL_GENTLE_SILENT
     else -> CHANNEL_GENTLE_SOUND
   }
 
   /** Before Android 8 there are no channels: the same choice is made per notification. */
-  private fun NotificationCompat.Builder.gentleCue(cueStyle: String): NotificationCompat.Builder = when (cueStyle) {
+  internal fun NotificationCompat.Builder.gentleCue(cueStyle: String): NotificationCompat.Builder = when (cueStyle) {
     "vibrate" -> setDefaults(NotificationCompat.DEFAULT_VIBRATE).setPriority(NotificationCompat.PRIORITY_DEFAULT)
     "silent" -> setSilent(true).setPriority(NotificationCompat.PRIORITY_LOW)
     else -> setDefaults(NotificationCompat.DEFAULT_SOUND).setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -229,7 +229,7 @@ object TendNotifications {
   private fun short(title: String, max: Int = 18): String =
     if (title.length <= max) title else title.take(max - 1).trimEnd() + "…"
 
-  private fun baseBuilder(ctx: Context, channel: String): NotificationCompat.Builder =
+  internal fun baseBuilder(ctx: Context, channel: String): NotificationCompat.Builder =
     NotificationCompat.Builder(ctx, channel)
       .setSmallIcon(R.drawable.ic_tend_leaf)
       .setColor(ContextCompat.getColor(ctx, R.color.tend_accent))

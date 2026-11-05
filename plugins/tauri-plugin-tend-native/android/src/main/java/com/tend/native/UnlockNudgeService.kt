@@ -147,7 +147,10 @@ class UnlockNudgeService : Service() {
     // `last > now` means the clock went backwards: don't let that block nudges forever.
     if (state.nagAfterChime) {
       // Once per chime / reminder: show it if one has sounded since the screen last showed.
-      if (last in 1..now && TendStore.lastChimeAt(this) <= last) {
+      // Chimes only sound while something timed is due, so with only untimed things waiting none
+      // may ever come: after a chime interval (at least 30 min) it shows anyway.
+      val floorMs = maxOf(state.chimeIntervalMs, 30L * 60_000L)
+      if (last in 1..now && TendStore.lastChimeAt(this) <= last && now - last < floorMs) {
         Log.i("TendNative", "unlock: no chime since last nag")
         return
       }

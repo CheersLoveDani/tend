@@ -7,6 +7,7 @@ import { Seed } from "../components/Icons";
 import { Sky } from "../components/Sky";
 import { WeatherCheckIn } from "../components/WeatherCheckIn";
 import { MovingCard } from "../components/MovingCard";
+import { AutoHeight } from "../components/AutoHeight";
 import { todaysWeather, weatherDays, weatherOf, type Quote, type Weather } from "../lib/weather";
 
 /** A check-in just happened: the tree reacts and a quote appears. */
@@ -71,21 +72,24 @@ export function Garden({ moment, onMomentDone }: { moment?: WeatherMoment | null
             <Tree level={level.level} progress={progress} size={280} still={reduceMotion} />
           </motion.div>
         </Sky>
-        <AnimatePresence>
-          {moment && (
-            <motion.figure
-              key={moment.key}
-              className={`weather-quote wq-${moment.weather}`}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0, transition: { delay: reduceMotion ? 0 : 0.9, duration: 0.5 } }}
-              exit={{ opacity: 0, y: -6 }}
-              onClick={onMomentDone}
-            >
-              <blockquote>“{moment.quote.text}”</blockquote>
-              <figcaption>{moment.quote.by}</figcaption>
-            </motion.figure>
-          )}
-        </AnimatePresence>
+        {/* The quote eases the rest of the page down instead of shoving it. */}
+        <AutoHeight className="garden-moment" reduceMotion={reduceMotion}>
+          <AnimatePresence mode="wait">
+            {moment && (
+              <motion.figure
+                key={moment.key}
+                className={`weather-quote wq-${moment.weather}`}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0, transition: { delay: reduceMotion ? 0 : 0.9, duration: 0.5 } }}
+                exit={{ opacity: 0, y: -6 }}
+                onClick={onMomentDone}
+              >
+                <blockquote>“{moment.quote.text}”</blockquote>
+                <figcaption>{moment.quote.by}</figcaption>
+              </motion.figure>
+            )}
+          </AnimatePresence>
+        </AutoHeight>
         <div className="level-bar" role="progressbar" aria-valuemin={0} aria-valuemax={level.levelSize} aria-valuenow={level.intoLevel} aria-label="Progress to next level">
           <motion.div className="level-bar-fill" initial={{ width: 0 }} animate={{ width: `${progress * 100}%` }} transition={{ type: "spring", stiffness: 60, damping: 18 }} />
         </div>
@@ -97,12 +101,14 @@ export function Garden({ moment, onMomentDone }: { moment?: WeatherMoment | null
       <section className="list-section weather-section">
         <h2 className="section-title">Weather inside today</h2>
         <WeatherCheckIn />
-        <p className="hint">{weatherOf(weather)?.line ?? "However it is in there, say so. Rain and sun both help it grow."}</p>
-        {spread.rain + spread.sun + spread.mild > 0 && (
-          <p className="weather-spread">
-            This month: {spread.rain} rainy or stormy {spread.rain === 1 ? "day" : "days"}, {spread.mild} cloudy, {spread.sun} sunny. A tree needs every one of them.
-          </p>
-        )}
+        <AutoHeight reduceMotion={reduceMotion}>
+          <p className="hint">{weatherOf(weather)?.line ?? "However it is in there, say so. Rain and sun both help it grow."}</p>
+          {spread.rain + spread.sun + spread.mild > 0 && (
+            <p className="weather-spread">
+              This month: {spread.rain} rainy or stormy {spread.rain === 1 ? "day" : "days"}, {spread.mild} cloudy, {spread.sun} sunny. A tree needs every one of them.
+            </p>
+          )}
+        </AutoHeight>
       </section>
 
       <MovingCard />

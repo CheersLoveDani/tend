@@ -139,7 +139,10 @@ class TendNativePlugin(private val activity: Activity) : Plugin(activity) {
         invoke.reject("missing `state`")
         return
       }
-      val state = NativeState.fromJson(raw)
+      var state = NativeState.fromJson(raw)
+      // A check-in tapped in the notification may not have reached the app yet: keep the newer day.
+      val loggedNatively = TendStore.loadState(activity).moodLoggedDay
+      if (loggedNatively != null && loggedNatively > (state.moodLoggedDay ?: "")) state = state.copy(moodLoggedDay = loggedNatively)
       TendStore.saveState(activity, state)
       TendEngine.apply(activity, state)
       invoke.resolve()

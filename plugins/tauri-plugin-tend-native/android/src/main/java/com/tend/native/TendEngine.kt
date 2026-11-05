@@ -23,7 +23,16 @@ object TendEngine {
     pruneExtras(ctx, state)
     TendAlarms.sync(ctx, state, fireMissedAlarms)
     TendAlarms.syncChime(ctx, state)
+    TendMood.sync(ctx, state)
     refreshSurface(ctx, state)
+  }
+
+  /** The half-hourly check-up: brings the unlock listener back if it was killed, and lines up the next. */
+  @Synchronized
+  fun onWatchdog(context: Context) {
+    val ctx = context.applicationContext
+    if (!UnlockNudgeService.isRunning) android.util.Log.i("TendNative", "watchdog: unlock listener wasn't running")
+    refreshSurface(ctx, TendStore.loadState(ctx))
   }
 
   /** Follow-ups only matter while their reminder or dose is still waiting. */
@@ -62,6 +71,7 @@ object TendEngine {
       }
     }
     if (state.pending.isEmpty()) TendNotifications.cancelNudge(ctx)
+    TendAlarms.syncWatchdog(ctx, state)
     TendWidget.updateAll(ctx, state)
     TendTileService.requestUpdate(ctx)
   }

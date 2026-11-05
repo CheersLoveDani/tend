@@ -23,11 +23,21 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
   }
 }
 
-/** Time for the gentle "still waiting" chime. */
+/** Time for the gentle "still waiting" chime, or the unlock listener's check-up. */
 class ChimeReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
-    if (intent.action != TendIds.ACTION_CHIME) return
-    TendEngine.onChime(context)
+    when (intent.action) {
+      TendIds.ACTION_CHIME -> TendEngine.onChime(context)
+      TendIds.ACTION_WATCHDOG -> TendEngine.onWatchdog(context)
+    }
+  }
+}
+
+/** Time for the daily weather check-in. */
+class MoodReceiver : BroadcastReceiver() {
+  override fun onReceive(context: Context, intent: Intent) {
+    if (intent.action != TendIds.ACTION_MOOD_TIME) return
+    TendMood.onTime(context)
   }
 }
 
@@ -37,6 +47,11 @@ class ReminderActionReceiver : BroadcastReceiver() {
     when (intent.action) {
       TendIds.ACTION_QUIET_TODAY -> {
         TendEngine.quietToday(context)
+        return
+      }
+      TendIds.ACTION_MOOD -> {
+        val v = intent.getIntExtra(TendIds.EXTRA_MOOD, 0)
+        if (v in 1..5) TendMood.log(context, v)
         return
       }
       TendIds.ACTION_ADD -> {

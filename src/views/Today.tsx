@@ -8,6 +8,7 @@ import { isPaused } from "../lib/settings";
 import { TaskCard } from "../components/TaskCard";
 import { DoseCard } from "../components/DoseCard";
 import { WeatherCheckIn } from "../components/WeatherCheckIn";
+import { AutoHeight } from "../components/AutoHeight";
 import { pickQuote, todaysWeather, weatherOf, type Quote, type Weather } from "../lib/weather";
 import { Close, Moon, Seed } from "../components/Icons";
 import { GoalBars } from "../components/GoalBars";
@@ -103,33 +104,40 @@ export function Today({ onEdit, onAdd, onOpenMed }: { onEdit: (r: Reminder) => v
         </section>
       )}
 
-      {snap && (todaysWeather(snap.entries) === null || reaction) && (
-        <section className="list-section">
-          <h2 className="section-title">What's the weather like in you today?</h2>
-          <WeatherCheckIn compact onPicked={(w) => setReaction({ key: Date.now(), weather: w, quote: pickQuote(w) })} />
-          <AnimatePresence>
-            {reaction && (
-              <motion.div
-                key={reaction.key}
-                className={`weather-reaction wq-${reaction.weather}`}
-                role="status"
-                initial={store.reduceMotion ? false : { opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-              >
-                <p className="weather-reaction-line">
-                  <span aria-hidden>{weatherOf(reaction.weather)?.icon}</span> {weatherOf(reaction.weather)?.line}
-                </p>
-                <blockquote>“{reaction.quote.text}”</blockquote>
-                <p className="weather-reaction-by">{reaction.quote.by}</p>
-                <button className="btn btn-quiet btn-icon weather-reaction-close" onClick={() => setReaction(null)} aria-label="Close">
-                  <Close size={16} />
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </section>
-      )}
+      {/* Appears, and later folds away, without jolting the lists below it. */}
+      <AutoHeight reduceMotion={store.reduceMotion}>
+        <AnimatePresence>
+          {snap && (todaysWeather(snap.entries) === null || reaction) && (
+            <motion.section key="weather" className="list-section" initial={store.reduceMotion ? false : { opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}>
+              <h2 className="section-title">What's the weather like in you today?</h2>
+              <WeatherCheckIn compact onPicked={(w) => setReaction({ key: Date.now(), weather: w, quote: pickQuote(w) })} />
+              <AutoHeight reduceMotion={store.reduceMotion}>
+                <AnimatePresence mode="wait">
+                  {reaction && (
+                    <motion.div
+                      key={reaction.key}
+                      className={`weather-reaction wq-${reaction.weather}`}
+                      role="status"
+                      initial={store.reduceMotion ? false : { opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                    >
+                      <p className="weather-reaction-line">
+                        <span aria-hidden>{weatherOf(reaction.weather)?.icon}</span> {weatherOf(reaction.weather)?.line}
+                      </p>
+                      <blockquote>“{reaction.quote.text}”</blockquote>
+                      <p className="weather-reaction-by">{reaction.quote.by}</p>
+                      <button className="btn btn-quiet btn-icon weather-reaction-close" onClick={() => setReaction(null)} aria-label="Close">
+                        <Close size={16} />
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </AutoHeight>
+            </motion.section>
+          )}
+        </AnimatePresence>
+      </AutoHeight>
 
       {todaysEvents.length > 0 && (
         <section className="list-section">

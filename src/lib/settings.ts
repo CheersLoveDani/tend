@@ -47,6 +47,8 @@ export interface Settings {
   calendarIds: string[];
   /** On a stormy check-in, gently offer to pick one thing and move the rest to tomorrow. */
   stormyLightDay: boolean;
+  /** A daily "how's the weather in you?" at this time ("HH:MM"), answered right from the notification; null = off. */
+  moodCheckIn: string | null;
   /** Last app version whose "what changed" note was seen. */
   lastSeenVersion: string | null;
   /** The user has said yes (or no) to downloading the on-device model. null = not asked yet. */
@@ -84,6 +86,7 @@ export const defaultSettings: Settings = {
   calendarEnabled: false,
   calendarIds: [],
   stormyLightDay: true,
+  moodCheckIn: null,
   lastSeenVersion: null,
   modelConsent: null,
 };

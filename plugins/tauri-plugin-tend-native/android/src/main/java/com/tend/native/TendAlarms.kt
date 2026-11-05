@@ -100,6 +100,35 @@ object TendAlarms {
     TendStore.setNextChimeAt(ctx, at)
   }
 
+  /** How often the unlock listener is checked on, while it should be running. */
+  private const val WATCHDOG_MS = 30L * 60_000L
+
+  private fun watchdogIntent(ctx: Context, flags: Int): PendingIntent? =
+    PendingIntent.getBroadcast(
+      ctx,
+      TendIds.RC_WATCHDOG,
+      Intent(ctx, ChimeReceiver::class.java).setAction(TendIds.ACTION_WATCHDOG),
+      flags or PendingIntent.FLAG_IMMUTABLE
+    )
+
+  /**
+   * Android (or a vendor battery saver) may kill the unlock listener, and isn't obliged to let it
+   * restart itself. While it should be running, an alarm checks on it every half hour and brings
+   * it back: an exact alarm is one of the few moments Android allows starting it from the
+   * background. Does nothing else, and stops once the listener isn't wanted.
+   */
+  fun syncWatchdog(ctx: Context, state: NativeState) {
+    if (!state.wantsUnlockService) {
+      watchdogIntent(ctx, PendingIntent.FLAG_NO_CREATE)?.let {
+        am(ctx).cancel(it)
+        it.cancel()
+      }
+      return
+    }
+    val pi = watchdogIntent(ctx, PendingIntent.FLAG_UPDATE_CURRENT) ?: return
+    setAlarm(ctx, System.currentTimeMillis() + WATCHDOG_MS, pi)
+  }
+
   /** Cancels one scheduled alarm by its key. */
   fun cancelKey(ctx: Context, key: String) {
     val pi = PendingIntent.getBroadcast(

@@ -250,6 +250,68 @@ pub fn toggle_quick(app: &AppHandle) {
     });
 }
 
+// ---------- weather check-in ----------
+
+const MOOD: &str = "mood";
+const MOOD_W: f64 = 440.0;
+const MOOD_H: f64 = 200.0;
+
+/// The little five-faces window, tucked in the bottom-right corner like a notification. It doesn't
+/// take focus, so it never interrupts typing; it stays until a face is picked or it's closed.
+pub fn show_mood(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window(MOOD) {
+        place_mood(&w);
+        let _ = w.show();
+        let _ = w.emit("mood-shown", ());
+        return;
+    }
+    let app = app.clone();
+    // Building a webview from inside an event handler can deadlock on Windows; use a thread.
+    std::thread::spawn(move || {
+        let built = WebviewWindowBuilder::new(&app, MOOD, WebviewUrl::App("index.html?mood=1".into()))
+            .title("Weather check-in")
+            .inner_size(MOOD_W, MOOD_H)
+            .resizable(false)
+            .maximizable(false)
+            .minimizable(false)
+            .decorations(false)
+            .transparent(true)
+            .shadow(false)
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .focused(false)
+            .visible(false)
+            .build();
+        match built {
+            Ok(w) => {
+                let w2 = w.clone();
+                w.on_window_event(move |e| {
+                    if let WindowEvent::CloseRequested { api, .. } = e {
+                        api.prevent_close();
+                        let _ = w2.hide();
+                    }
+                });
+                place_mood(&w);
+                // The page shows itself once it has drawn, so it never flashes blank.
+            }
+            Err(e) => log::warn!("couldn't open the weather check-in: {e}"),
+        }
+    });
+}
+
+fn place_mood(w: &tauri::WebviewWindow) {
+    let Ok(Some(m)) = w.primary_monitor() else { return };
+    let f = m.scale_factor();
+    let (pos, size) = (m.position().to_logical::<f64>(f), m.size().to_logical::<f64>(f));
+    // Clear of a bottom taskbar.
+    let _ = w.set_position(tauri::LogicalPosition::new(pos.x + size.width - MOOD_W - 16.0, pos.y + size.height - MOOD_H - 64.0));
+}
+
+fn minutes_of(hm: &str) -> Option<i32> {
+    let (h, m) = hm.split_once(':')?;
+    Some(h.trim().parse::<i32>().ok()? * 60 + m.trim().parse::<i32>().ok()?)
+}
+
 // ---------- scheduler ----------
 
 fn in_quiet_hours(ui: &serde_json::Value) -> bool {
@@ -335,6 +397,22 @@ fn tick(app: &AppHandle) {
     }
     if quiet || paused(&ui) {
         return;
+    }
+
+    // The daily weather check-in: once a day, within a few hours of its time, unless already logged.
+    if let Some(at) = ui.get("moodCheckIn").and_then(|v| v.as_str()) {
+        let late = minutes_of(&hm).zip(minutes_of(at)).map(|(n, a)| n - a);
+        if late.is_some_and(|m| (0..180).contains(&m)) {
+            let key = format!("mood@{today}");
+            if !db.was_notified(&key).unwrap_or(true) {
+                let _ = db.mark_notified(&key);
+                // Entries since today are today's.
+                let logged = crate::meds::entries(&db, &today).unwrap_or_default().iter().any(|e| e.kind == "mood");
+                if !logged {
+                    show_mood(app);
+                }
+            }
+        }
     }
 
     for r in &waiting {

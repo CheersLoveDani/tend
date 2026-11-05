@@ -36,6 +36,11 @@
             android:name="com.tend.native.ChimeReceiver"
             android:exported="false" />
 
+        <!-- The daily weather check-in. -->
+        <receiver
+            android:name="com.tend.native.MoodReceiver"
+            android:exported="false" />
+
         <!-- Notification buttons: Done / 1 h / Tomorrow / Snooze, ✓ step, Add…, Quiet today. -->
         <receiver
             android:name="com.tend.native.ReminderActionReceiver"

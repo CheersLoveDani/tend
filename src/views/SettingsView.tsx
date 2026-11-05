@@ -925,6 +925,29 @@ function DaySettings() {
         checked={s.stormyLightDay}
         onChange={(v) => set({ stormyLightDay: v })}
       />
+      <Toggle
+        label="Daily weather check-in"
+        hint={
+          s.moodCheckIn
+            ? isAndroid
+              ? `At ${s.moodCheckIn}, a notification asks how the weather is in you. Tap a face right there. Skipped if you've already checked in.`
+              : `At ${s.moodCheckIn}, a small window asks how the weather is in you. Click a face. Skipped if you've already checked in.`
+            : "A gentle daily ask about your mood, answered with one tap."
+        }
+        checked={!!s.moodCheckIn}
+        onChange={(v) => set({ moodCheckIn: v ? "20:00" : null })}
+      />
+      {s.moodCheckIn && (
+        <div className="row">
+          <span className="row-label">Ask at</span>
+          <input
+            type="time"
+            value={s.moodCheckIn}
+            onChange={(e) => e.target.value && set({ moodCheckIn: e.target.value })}
+            aria-label="Weather check-in time"
+          />
+        </div>
+      )}
     </>
   );
 }

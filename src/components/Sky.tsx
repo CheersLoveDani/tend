@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import type { Weather } from "../lib/weather";
 
 interface Props {
@@ -24,6 +25,9 @@ const CLOUDS: Record<Weather, { x: number; y: number; s: number }[]> = {
   5: [],
 };
 
+/** Clouds, rain and lightning drift in and out with the weather instead of popping. */
+const FADE = { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 1.2, ease: "easeInOut" as const } };
+
 /** The tree's weather, from thunder to bright sun. Every one of them helps it grow. */
 export function Sky({ weather, children, compact }: Props) {
   const drops = weather === 1 ? DROPS.length : weather === 2 ? 26 : 0;
@@ -33,26 +37,35 @@ export function Sky({ weather, children, compact }: Props) {
       <div className="sky-sun" aria-hidden>
         <span className="sky-rays" />
       </div>
-      {weather &&
-        CLOUDS[weather].map((c, i) => (
-          <span key={`${weather}-${i}`} className="sky-cloud" aria-hidden style={{ left: `${c.x}%`, top: `${c.y}%`, ["--s" as string]: c.s, animationDelay: `${-i * 7}s` }} />
-        ))}
-      {weather === 1 && (
-        <>
-          <span className="sky-flash" aria-hidden />
-          <svg className="sky-bolt" viewBox="0 0 20 44" aria-hidden>
-            <path d="M12 0 2 24h7l-3 20 12-28h-7l5-16z" />
-          </svg>
-        </>
-      )}
-      <div className="sky-tree">{children}</div>
-      {drops > 0 && (
-        <div className="sky-rain" aria-hidden>
-          {DROPS.slice(0, drops).map((d, i) => (
-            <span key={i} style={{ left: `${d.left}%`, height: d.len, animationDelay: `${d.delay}s`, animationDuration: `${d.speed}s` }} />
+      <AnimatePresence>
+        {weather &&
+          CLOUDS[weather].map((c, i) => (
+            <motion.span
+              key={`${weather}-${i}`}
+              {...FADE}
+              animate={{ opacity: 0.92 }}
+              className="sky-cloud"
+              aria-hidden
+              style={{ left: `${c.x}%`, top: `${c.y}%`, ["--s" as string]: c.s, animationDelay: `${-i * 7}s` }}
+            />
           ))}
-        </div>
-      )}
+        {weather === 1 && <motion.span key="flash" {...FADE} className="sky-flash" aria-hidden />}
+        {weather === 1 && (
+          <motion.svg key="bolt" {...FADE} className="sky-bolt" viewBox="0 0 20 44" aria-hidden>
+            <path d="M12 0 2 24h7l-3 20 12-28h-7l5-16z" />
+          </motion.svg>
+        )}
+      </AnimatePresence>
+      <div className="sky-tree">{children}</div>
+      <AnimatePresence>
+        {drops > 0 && (
+          <motion.div key="rain" {...FADE} className="sky-rain" aria-hidden>
+            {DROPS.slice(0, drops).map((d, i) => (
+              <span key={i} style={{ left: `${d.left}%`, height: d.len, animationDelay: `${d.delay}s`, animationDuration: `${d.speed}s` }} />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

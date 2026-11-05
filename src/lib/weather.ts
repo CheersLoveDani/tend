@@ -5,13 +5,17 @@ import { today, ymd } from "./dates";
 /** 5 = bright and sunny … 1 = thunder. Stored as the mood entry's value. */
 export type Weather = 1 | 2 | 3 | 4 | 5;
 
-/** Happiest first, the order they're offered in. */
-export const WEATHERS: { value: Weather; icon: string; label: string; line: string }[] = [
-  { value: 5, icon: "☀️", label: "Bright & sunny", line: "Full sun. The rain from other days is what lets it bloom." },
-  { value: 4, icon: "🌤️", label: "Sunny", line: "Sunny. The leaves are turning to the light." },
-  { value: 3, icon: "⛅", label: "Partly cloudy", line: "Partly cloudy. Leaves like a rest from the glare." },
-  { value: 2, icon: "🌧️", label: "Rain", line: "Rain. Roots drink deepest on days like this." },
-  { value: 1, icon: "⛈️", label: "Thunder", line: "A storm. Trees that weather them grow the deepest roots." },
+/**
+ * Happiest first, the order they're offered in. You answer with a face (`face`, `feel`); it turns
+ * into its weather (`icon`, `label`) once picked. The Android mood notification mirrors this table
+ * (TendMood.kt), so keep the two in step.
+ */
+export const WEATHERS: { value: Weather; face: string; feel: string; icon: string; label: string; line: string }[] = [
+  { value: 5, face: "😄", feel: "Great", icon: "☀️", label: "Bright & sunny", line: "Full sun. The rain from other days is what lets it bloom." },
+  { value: 4, face: "🙂", feel: "Good", icon: "🌤️", label: "Sunny", line: "Sunny. The leaves are turning to the light." },
+  { value: 3, face: "😐", feel: "Okay", icon: "⛅", label: "Partly cloudy", line: "Partly cloudy. Leaves like a rest from the glare." },
+  { value: 2, face: "😔", feel: "Low", icon: "🌧️", label: "Rain", line: "Rain. Roots drink deepest on days like this." },
+  { value: 1, face: "😣", feel: "Rough", icon: "⛈️", label: "Thunder", line: "A storm. Trees that weather them grow the deepest roots." },
 ];
 
 export const weatherOf = (v: number | null | undefined) => WEATHERS.find((w) => w.value === v) ?? null;
@@ -21,6 +25,16 @@ export function todaysWeather(entries: Entry[]): Weather | null {
   const t = today();
   const latest = entries.filter((e) => e.kind === "mood" && ymd(new Date(e.at)) === t).sort((a, b) => b.at - a.at)[0];
   return latest ? (Math.min(5, Math.max(1, Math.round(latest.value))) as Weather) : null;
+}
+
+/**
+ * The mood entry for a check-in at [at]. Changing your mind later the same day updates that day's
+ * check-in, so seeds come once a day.
+ */
+export function moodEntry(entries: Entry[], v: Weather, at = Date.now()): Entry {
+  const day = ymd(new Date(at));
+  const existing = entries.find((e) => e.kind === "mood" && ymd(new Date(e.at)) === day);
+  return { id: existing?.id ?? "", kind: "mood", name: "Mood", value: v, value2: null, unit: "", note: "", at };
 }
 
 /** Rainy and sunny days over the last month (a day counts by its last check-in). */

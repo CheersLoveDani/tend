@@ -3,9 +3,10 @@
 import { addPluginListener, invoke } from "@tauri-apps/api/core";
 import { api, isAndroid, isSomeday, type Reminder, type Snapshot } from "./api";
 import { defaultSettings, endOfToday, type Settings } from "./settings";
-import { plusDays, today } from "./dates";
+import { plusDays, today, ymd } from "./dates";
 import { amountText } from "./meds";
 import { quickAddInput } from "./quickadd";
+import { moodEntry, type Weather } from "./weather";
 
 export interface Permissions {
   notifications: boolean;
@@ -30,10 +31,11 @@ export interface LaunchAction {
  * - tomorrow: move reminder `id` to tomorrow
  * - add: create a reminder from `text` (natural language, e.g. "call mum at 6")
  * - quietToday: turn on "Quiet for today"
+ * - mood: a weather check-in from the mood notification; `text` is the value (1–5)
  * - snooze: already handled natively (alarm re-scheduled); informational only
  */
 export interface PendingAction {
-  type: "complete" | "snooze" | "step" | "tomorrow" | "add" | "quietToday";
+  type: "complete" | "snooze" | "step" | "tomorrow" | "add" | "quietToday" | "mood";
   id: string;
   at: number;
   text?: string;
@@ -132,6 +134,12 @@ export async function pushNativeState(snap: Snapshot, s: Settings) {
       doseNagUntilMinutes: s.doseNagUntilMinutes,
       preWarnMinutes: s.preWarnMinutes,
       cueStyle: s.cueStyle,
+      moodTime: s.moodCheckIn,
+      // The day of the last check-in: no need to ask again that day.
+      moodLoggedDay: snap.entries.filter((e) => e.kind === "mood").reduce<string | null>((d, e) => {
+        const day = ymd(new Date(e.at));
+        return d && d > day ? d : day;
+      }, null),
     },
   }).catch((e) => console.warn("native state", e));
 }
@@ -171,6 +179,13 @@ export async function applyActions(actions: PendingAction[]): Promise<Settings |
           const next = { ...defaultSettings, ...stored, pausedUntil: endOfToday(new Date(a.at)) } as Settings;
           await api.setSettings(next);
           settings = next;
+          break;
+        }
+        case "mood": {
+          const v = Number(a.text);
+          if (!(v >= 1 && v <= 5)) break;
+          const entries = (await api.snapshot()).entries;
+          await api.saveEntry(moodEntry(entries, v as Weather, a.at));
           break;
         }
         case "snooze":

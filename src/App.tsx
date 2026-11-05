@@ -26,6 +26,7 @@ import { appUpdater, appVersion, type UpdateState } from "./lib/updater";
 import { native } from "./lib/native";
 import { onBackButtonPress } from "@tauri-apps/api/app";
 import { QuickAdd } from "./views/QuickAdd";
+import { MoodPop } from "./views/MoodPop";
 import { StormyDay } from "./components/StormyDay";
 import { closeTopOverlay } from "./lib/backStack";
 
@@ -412,9 +413,12 @@ function ToastItem({ t }: { t: Toast }) {
 
 /** The desktop hotkey's little quick-add window loads the same page with ?quick=1. */
 const QUICK = new URLSearchParams(location.search).has("quick");
+/** The desktop's daily weather check-in window loads it with ?mood=1. */
+const MOOD = new URLSearchParams(location.search).has("mood");
 
 export default function App() {
   if (QUICK) return <QuickAdd />;
+  if (MOOD) return <MoodPop />;
   return (
     <StoreProvider>
       <Shell />

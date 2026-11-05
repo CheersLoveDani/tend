@@ -170,7 +170,11 @@ data class NativeState(
   /** Heads-up this many minutes before a timed reminder (0 = off). Not for doses. */
   val preWarnMinutes: Int = 0,
   /** How gentle cues arrive: `sound`, `vibrate` or `silent`. */
-  val cueStyle: String = "sound"
+  val cueStyle: String = "sound",
+  /** The daily weather check-in, "HH:mm", or null when off. */
+  val moodTime: String? = null,
+  /** "yyyy-MM-dd" of the last check-in: that day isn't asked again. */
+  val moodLoggedDay: String? = null
 ) {
   /** The unlock listener only makes sense when there is something to nudge about. */
   val wantsUnlockService: Boolean get() = nagOnUnlock && pending.isNotEmpty()
@@ -229,6 +233,8 @@ data class NativeState(
       .put("doseNagUntilMinutes", doseNagUntilMinutes)
       .put("preWarnMinutes", preWarnMinutes)
       .put("cueStyle", cueStyle)
+      .put("moodTime", moodTime ?: JSONObject.NULL)
+      .put("moodLoggedDay", moodLoggedDay ?: JSONObject.NULL)
   }
 
   companion object {
@@ -273,7 +279,9 @@ data class NativeState(
         doseNagMinutes = o.optInt("doseNagMinutes", 0).coerceAtLeast(0),
         doseNagUntilMinutes = o.optInt("doseNagUntilMinutes", 0).coerceAtLeast(0),
         preWarnMinutes = o.optInt("preWarnMinutes", 0).coerceAtLeast(0),
-        cueStyle = o.optString("cueStyle", "sound").let { if (it in CUE_STYLES) it else "sound" }
+        cueStyle = o.optString("cueStyle", "sound").let { if (it in CUE_STYLES) it else "sound" },
+        moodTime = o.optStringOrNull("moodTime")?.takeIf { QuietHours.minutesOf(it) != null },
+        moodLoggedDay = o.optStringOrNull("moodLoggedDay")
       )
     }
   }
