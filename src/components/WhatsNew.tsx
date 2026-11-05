@@ -7,6 +7,16 @@ import { Leaf } from "./Icons";
 /** What each release changed, newest first. Shown once after updating; new installs never see it. */
 export const CHANGES: { version: string; title: string; items: string[] }[] = [
   {
+    version: "0.4.0",
+    title: "Weather in you",
+    items: [
+      "The mood check-in is now faces. Tap one and watch it turn into its weather.",
+      "A daily check-in at a time you choose (Settings → Your day): tap a face right in the notification, or in a small window on Windows.",
+      "Things on screen now glide into place instead of jumping.",
+      "The unlock screen keeps working through the day, even if Android stops it in the background.",
+    ],
+  },
+  {
     version: "0.3.0",
     title: "A calmer Tend",
     items: [
