@@ -7,6 +7,14 @@ import { Leaf } from "./Icons";
 /** What each release changed, newest first. Shown once after updating; new installs never see it. */
 export const CHANGES: { version: string; title: string; items: string[] }[] = [
   {
+    version: "0.4.1",
+    title: "One notification",
+    items: [
+      "Tend now keeps a single notification on Android: your list of what's still waiting. It comes back if swiped away.",
+      "Reminders, doses and chimes ring through that one notification, with Taken, Done or Snooze right on it.",
+    ],
+  },
+  {
     version: "0.4.0",
     title: "Weather in you",
     items: [
