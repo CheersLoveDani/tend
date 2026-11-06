@@ -64,7 +64,7 @@ object TendEngine {
         // The service re-evaluates the notification in onDestroy (it detaches, then posts/cancels).
         UnlockNudgeService.stop(ctx)
       }
-      if (state.wantsPersistentNotification) {
+      if (state.wantsPersistentNotification || TendNotifications.hasLiveAlert()) {
         TendNotifications.postPersistent(ctx, state)
       } else {
         TendNotifications.cancelPersistent(ctx)
@@ -140,19 +140,6 @@ object TendEngine {
 
     val quiet = state.isQuietAt(now) && !critical
     val paused = state.isPaused(now) && !dose
-    if (kind == AlarmItem.KIND_AGAIN) {
-      // The one gentle follow-up: skipped entirely while quiet.
-      if (!quiet && !paused) {
-        TendNotifications.postReminder(ctx, id, title, body, silent = false, dose = false, gentle = true, cueStyle = state.cueStyle)
-        TendStore.setLastChimeAt(ctx, now)
-      }
-    } else {
-      TendNotifications.postReminder(
-        ctx, id, title, body,
-        silent = quiet || paused, dose = dose, fullScreen = dose
-      )
-      if (!quiet && !paused) TendStore.setLastChimeAt(ctx, now)
-    }
 
     // What comes next.
     if (dose) {
@@ -165,6 +152,18 @@ object TendEngine {
     }
     TendAlarms.syncChime(ctx, state)
     refreshSurface(ctx, state)
+
+    // Last, so nothing above re-posts it quietly: the grouped notification alerts.
+    if (kind == AlarmItem.KIND_AGAIN) {
+      // The one gentle follow-up: skipped entirely while quiet.
+      if (!quiet && !paused) {
+        TendNotifications.postReminder(ctx, state, id, silent = false, gentle = true)
+        TendStore.setLastChimeAt(ctx, now)
+      }
+    } else {
+      TendNotifications.postReminder(ctx, state, id, silent = quiet || paused, dose = dose, fullScreen = dose)
+      if (!quiet && !paused) TendStore.setLastChimeAt(ctx, now)
+    }
   }
 
   private fun scheduleDoseNag(
@@ -198,16 +197,16 @@ object TendEngine {
     }
     val now = System.currentTimeMillis()
     val items = state.chimeItems(now)
-    if (items.isNotEmpty() && !state.isPaused(now) && !state.isQuietFor(now)) {
-      TendNotifications.postChime(ctx, state, items)
-      TendStore.setLastChimeAt(ctx, now)
-    }
     val next = state.nextChimeAfter(now)
     TendAlarms.scheduleChime(ctx, next)
     TendStore.setNextChimeAt(ctx, next)
     // An exact alarm may start a foreground service: bring the unlock listener back if the
     // system killed it, so the unlock screen keeps working without opening the app.
     refreshSurface(ctx, state)
+    if (items.isNotEmpty() && !state.isPaused(now) && !state.isQuietFor(now)) {
+      TendNotifications.postChime(ctx, state)
+      TendStore.setLastChimeAt(ctx, now)
+    }
   }
 
   /** Takes [id] off every native surface (it's done, or moved away). */
@@ -312,6 +311,7 @@ object TendEngine {
     )
     TendAlarms.scheduleExtra(ctx, alarm)
     TendNotifications.cancelReminder(ctx, id)
+    refreshSurface(ctx, state)
     TendNativePlugin.notifyPendingActions(ctx)
   }
 }

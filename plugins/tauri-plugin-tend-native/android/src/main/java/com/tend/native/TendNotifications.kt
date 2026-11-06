@@ -212,7 +212,48 @@ object TendNotifications {
       .build()
   }
 
-  // ---- "still to do" ---------------------------------------------------------------------------
+  // ---- the one notification ------------------------------------------------------------------
+  //
+  // Tend shows a single notification: the grouped "still to do" list. It is always there while
+  // something is waiting and comes back if swiped away. Reminders, doses, the chime, heads-ups and
+  // the unlock fallback don't post cards of their own: they re-post this one on an alerting
+  // channel so it sounds, peeks or wakes the screen, then it settles back to quiet.
+
+  /** How the next post of the grouped notification should alert. */
+  data class Alert(
+    val kind: String,
+    val channel: String,
+    val cueStyle: String? = null,
+    /** Replaces the title, e.g. "In 10 min: dentist". */
+    val headline: String? = null,
+    /** The item whose buttons (Taken / Done / Snooze) are shown. */
+    val focusId: String? = null,
+    val fullScreen: Boolean = false,
+    /** Re-posts keep this alert's channel, headline and focus (quietly) until then. */
+    val until: Long = System.currentTimeMillis() + ALERT_HOLD_MS
+  )
+
+  const val ALERT_REMINDER = "reminder"
+  const val ALERT_CHIME = "chime"
+  const val ALERT_PREWARN = "prewarn"
+  const val ALERT_NUDGE = "nudge"
+
+  /** Long enough that a state push right after an alert doesn't knock it off its channel. */
+  private const val ALERT_HOLD_MS = 2L * 60L * 1000L
+
+  @Volatile
+  private var activeAlert: Alert? = null
+
+  private fun liveAlert(now: Long = System.currentTimeMillis()): Alert? =
+    activeAlert?.takeIf { it.until > now }
+
+  /** A heads-up keeps the notification up for a moment even when the list itself is empty. */
+  fun hasLiveAlert(): Boolean = liveAlert() != null
+
+  private fun clearAlert(match: (Alert) -> Boolean) {
+    val a = activeAlert ?: return
+    if (match(a)) activeAlert = null
+  }
 
   fun countPhrase(n: Int, verb: String): String =
     if (n == 1) "1 thing $verb" else "$n things $verb"
@@ -234,47 +275,118 @@ object TendNotifications {
       .setSmallIcon(R.drawable.ic_tend_leaf)
       .setColor(ContextCompat.getColor(ctx, R.color.tend_accent))
 
+  /** What gets the one-tap buttons: the alert's item, else a due dose, else a reminder whose time has come. */
+  private fun focusItem(state: NativeState, focusId: String?, now: Long): PendingItem? =
+    state.pending.firstOrNull { it.id == focusId }
+      ?: state.pending.firstOrNull { it.dose && it.chimesAt(now) }
+      ?: state.pending.firstOrNull { it.dueAt != null && it.dueAt <= now }
+
   /**
-   * Used both as a plain notification and as the unlock service's foreground notification.
-   * [added] is shown under the reply field right after an "Add…" (it also stops the spinner).
+   * The grouped notification. Used as a plain notification and as the unlock service's foreground
+   * notification. [alert]: sound/peek this time. Without one, a still-live alert's look is kept
+   * but nothing re-alerts. [added] shows under the reply field right after an "Add…".
    */
-  fun buildPersistent(ctx: Context, state: NativeState, added: CharSequence? = null): Notification {
+  fun buildPersistent(
+    ctx: Context,
+    state: NativeState,
+    added: CharSequence? = null,
+    alert: Alert? = null
+  ): Notification {
+    val now = System.currentTimeMillis()
+    val look = alert ?: liveAlert(now)
+    val channel = look?.channel ?: CHANNEL_STILL_TO_DO
+
     val n = state.pending.size
-    val title = if (n == 0) "All clear for now" else countPhrase(n, "still waiting")
-    val text = if (n == 0) "Nothing waiting. Nice." else state.pending.joinToString(" · ") { it.title }
+    val countTitle = if (n == 0) "All clear for now" else countPhrase(n, "still waiting")
+    val headline = look?.headline
+    val title = headline ?: countTitle
+    val list = state.pending.joinToString(" · ") { it.title }
+    val text = when {
+      n == 0 -> if (headline != null) "A heads-up so it doesn't arrive out of nowhere." else "Nothing waiting. Nice."
+      headline != null -> "$countTitle: $list"
+      else -> list
+    }
 
     val style = NotificationCompat.InboxStyle().setBigContentTitle(title)
     state.pending.take(MAX_INBOX_LINES).forEach { style.addLine(lineFor(it)) }
     if (n > MAX_INBOX_LINES) style.setSummaryText("and ${n - MAX_INBOX_LINES} more")
 
     // What shows on a secure lock screen: just the count, never the titles.
-    val publicVersion = baseBuilder(ctx, CHANNEL_STILL_TO_DO)
-      .setContentTitle(title)
+    val publicVersion = baseBuilder(ctx, channel)
+      .setContentTitle(countTitle)
       .setContentText("Open Tend to see them")
       .build()
 
-    val builder = baseBuilder(ctx, CHANNEL_STILL_TO_DO)
+    val builder = baseBuilder(ctx, channel)
       .setContentTitle(title)
       .setContentText(text)
       .setStyle(style)
       .setOngoing(true)
-      .setOnlyAlertOnce(true)
-      .setSilent(true)
-      .setShowWhen(false)
       .setLocalOnly(true)
-      .setPriority(NotificationCompat.PRIORITY_LOW)
       .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
       .setPublicVersion(publicVersion)
       .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
       .setDeleteIntent(persistentDeletePendingIntent(ctx))
-      .addAction(addAction(ctx))
-    // The first thing with steps left gets a one-tap "next step done".
-    state.pending.firstOrNull { it.hasStepsLeft }?.let { item ->
-      builder.addAction(0, "✓ step · ${short(item.title)}", reminderActionPendingIntent(ctx, TendIds.ACTION_STEP, item.id, item.title, ""))
+
+    if (alert != null) {
+      builder.setOnlyAlertOnce(false)
+        .setCategory(NotificationCompat.CATEGORY_REMINDER)
+        .setShowWhen(true)
+        .setWhen(now)
+      when (channel) {
+        CHANNEL_ALERTS -> builder.setPriority(NotificationCompat.PRIORITY_HIGH)
+          .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)
+        CHANNEL_NUDGE -> builder.setPriority(NotificationCompat.PRIORITY_HIGH)
+        else -> builder.gentleCue(alert.cueStyle ?: state.cueStyle)
+      }
+    } else {
+      builder.setOnlyAlertOnce(true)
+        .setSilent(true)
+        .setShowWhen(false)
+        .setPriority(if (look != null) NotificationCompat.PRIORITY_DEFAULT else NotificationCompat.PRIORITY_LOW)
     }
-    if (n > 0 && !state.isPaused()) builder.addAction(quietTodayAction(ctx))
+
+    // Buttons (Android shows three): the due item's first, then "Add…".
+    val focus = focusItem(state, look?.focusId, now)
+    if (focus != null) {
+      val name = short(focus.title)
+      if (focus.dose) {
+        builder.addAction(0, "Taken · $name", reminderActionPendingIntent(ctx, TendIds.ACTION_DONE, focus.id, focus.title, ""))
+        builder.addAction(0, "Snooze 15 min", reminderActionPendingIntent(ctx, TendIds.ACTION_SNOOZE, focus.id, focus.title, ""))
+      } else {
+        builder.addAction(0, "Done · $name", reminderActionPendingIntent(ctx, TendIds.ACTION_DONE, focus.id, focus.title, ""))
+        builder.addAction(0, "1 h", reminderActionPendingIntent(ctx, TendIds.ACTION_SNOOZE_HOUR, focus.id, focus.title, ""))
+      }
+      builder.addAction(addAction(ctx))
+    } else {
+      builder.addAction(addAction(ctx))
+      // The first thing with steps left gets a one-tap "next step done".
+      state.pending.firstOrNull { it.hasStepsLeft }?.let { item ->
+        builder.addAction(0, "✓ step · ${short(item.title)}", reminderActionPendingIntent(ctx, TendIds.ACTION_STEP, item.id, item.title, ""))
+      }
+      if (n > 0 && !state.isPaused()) builder.addAction(quietTodayAction(ctx))
+    }
     if (added != null) builder.setRemoteInputHistory(arrayOf(added))
-    activityPendingIntent(ctx, TendIds.RC_OPEN, TendIds.LAUNCH_OPEN, null)?.let { builder.setContentIntent(it) }
+
+    val focusId = look?.focusId
+    val tap = when (look?.kind) {
+      ALERT_CHIME, ALERT_NUDGE -> activityPendingIntent(ctx, TendIds.RC_NAG, TendIds.LAUNCH_NAG, null)
+      ALERT_REMINDER, ALERT_PREWARN -> focusId?.let {
+        activityPendingIntent(ctx, TendIds.stableHash("open-reminder", it), TendIds.LAUNCH_REMINDER, it)
+      }
+      else -> null
+    } ?: activityPendingIntent(ctx, TendIds.RC_OPEN, TendIds.LAUNCH_OPEN, null)
+    tap?.let { builder.setContentIntent(it) }
+
+    if (alert != null && alert.fullScreen) {
+      // A full-screen intent is what makes Android wake a sleeping screen. Doses only while the
+      // screen is off (when the phone is in use, a peek is enough), and the unlock fallback.
+      val pm = ctx.getSystemService(Context.POWER_SERVICE) as PowerManager
+      val wake = alert.kind == ALERT_NUDGE || !pm.isInteractive
+      if (wake && canUseFullScreenIntent(ctx)) {
+        activityPendingIntent(ctx, TendIds.RC_NAG, TendIds.LAUNCH_NAG, null)?.let { builder.setFullScreenIntent(it, true) }
+      }
+    }
     return builder.build()
   }
 
@@ -284,93 +396,77 @@ object TendNotifications {
     nm(ctx).notify(TendIds.PERSISTENT_NOTIFICATION_ID, buildPersistent(ctx, state, added))
   }
 
+  /** Re-post the grouped notification so it alerts. */
+  @SuppressLint("MissingPermission")
+  private fun postAlert(ctx: Context, state: NativeState, alert: Alert) {
+    ensureChannels(ctx)
+    activeAlert = alert
+    nm(ctx).notify(TendIds.PERSISTENT_NOTIFICATION_ID, buildPersistent(ctx, state, alert = alert))
+  }
+
   fun cancelPersistent(ctx: Context) {
+    activeAlert = null
     nm(ctx).cancel(TendIds.PERSISTENT_NOTIFICATION_ID)
   }
 
   // ---- timed reminders and doses ---------------------------------------------------------------
 
   /**
-   * A reminder's or dose's own notification. [gentle]: the follow-up nudge, on the gentle channel
-   * in the user's cue style. [fullScreen]: doses only, and only while the screen is off.
+   * A reminder or dose came due: the grouped notification alerts with its buttons. [gentle]: the
+   * follow-up nudge, in the user's cue style. [fullScreen]: doses only, and only while the screen
+   * is off. [silent] (quiet hours, paused): it just joins the list.
    */
-  @SuppressLint("MissingPermission")
   fun postReminder(
     ctx: Context,
+    state: NativeState,
     id: String,
-    title: String,
-    body: String,
     silent: Boolean,
     dose: Boolean = false,
     gentle: Boolean = false,
-    cueStyle: String = "sound",
     fullScreen: Boolean = false
   ) {
-    ensureChannels(ctx)
-    val builder = baseBuilder(ctx, if (gentle) gentleChannel(cueStyle) else CHANNEL_ALERTS)
-      .setContentTitle(title)
-      .setAutoCancel(true)
-      .setCategory(NotificationCompat.CATEGORY_REMINDER)
-      .setShowWhen(true)
-      .setWhen(System.currentTimeMillis())
-    if (gentle) {
-      builder.gentleCue(cueStyle)
-    } else {
-      builder.setPriority(NotificationCompat.PRIORITY_HIGH)
-        .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)
+    if (silent) {
+      postPersistent(ctx, state)
+      return
     }
-    if (silent) builder.setSilent(true)
-    if (dose) {
-      builder
-        .addAction(0, "Taken", reminderActionPendingIntent(ctx, TendIds.ACTION_DONE, id, title, body))
-        .addAction(0, "Snooze 15 min", reminderActionPendingIntent(ctx, TendIds.ACTION_SNOOZE, id, title, body))
-    } else {
-      builder
-        .addAction(0, "Done", reminderActionPendingIntent(ctx, TendIds.ACTION_DONE, id, title, body))
-        .addAction(0, "1 h", reminderActionPendingIntent(ctx, TendIds.ACTION_SNOOZE_HOUR, id, title, body))
-        .addAction(0, "Tomorrow", reminderActionPendingIntent(ctx, TendIds.ACTION_TOMORROW, id, title, body))
-    }
-    if (body.isNotBlank()) {
-      builder.setContentText(body).setStyle(NotificationCompat.BigTextStyle().bigText(body))
-    }
-    activityPendingIntent(ctx, TendIds.stableHash("open-reminder", id), TendIds.LAUNCH_REMINDER, id)
-      ?.let { builder.setContentIntent(it) }
-    if (fullScreen && dose && !silent) {
-      // A full-screen intent is what makes Android wake a sleeping screen. Doses only, and only
-      // while the screen is off: when the phone is in use, a pop-up is enough.
-      val pm = ctx.getSystemService(Context.POWER_SERVICE) as PowerManager
-      if (!pm.isInteractive && canUseFullScreenIntent(ctx)) {
-        activityPendingIntent(ctx, TendIds.RC_NAG, TendIds.LAUNCH_NAG, null)?.let { builder.setFullScreenIntent(it, true) }
-      }
-    }
-    nm(ctx).notify(TendIds.reminderNotificationId(id), builder.build())
+    postAlert(
+      ctx, state,
+      Alert(
+        ALERT_REMINDER,
+        if (gentle) gentleChannel(state.cueStyle) else CHANNEL_ALERTS,
+        cueStyle = state.cueStyle,
+        focusId = id,
+        fullScreen = fullScreen && dose
+      )
+    )
   }
 
+  /** [id] is done or moved: drop its alert look. Also clears cards older versions posted. */
   fun cancelReminder(ctx: Context, id: String) {
+    clearAlert { it.focusId == id }
     nm(ctx).cancel(TendIds.reminderNotificationId(id))
     nm(ctx).cancel(TendIds.preWarnNotificationId(id))
   }
 
-  /** "In 10 min: leave for the dentist." Gentle, and gone by the time the reminder itself arrives. */
-  @SuppressLint("MissingPermission")
+  /** "In 10 min: leave for the dentist." Gentle; the headline goes once the reminder is due. */
   fun postPreWarn(ctx: Context, state: NativeState, id: String, title: String, dueAt: Long) {
-    ensureChannels(ctx)
-    val minutes = ((dueAt - System.currentTimeMillis() + 30_000L) / 60_000L).coerceAtLeast(1L)
-    val builder = baseBuilder(ctx, gentleChannel(state.cueStyle))
-      .setContentTitle("In $minutes min: $title")
-      .setContentText("A heads-up so it doesn't arrive out of nowhere.")
-      .setAutoCancel(true)
-      .setCategory(NotificationCompat.CATEGORY_REMINDER)
-      .setShowWhen(false)
-      .setLocalOnly(true)
-      .setTimeoutAfter((dueAt - System.currentTimeMillis()).coerceAtLeast(60_000L))
-      .gentleCue(state.cueStyle)
-    activityPendingIntent(ctx, TendIds.stableHash("open-reminder", id), TendIds.LAUNCH_REMINDER, id)
-      ?.let { builder.setContentIntent(it) }
-    nm(ctx).notify(TendIds.preWarnNotificationId(id), builder.build())
+    val now = System.currentTimeMillis()
+    val minutes = ((dueAt - now + 30_000L) / 60_000L).coerceAtLeast(1L)
+    postAlert(
+      ctx, state,
+      Alert(
+        ALERT_PREWARN,
+        gentleChannel(state.cueStyle),
+        cueStyle = state.cueStyle,
+        headline = "In $minutes min: $title",
+        focusId = id,
+        until = dueAt.coerceAtLeast(now + 60_000L)
+      )
+    )
   }
 
   fun cancelPreWarn(ctx: Context, id: String) {
+    clearAlert { it.kind == ALERT_PREWARN && it.focusId == id }
     nm(ctx).cancel(TendIds.preWarnNotificationId(id))
   }
 
@@ -379,65 +475,35 @@ object TendNotifications {
 
   // ---- periodic chime -------------------------------------------------------------------------
 
-  /** The gentle "still waiting" cue about [items] (doses and timed reminders already due). Never wakes the screen. */
-  @SuppressLint("MissingPermission")
-  fun postChime(ctx: Context, state: NativeState, items: List<PendingItem>) {
-    ensureChannels(ctx)
-    val channel = gentleChannel(state.cueStyle)
-    val n = items.size
-    val title = countPhrase(n, "still waiting")
-    val text = items.take(3).joinToString(" · ") { it.title }
-    // What shows on a secure lock screen: just the count, never the titles.
-    val publicVersion = baseBuilder(ctx, channel)
-      .setContentTitle(title)
-      .setContentText("Open Tend to see them")
-      .build()
-    val builder = baseBuilder(ctx, channel)
-      .setContentTitle(title)
-      .setContentText(text)
-      .setAutoCancel(true)
-      .setOnlyAlertOnce(false)
-      .setCategory(NotificationCompat.CATEGORY_REMINDER)
-      .gentleCue(state.cueStyle)
-      .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-      .setPublicVersion(publicVersion)
-      .setLocalOnly(true)
-      .addAction(quietTodayAction(ctx))
-      // The next chime replaces it anyway; don't leave a stale one behind.
-      .setTimeoutAfter(state.chimeIntervalMs.coerceAtLeast(60_000L))
-    activityPendingIntent(ctx, TendIds.RC_NAG, TendIds.LAUNCH_NAG, null)?.let { builder.setContentIntent(it) }
-    nm(ctx).notify(TendIds.CHIME_NOTIFICATION_ID, builder.build())
+  /** The gentle "still waiting" cue: the grouped notification chimes. Never wakes the screen. */
+  fun postChime(ctx: Context, state: NativeState) {
+    postAlert(ctx, state, Alert(ALERT_CHIME, gentleChannel(state.cueStyle), cueStyle = state.cueStyle))
   }
 
   fun cancelChime(ctx: Context) {
+    clearAlert { it.kind == ALERT_CHIME }
+    // Left over from versions that posted the chime as its own card.
     nm(ctx).cancel(TendIds.CHIME_NOTIFICATION_ID)
   }
 
   // ---- unlock nudge fallback -------------------------------------------------------------------
 
-  @SuppressLint("MissingPermission")
+  /** The unlock screen couldn't open: the grouped notification peeks (or goes full screen) instead. */
   fun postNudge(ctx: Context, state: NativeState, fullScreen: Boolean) {
-    ensureChannels(ctx)
     val n = state.pending.size
-    val title = "Before you dive in — ${countPhrase(n, if (n == 1) "is waiting" else "are waiting")}"
-    val text = state.pending.take(3).joinToString(" · ") { it.title }
-    val pi = activityPendingIntent(ctx, TendIds.RC_NAG, TendIds.LAUNCH_NAG, null)
-    val builder = baseBuilder(ctx, CHANNEL_NUDGE)
-      .setContentTitle(title)
-      .setContentText(text)
-      .setAutoCancel(true)
-      .setCategory(NotificationCompat.CATEGORY_REMINDER)
-      .setPriority(NotificationCompat.PRIORITY_HIGH)
-      .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-      .setTimeoutAfter(10L * 60L * 1000L)
-    if (pi != null) {
-      builder.setContentIntent(pi)
-      if (fullScreen) builder.setFullScreenIntent(pi, true)
-    }
-    nm(ctx).notify(TendIds.NUDGE_NOTIFICATION_ID, builder.build())
+    postAlert(
+      ctx, state,
+      Alert(
+        ALERT_NUDGE,
+        CHANNEL_NUDGE,
+        headline = "Before you dive in — ${countPhrase(n, if (n == 1) "is waiting" else "are waiting")}",
+        fullScreen = fullScreen
+      )
+    )
   }
 
   fun cancelNudge(ctx: Context) {
+    clearAlert { it.kind == ALERT_NUDGE }
     nm(ctx).cancel(TendIds.NUDGE_NOTIFICATION_ID)
   }
 }

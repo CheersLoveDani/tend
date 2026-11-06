@@ -179,7 +179,8 @@ data class NativeState(
   /** The unlock listener only makes sense when there is something to nudge about. */
   val wantsUnlockService: Boolean get() = nagOnUnlock && pending.isNotEmpty()
 
-  val wantsPersistentNotification: Boolean get() = persistentNotification && pending.isNotEmpty()
+  /** The grouped notification is Tend's only one, so it's always up while something is waiting. */
+  val wantsPersistentNotification: Boolean get() = pending.isNotEmpty()
 
   fun isPaused(ms: Long = System.currentTimeMillis()): Boolean = pausedUntil > ms
 

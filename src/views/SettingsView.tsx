@@ -702,12 +702,6 @@ function NudgeSettings({ autostart, setAutostart }: { autostart: boolean | null;
               />
             </>
           )}
-          <Toggle
-            label="Keep a 'still to do' notification"
-            hint="A silent notification that stays while things are waiting. It comes back if swiped away."
-            checked={s.persistentNotification}
-            onChange={(v) => set({ persistentNotification: v })}
-          />
         </>
       )}
       {!isAndroid && autostart !== null && (
