@@ -327,9 +327,14 @@ fn put_f32s(out: &mut Vec<u8>, v: &[f32]) {
 }
 
 fn read_anchor_cache(path: &Path, key: u64) -> Option<Vec<Vec<f32>>> {
+    read_vec_cache(path, ANCHOR_MAGIC, key, ANCHORS.len())
+}
+
+/// Reads a fixed-size table of `n` embeddings written by [`write_vec_cache`]; `None` if
+/// missing, torn, or written for a different table / model (`magic`, `key`).
+pub(crate) fn read_vec_cache(path: &Path, magic: &[u8; 8], key: u64, n: usize) -> Option<Vec<Vec<f32>>> {
     let b = fs::read(path).ok()?;
-    let n = ANCHORS.len();
-    if b.len() != 16 + n * DIM * 4 || &b[..8] != ANCHOR_MAGIC || b[8..16] != key.to_le_bytes() {
+    if b.len() != 16 + n * DIM * 4 || &b[..8] != magic || b[8..16] != key.to_le_bytes() {
         return None;
     }
     Some(b[16..].chunks_exact(DIM * 4).map(f32s).collect())
@@ -337,8 +342,13 @@ fn read_anchor_cache(path: &Path, key: u64) -> Option<Vec<Vec<f32>>> {
 
 /// Best effort: a failed write only means recomputing next time.
 fn write_anchor_cache(path: &Path, key: u64, v: &[Vec<f32>]) {
+    write_vec_cache(path, ANCHOR_MAGIC, key, v)
+}
+
+/// Best effort, atomic (temp file + rename).
+pub(crate) fn write_vec_cache(path: &Path, magic: &[u8; 8], key: u64, v: &[Vec<f32>]) {
     let mut out = Vec::with_capacity(16 + v.len() * DIM * 4);
-    out.extend_from_slice(ANCHOR_MAGIC);
+    out.extend_from_slice(magic);
     out.extend_from_slice(&key.to_le_bytes());
     for e in v {
         put_f32s(&mut out, e);

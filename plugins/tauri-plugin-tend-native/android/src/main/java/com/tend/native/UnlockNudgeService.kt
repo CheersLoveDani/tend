@@ -88,6 +88,7 @@ class UnlockNudgeService : Service() {
       stopSelf()
       return START_NOT_STICKY
     }
+    TendNotifications.syncItems(this, state)
     if (!state.wantsUnlockService) {
       stopSelf()
       return START_NOT_STICKY

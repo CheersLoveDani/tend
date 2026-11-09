@@ -93,6 +93,8 @@ export function installMock() {
   const entries: any[] = [
     { id: "e1", kind: "mood", name: "Mood", value: 4, value2: null, unit: "", note: "", at: Date.now() - 3_600_000 },
     { id: "e2", kind: "measurement", name: "Blood pressure", value: 122, value2: 79, unit: "mmHg", note: "", at: Date.now() - 86_400_000 },
+    // ?moods: three months of check-ins with reasons, for the weather map.
+    ...(new URLSearchParams(location.search).has("moods") ? sampleMoods() : []),
   ];
   const doses = () =>
     meds
@@ -165,7 +167,12 @@ export function installMock() {
       case "med_history":
         return Array.from({ length: args.days }, (_, i) => ({ date: plusDays(i - args.days + 1), scheduled: 2, taken: i === args.days - 1 ? 0 : Math.random() < 0.85 ? 2 : 1, skipped: 0 }));
       case "save_entry": {
-        const e = { ...args.entry, id: args.entry.id || Math.random().toString(36).slice(2) };
+        const seen = new Set<string>();
+        const reasons = (args.entry.reasons ?? [])
+          .map((r: { label: string; emoji: string }) => ({ label: String(r.label ?? "").trim().replace(/\s+/g, " "), emoji: String(r.emoji ?? "").trim() }))
+          .filter((r: { label: string }) => r.label && !seen.has(r.label.toLowerCase()) && seen.add(r.label.toLowerCase()))
+          .slice(0, 12);
+        const e = { ...args.entry, id: args.entry.id || Math.random().toString(36).slice(2), reasons: reasons.length ? reasons : undefined };
         const at = entries.findIndex((x) => x.id === e.id);
         if (at >= 0) entries[at] = e;
         else entries.unshift(e);
@@ -249,6 +256,55 @@ export function installMock() {
         return [
           { steps: ["Put clothes in the basket", "Clear the sink", "Wipe the surfaces", "Mop the floor"], from: "Clean the bathroom", source: "library", similarity: 0.8 },
         ];
+      case "suggest_emoji": {
+        const t = String(args.text).toLowerCase();
+        const map: [RegExp, string][] = [
+          [/sleep|tired|slept|exhaust|nap|insomnia/, "😴"],
+          [/work|job|boss|office|meeting|deadline/, "💼"],
+          [/exam|test|essay|assignment/, "📝"],
+          [/school|study|class|homework|uni/, "📚"],
+          [/money|bill|rent|debt|pay/, "💸"],
+          [/friend/, "👯"],
+          [/family|mum|mom|dad|parent|sister|brother/, "👨‍👩‍👧"],
+          [/partner|love|boyfriend|girlfriend|husband|wife|date/, "❤️"],
+          [/dog|puppy/, "🐶"],
+          [/cat|kitten/, "🐱"],
+          [/gym|exercise|workout/, "🏋️"],
+          [/walk/, "🚶"],
+          [/run|jog/, "🏃"],
+          [/sun|warm/, "☀️"],
+          [/rain|wet/, "🌧️"],
+          [/nature|outside|park|tree/, "🌳"],
+          [/coffee|caffeine/, "☕"],
+          [/food|eat|meal|lunch|dinner/, "🍽️"],
+          [/alcohol|wine|beer|drink/, "🍷"],
+          [/sick|ill|flu|cold/, "🤒"],
+          [/pain|hurt|ache/, "🤕"],
+          [/period|cramp/, "🩸"],
+          [/med|pill|tablet/, "💊"],
+          [/therap/, "🛋️"],
+          [/anx|worr|panic|nervous/, "😰"],
+          [/stress|overwhelm|busy/, "😵‍💫"],
+          [/lonely|alone/, "🫂"],
+          [/music|song/, "🎵"],
+          [/game/, "🎮"],
+          [/book|read/, "📖"],
+          [/tv|film|movie|netflix/, "🎬"],
+          [/art|draw|paint/, "🎨"],
+          [/clean|tidy|chore|laundry/, "🧹"],
+          [/shop/, "🛍️"],
+          [/travel|holiday|trip|flight/, "✈️"],
+          [/commute|bus|train|traffic/, "🚌"],
+          [/weekend|party/, "🎉"],
+          [/news/, "📰"],
+          [/phone|social media|scroll/, "📱"],
+          [/meditat|yoga/, "🧘"],
+          [/birthday/, "🎂"],
+          [/garden|plant/, "🌱"],
+        ];
+        const hit = map.find(([re]) => re.test(t));
+        return new Promise((res) => setTimeout(() => res(hit ? hit[1] : "💭"), 150));
+      }
       case "model_status":
         return { present: false, size: 105_000_000 };
       case "sync_info":
@@ -289,4 +345,38 @@ export function installMock() {
         return null;
     }
   });
+}
+
+/** Deterministic sample check-ins over ~100 days (most days, some gaps), with reasons. */
+function sampleMoods() {
+  const R = {
+    sleep: { label: "Sleep", emoji: "😴" },
+    work: { label: "Work", emoji: "💼" },
+    friends: { label: "Friends", emoji: "👯" },
+    exercise: { label: "Exercise", emoji: "🏃" },
+    walk: { label: "Walked the dog", emoji: "🐶" },
+    money: { label: "Money", emoji: "💸" },
+    rest: { label: "Rest", emoji: "🛋️" },
+  };
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
+  const out: any[] = [];
+  for (let d = 100; d >= 1; d--) {
+    if (rnd() < 0.18) continue;
+    const at = new Date();
+    at.setDate(at.getDate() - d);
+    at.setHours(20, Math.floor(rnd() * 59), 0, 0);
+    const weekend = at.getDay() === 0 || at.getDay() === 6;
+    const reasons: { label: string; emoji: string }[] = [];
+    let v = 3 + (weekend ? 1 : 0) + (rnd() < 0.5 ? 0 : rnd() < 0.5 ? 1 : -1);
+    if (rnd() < 0.3) (reasons.push(R.sleep), (v -= 1));
+    if (!weekend && rnd() < 0.4) (reasons.push(R.work), (v -= rnd() < 0.6 ? 1 : 0));
+    if (rnd() < 0.3) (reasons.push(R.walk), (v += 1));
+    if (weekend && rnd() < 0.5) reasons.push(R.friends);
+    if (rnd() < 0.2) (reasons.push(R.exercise), (v += 1));
+    if (rnd() < 0.1) (reasons.push(R.money), (v -= 1));
+    if (rnd() < 0.15) reasons.push(R.rest);
+    out.push({ id: `m${d}`, kind: "mood", name: "Mood", value: Math.max(1, Math.min(5, v)), value2: null, unit: "", note: "", reasons, at: at.getTime() });
+  }
+  return out;
 }

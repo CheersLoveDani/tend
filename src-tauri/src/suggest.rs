@@ -128,6 +128,19 @@ pub fn steps(db: &Mutex<Db>, dir: &Path, title: String) -> Result<Vec<tend_llm::
     tend_llm::suggest_steps(dir, &title, &history, 3)
 }
 
+/// Emoji for a mood-check-in reason. Never fails on a busy model: falls back to keywords.
+pub fn emoji(dir: &Path, text: &str, use_model: bool) -> String {
+    if use_model {
+        if let Ok(_guard) = RUNNING.try_lock() {
+            match tend_llm::suggest_emoji(dir, text) {
+                Ok(p) => return p.emoji,
+                Err(e) => log::warn!("emoji suggestion failed: {e:#}"),
+            }
+        }
+    }
+    tend_llm::emoji_keyword(text)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -34,7 +34,14 @@ export function todaysWeather(entries: Entry[]): Weather | null {
 export function moodEntry(entries: Entry[], v: Weather, at = Date.now()): Entry {
   const day = ymd(new Date(at));
   const existing = entries.find((e) => e.kind === "mood" && ymd(new Date(e.at)) === day);
-  return { id: existing?.id ?? "", kind: "mood", name: "Mood", value: v, value2: null, unit: "", note: "", at };
+  // A change of mind keeps what was said about why.
+  return { id: existing?.id ?? "", kind: "mood", name: "Mood", value: v, value2: null, unit: "", note: existing?.note ?? "", reasons: existing?.reasons ?? [], at };
+}
+
+/** Today's check-in entry (the latest), if any. */
+export function todaysMoodEntry(entries: Entry[]): Entry | null {
+  const t = today();
+  return entries.filter((e) => e.kind === "mood" && ymd(new Date(e.at)) === t).sort((a, b) => b.at - a.at)[0] ?? null;
 }
 
 /** Rainy and sunny days over the last month (a day counts by its last check-in). */
@@ -135,6 +142,14 @@ export function pickQuote(w: Weather): Quote {
   }
   return { text, by };
 }
+
+/** Opens the weather map (MoodInsights) from anywhere. */
+export const OPEN_INSIGHTS_EVENT = "tend:open-insights";
+export const openInsights = () => window.dispatchEvent(new Event(OPEN_INSIGHTS_EVENT));
+
+/** Opens the "what's behind it" sheet for today's check-in (from the mood notification). */
+export const OPEN_MOOD_WHY_EVENT = "tend:open-mood-why";
+export const openMoodWhy = () => window.dispatchEvent(new Event(OPEN_MOOD_WHY_EVENT));
 
 /** Logged from anywhere: the shell takes you to the garden to watch the tree respond. */
 export const WEATHER_EVENT = "tend:weather";

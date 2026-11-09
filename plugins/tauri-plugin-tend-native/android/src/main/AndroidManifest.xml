@@ -18,6 +18,8 @@
     <!-- Steps and workouts from Health Connect, read while Tend is open. -->
     <uses-permission android:name="android.permission.health.READ_STEPS" />
     <uses-permission android:name="android.permission.health.READ_EXERCISE" />
+    <!-- The phone's own step counter, so steps count without a fitness app having synced. -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
     <!-- Today's events from the phone's calendars (Google Calendar included), read-only. -->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
 

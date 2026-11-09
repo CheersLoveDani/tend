@@ -11,6 +11,10 @@ export interface FitStatus {
   status: "available" | "update" | "unavailable" | "unsupported";
   steps: boolean;
   workouts: boolean;
+  /** The phone's own step counter can be read (sensor present and "physical activity" allowed). */
+  phoneSteps?: boolean;
+  /** The phone has a step counter at all. */
+  phoneSensor?: boolean;
 }
 
 export interface FitDay {
@@ -152,6 +156,8 @@ export const fitness = {
   status: () => (fitSupported() ? invoke<FitStatus>(`${P}health_status`) : Promise.resolve(unsupported)),
   /** Opens Health Connect's permission screen, or the store if it needs installing or updating. */
   connect: () => invoke<FitStatus>(`${P}health_request`),
+  /** Lets Tend count steps with the phone's own sensor, so they don't wait for a fitness app to sync. */
+  allowPhoneSteps: () => invoke<FitStatus>(`${P}request_permission`, { kind: "activity" }),
   read: (days = 7) => invoke<{ days: FitDay[]; workouts: FitWorkout[] }>(`${P}health_read`, { days }),
   award: (s: Settings, days: FitDay[], workouts: FitWorkout[]) =>
     invoke<FitResult>("fit_award", {

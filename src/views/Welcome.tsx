@@ -4,6 +4,7 @@ import { useStore } from "../lib/store";
 import { api, isAndroid } from "../lib/api";
 import { native } from "../lib/native";
 import { NUDGE_PRESETS, PRESET_TEXT } from "../lib/settings";
+import { markJustOnboarded, seenOnInstall } from "../lib/features";
 import { sounds } from "../lib/sound";
 import { appVersion } from "../lib/updater";
 import { Tree } from "../components/Tree";
@@ -15,7 +16,7 @@ type Preset = keyof typeof NUDGE_PRESETS;
 const onMobileData = () => (navigator as Navigator & { connection?: { type?: string } }).connection?.type === "cellular";
 
 export function Welcome() {
-  const { updateSettings, toast } = useStore();
+  const { settings, updateSettings, toast } = useStore();
   const [page, setPage] = useState(0);
   const [preset, setPreset] = useState<Preset>("gentle");
   const [helper, setHelper] = useState(false);
@@ -36,14 +37,17 @@ export function Welcome() {
     if (isAndroid) await native.request("notifications").catch(() => null);
     const version = await appVersion().catch(() => null);
     const consent = skipped ? null : helper;
-    updateSettings({
+    const patch = {
       ...NUDGE_PRESETS[skipped ? "gentle" : preset],
       onboarded: true,
       // A new install has nothing to catch up on, so the "what changed" note starts from here.
       lastSeenVersion: version,
       modelConsent: consent,
       useModel: consent !== false,
-    });
+    };
+    // What's on by default counts as seen. Anything needing a permission is offered on a later visit.
+    markJustOnboarded();
+    updateSettings({ ...patch, seenFeatures: seenOnInstall({ ...settings, ...patch }) });
     if (consent) {
       if (onMobileData()) toast("You're on mobile data, so the helper waits. Download it from Settings when you're on Wi-Fi.");
       else

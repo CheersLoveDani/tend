@@ -133,6 +133,34 @@ pub struct Entry {
     #[serde(default)]
     pub note: String,
     pub at: i64,
+    /// Why (mood check-ins): short labels with an emoji, e.g. Sleep 😴.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reasons: Vec<MoodReason>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct MoodReason {
+    pub label: String,
+    #[serde(default)]
+    pub emoji: String,
+}
+
+const MAX_REASONS: usize = 12;
+
+/// Trims labels and emoji, drops empty labels, dedupes by lowercase label (first wins),
+/// keeps at most `MAX_REASONS`.
+fn clean_reasons(reasons: Vec<MoodReason>) -> Vec<MoodReason> {
+    let mut seen = std::collections::HashSet::new();
+    reasons
+        .into_iter()
+        .map(|r| MoodReason {
+            label: r.label.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(40).collect(),
+            emoji: r.emoji.trim().chars().take(16).collect(),
+        })
+        .filter(|r| !r.label.is_empty() && seen.insert(r.label.to_lowercase()))
+        .take(MAX_REASONS)
+        .collect()
 }
 
 /// A dose as the app shows it: scheduled (from a med's schedule) or logged.
@@ -727,6 +755,7 @@ pub fn save_entry(db: &Db, mut e: Entry) -> Result<RewardEvent> {
     if e.name.is_empty() {
         return Err(anyhow!("An entry needs a name"));
     }
+    e.reasons = clean_reasons(std::mem::take(&mut e.reasons));
     if e.id.is_empty() {
         e.id = uuid::Uuid::new_v4().to_string();
     }
@@ -799,7 +828,8 @@ pub fn import(db: &Db, data: HealthExport) -> Result<(usize, usize, usize)> {
             counts.1 += 1;
         }
     }
-    for e in data.entries {
+    for mut e in data.entries {
+        e.reasons = clean_reasons(std::mem::take(&mut e.reasons));
         if !e.id.is_empty() && e.at > 0 {
             save_entry_item(db, &e, false)?;
             counts.2 += 1;
@@ -957,6 +987,7 @@ mod tests {
             unit: "mmHg".into(),
             note: String::new(),
             at: 0,
+            reasons: vec![],
         };
         let ev = save_entry(&db, e).unwrap();
         assert_eq!(ev.gained, ENTRY_REWARD);
@@ -982,5 +1013,41 @@ mod tests {
         c.apply_remote(&[], &a.ledger_since(0).unwrap(), &a.items_since(0).unwrap()).unwrap();
         assert_eq!(today_slots(&c).unwrap()[0].status, "taken");
         assert_eq!(c.apply_remote(&[], &a.ledger_since(0).unwrap(), &a.items_since(0).unwrap()).unwrap(), 0);
+    }
+
+    #[test]
+    fn mood_reasons_clean_and_round_trip() {
+        let r = |l: &str, e: &str| MoodReason { label: l.into(), emoji: e.into() };
+        let a = db();
+        let mut reasons = vec![r("  Sleep ", "😴"), r("sleep", "💤"), r("   ", "x"), r("Work  stress", " 💼 ")];
+        reasons.extend((0..20).map(|i| r(&format!("R{i}"), "💭")));
+        let e = Entry {
+            id: String::new(),
+            kind: "mood".into(),
+            name: "Mood".into(),
+            value: 4.0,
+            value2: None,
+            unit: String::new(),
+            note: String::new(),
+            at: 0,
+            reasons,
+        };
+        save_entry(&a, e).unwrap();
+        let saved = entries(&a, "").unwrap().remove(0);
+        assert_eq!(saved.reasons.len(), MAX_REASONS);
+        assert_eq!(saved.reasons[0], r("Sleep", "😴"));
+        assert_eq!(saved.reasons[1], r("Work stress", "💼"));
+        // No reasons -> field omitted from JSON, and old JSON without it still parses.
+        let plain: Entry = serde_json::from_str(r#"{"id":"x","kind":"mood","name":"Mood","value":3,"at":1}"#).unwrap();
+        assert!(plain.reasons.is_empty());
+        assert!(!serde_json::to_string(&plain).unwrap().contains("reasons"));
+        // Export/import and sync carry them.
+        let json = serde_json::to_string(&export(&a).unwrap()).unwrap();
+        let b = db();
+        import(&b, serde_json::from_str(&json).unwrap()).unwrap();
+        assert_eq!(entries(&b, "").unwrap()[0].reasons, saved.reasons);
+        let c = db();
+        c.apply_remote(&[], &a.ledger_since(0).unwrap(), &a.items_since(0).unwrap()).unwrap();
+        assert_eq!(entries(&c, "").unwrap()[0].reasons, saved.reasons);
     }
 }

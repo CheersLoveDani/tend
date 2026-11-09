@@ -7,6 +7,8 @@ import { applyActions, native, pushNativeState } from "./native";
 import { dayName, today, tomorrow } from "./dates";
 import { autoBackup } from "./backup";
 import { earnedText, fitness, fitSupported, type FitData } from "./fitness";
+import { holdBackNewFeatures } from "./features";
+import { openMoodWhy } from "./weather";
 
 export type Toast = { id: number; text: string; undo?: () => void };
 
@@ -175,7 +177,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     (async () => {
       const stored = await api.getSettings().catch(() => ({}));
-      const merged = { ...defaultSettings, ...stored } as Settings;
+      // An install from before a feature existed is asked about it (FeatureOffer) rather than having it switched on.
+      const merged = { ...defaultSettings, ...holdBackNewFeatures(stored), ...stored } as Settings;
       setSettings(merged);
       settingsRef.current = merged;
       configureSound({ enabled: merged.sound, volume: merged.volume, muted: merged.mutedSounds });
@@ -184,12 +187,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       void syncFit(true);
       const launch = await native.takeLaunchAction().catch(() => ({ action: null }));
       if (launch.action === "nag" && !isPaused(merged)) setNag(true);
+      if (launch.action === "moodWhy") openMoodWhy();
       void api.syncNow().catch(() => null);
       void autoBackup();
     })();
     const unlisten = listen("data-changed", () => void refresh());
+    // The desktop mood pop-up saved a new regular reason.
+    const unlistenSettings = listen("settings-changed", async () => {
+      const stored = await api.getSettings().catch(() => null);
+      if (!stored) return;
+      const next = { ...settingsRef.current, moodReasonOptions: (stored as Partial<Settings>).moodReasonOptions ?? settingsRef.current.moodReasonOptions };
+      settingsRef.current = next;
+      setSettings(next);
+    });
     const actionSub = native.onAction((a) => {
       if (a.action === "nag" && !isPaused(settingsRef.current)) setNag(true);
+      if (a.action === "moodWhy") openMoodWhy();
       void refresh();
     });
     const pendingSub = native.onPendingActions(() => void applyPending());
@@ -211,6 +224,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     mq.addEventListener("change", onMq);
     return () => {
       void unlisten.then((f) => f());
+      void unlistenSettings.then((f) => f());
       void actionSub.then((s) => s?.unregister());
       void pendingSub.then((s) => s?.unregister());
       document.removeEventListener("visibilitychange", onVisible);

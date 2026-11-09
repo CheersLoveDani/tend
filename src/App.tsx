@@ -12,12 +12,15 @@ import { MedEditor } from "./components/MedEditor";
 import { MedDetail } from "./components/MedDetail";
 import { EntrySheet } from "./components/EntrySheet";
 import { Welcome } from "./views/Welcome";
-import { WhatsNew } from "./components/WhatsNew";
+import { WhatsNew, useWhatsNewNote } from "./components/WhatsNew";
+import { FeatureOffer } from "./components/FeatureOffer";
+import { MoodInsights } from "./views/MoodInsights";
+import { OPEN_SETTINGS_EVENT } from "./lib/features";
 import { Editor } from "./components/Editor";
 import { RewardLayer } from "./components/RewardLayer";
 import { Tree } from "./components/Tree";
 import { Sky } from "./components/Sky";
-import { pickQuote, todaysWeather, WEATHER_EVENT, type Weather } from "./lib/weather";
+import { OPEN_INSIGHTS_EVENT, OPEN_MOOD_WHY_EVENT, pickQuote, todaysWeather, WEATHER_EVENT, type Weather } from "./lib/weather";
 import type { WeatherMoment } from "./views/Garden";
 import { Calendar, Gear, Pill, Plus, Seed, Sprout, Sun } from "./components/Icons";
 import { sounds } from "./lib/sound";
@@ -28,6 +31,7 @@ import { onBackButtonPress } from "@tauri-apps/api/app";
 import { QuickAdd } from "./views/QuickAdd";
 import { MoodPop } from "./views/MoodPop";
 import { StormyDay } from "./components/StormyDay";
+import { WeatherCheckIn } from "./components/WeatherCheckIn";
 import { closeTopOverlay } from "./lib/backStack";
 
 type Tab = "today" | "meds" | "upcoming" | "garden" | "settings";
@@ -160,6 +164,36 @@ function Shell() {
     return () => window.removeEventListener(WEATHER_EVENT, on);
   }, []);
   const offerShown = !!offer && settings.onboarded && !sheetOpen && !store.nag;
+  const whatsNew = useWhatsNewNote();
+
+  // The weather map, opened from the Garden or a mood check-in.
+  const [insights, setInsights] = useState(false);
+  useEffect(() => {
+    const on = () => setInsights(true);
+    window.addEventListener(OPEN_INSIGHTS_EVENT, on);
+    return () => window.removeEventListener(OPEN_INSIGHTS_EVENT, on);
+  }, []);
+
+  // "Add what's behind it" on the mood notification.
+  const [moodWhy, setMoodWhy] = useState(false);
+  useEffect(() => {
+    const on = () => setMoodWhy(true);
+    window.addEventListener(OPEN_MOOD_WHY_EVENT, on);
+    return () => window.removeEventListener(OPEN_MOOD_WHY_EVENT, on);
+  }, []);
+
+  // "Set up" in the new-feature pop-up: Settings, scrolled to where that feature lives.
+  const openSettingsAt = useRef<(section: string) => void>(() => {});
+  openSettingsAt.current = (section) => {
+    setInsights(false);
+    setTab("settings");
+    window.setTimeout(() => document.getElementById(`settings-${section}`)?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" }), 350);
+  };
+  useEffect(() => {
+    const on = (e: Event) => openSettingsAt.current((e as CustomEvent<string>).detail);
+    window.addEventListener(OPEN_SETTINGS_EVENT, on);
+    return () => window.removeEventListener(OPEN_SETTINGS_EVENT, on);
+  }, []);
 
   // Back closes whatever is on top, then retraces tabs, then goes home. Only on Today with
   // nothing open does it leave the app (to the background, the way Android does).
@@ -169,6 +203,8 @@ function Shell() {
     if (closeTopOverlay()) return;
     if (store.nag) return store.setNag(false);
     if (offerShown) return dismissOffer();
+    if (insights) return setInsights(false);
+    if (moodWhy) return setMoodWhy(false);
     if (entry) return setEntry(null);
     if (medEditing) return setMedEditing(null);
     if (editing) return setEditing(null);
@@ -318,6 +354,8 @@ function Shell() {
         )}
       </AnimatePresence>
       <AnimatePresence>{entry && <EntrySheet key="entry" kind={entry.kind} initial={entry.initial} onClose={() => setEntry(null)} />}</AnimatePresence>
+      <AnimatePresence>{insights && <MoodInsights key="insights" onClose={() => setInsights(false)} />}</AnimatePresence>
+      <AnimatePresence>{moodWhy && <MoodWhySheet key="mood-why" onClose={() => setMoodWhy(false)} />}</AnimatePresence>
       <AnimatePresence>{store.nag && <Nag key="nag" />}</AnimatePresence>
       <AnimatePresence>{!settings.onboarded && <Welcome key="welcome" />}</AnimatePresence>
       {!sheetOpen && !offerShown && <WhatsNew />}
@@ -325,10 +363,43 @@ function Shell() {
       <AnimatePresence>
         {offerShown && <UpdateOffer key="update" version={offer!} onClose={dismissOffer} />}
       </AnimatePresence>
+      <FeatureOffer blocked={sheetOpen || insights || moodWhy || offerShown || whatsNew.waiting} />
       <StormyDay />
       <Toasts />
       <RewardLayer />
     </div>
+  );
+}
+
+/** Today's check-in with "what's behind it" open, from the mood notification. */
+function MoodWhySheet({ onClose }: { onClose: () => void }) {
+  const { reduceMotion } = useStore();
+  return (
+    <motion.div className="sheet-scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
+      <motion.div
+        className="sheet mood-why-sheet"
+        role="dialog"
+        aria-labelledby="mood-why-title"
+        initial={reduceMotion ? { opacity: 0 } : { y: 40, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={reduceMotion ? { opacity: 0 } : { y: 40, opacity: 0 }}
+        transition={{ type: "spring", stiffness: 330, damping: 30 }}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.key === "Escape" && onClose()}
+      >
+        <div className="sheet-head">
+          <h2 id="mood-why-title">The weather in you today</h2>
+        </div>
+        <div className="sheet-body">
+          <WeatherCheckIn compact askWhy />
+        </div>
+        <div className="sheet-foot">
+          <button className="btn btn-primary btn-wide" onClick={onClose}>
+            Done
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
   );
 }
 

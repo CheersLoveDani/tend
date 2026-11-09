@@ -9,6 +9,7 @@
     "notification:default",
     "tend-native:default",
     "core:window:allow-show",
-    "core:window:allow-hide"
+    "core:window:allow-hide",
+    "core:window:allow-set-size"
   ]
 }

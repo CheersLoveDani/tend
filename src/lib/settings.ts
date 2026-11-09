@@ -1,3 +1,5 @@
+import type { MoodReason } from "./api";
+
 export interface Settings {
   sound: boolean;
   volume: number;
@@ -53,7 +55,27 @@ export interface Settings {
   lastSeenVersion: string | null;
   /** The user has said yes (or no) to downloading the on-device model. null = not asked yet. */
   modelConsent: boolean | null;
+  /** After a weather check-in, ask what's behind it (chips + your own words). */
+  moodReasons: boolean;
+  /** The reasons offered as one-tap chips, in order. */
+  moodReasonOptions: MoodReason[];
+  /** Features (ids from features.ts) already offered in the "something new" pop-up. */
+  seenFeatures: string[];
 }
+
+/** The reasons a fresh install starts with. Editable in Settings → Your day. */
+export const DEFAULT_MOOD_REASONS: MoodReason[] = [
+  { label: "Sleep", emoji: "😴" },
+  { label: "Work", emoji: "💼" },
+  { label: "Friends", emoji: "👯" },
+  { label: "Family", emoji: "🏡" },
+  { label: "Health", emoji: "🩺" },
+  { label: "Exercise", emoji: "🏃" },
+  { label: "Food", emoji: "🍽️" },
+  { label: "Weather", emoji: "🌦️" },
+  { label: "Money", emoji: "💸" },
+  { label: "Rest", emoji: "🛋️" },
+];
 
 export const defaultSettings: Settings = {
   sound: true,
@@ -83,12 +105,15 @@ export const defaultSettings: Settings = {
   preWarnMinutes: 10,
   cueStyle: "sound",
   mutedSounds: ["tap"],
-  calendarEnabled: false,
+  calendarEnabled: false, // needs calendar access: offered by the "something new" pop-up
   calendarIds: [],
   stormyLightDay: true,
-  moodCheckIn: null,
+  moodCheckIn: "20:00",
   lastSeenVersion: null,
   modelConsent: null,
+  moodReasons: true,
+  moodReasonOptions: DEFAULT_MOOD_REASONS,
+  seenFeatures: [],
 };
 
 /** Quiet / Gentle / Persistent: what onboarding and Settings offer as one-tap starting points. */

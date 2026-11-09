@@ -20,6 +20,7 @@
 mod anchors;
 mod download;
 mod embed;
+mod emoji;
 mod heuristic;
 #[cfg(feature = "large")]
 mod llm;
@@ -31,6 +32,7 @@ use std::path::Path;
 use std::time::Instant;
 
 pub use download::{download_model, model_present, model_size_hint};
+pub use emoji::{DEFAULT_EMOJI, EmojiPick, emoji_keyword};
 pub use heuristic::heuristic_effort;
 
 /// The old SmolLM2-360M scorer (~386 MB, ~1.3 s per call). Same contract as the crate
@@ -163,6 +165,25 @@ pub fn suggest_all(
         millis: start.elapsed().as_millis() as u64,
     };
     Ok((s, ideas))
+}
+
+/// Picks an emoji for a short mood-check-in reason ("Sleep" -> 😴). With the model, the
+/// nearest phrase of a built-in labelled table (its embeddings cached in `dir`, so a call
+/// normally embeds only `text`); below a similarity threshold, or without the model, word
+/// overlap with that table and a synonym list; failing that, [`DEFAULT_EMOJI`].
+pub fn suggest_emoji(dir: &Path, text: &str) -> anyhow::Result<EmojiPick> {
+    let text = text.trim();
+    if text.is_empty() {
+        return Ok(EmojiPick { emoji: DEFAULT_EMOJI.into(), source: "default", similarity: 0.0 });
+    }
+    if model_present(dir) {
+        let (sim, emoji) = emoji::nearest(&mini_spec(dir), text)?;
+        if sim >= emoji::MIN_SIM {
+            return Ok(EmojiPick { emoji: emoji.into(), source: "llm", similarity: sim });
+        }
+    }
+    Ok(emoji::keyword_pick(text)
+        .unwrap_or(EmojiPick { emoji: DEFAULT_EMOJI.into(), source: "default", similarity: 0.0 }))
 }
 
 /// Fills the anchor embedding cache. Best effort (it is rebuilt on demand anyway).

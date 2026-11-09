@@ -23,12 +23,24 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
   }
 }
 
-/** Time for the gentle "still waiting" chime, or the unlock listener's check-up. */
+/** Time for the gentle "still waiting" chime, the unlock listener's check-up, or a step reading. */
 class ChimeReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
     when (intent.action) {
       TendIds.ACTION_CHIME -> TendEngine.onChime(context)
       TendIds.ACTION_WATCHDOG -> TendEngine.onWatchdog(context)
+      TendIds.ACTION_STEP_SAMPLE -> {
+        // The sensor answers asynchronously: keep the receiver alive while it does.
+        val done = goAsync()
+        val ctx = context.applicationContext
+        Thread {
+          try {
+            TendSteps.sample(ctx)
+          } finally {
+            done.finish()
+          }
+        }.start()
+      }
     }
   }
 }
@@ -47,6 +59,10 @@ class ReminderActionReceiver : BroadcastReceiver() {
     when (intent.action) {
       TendIds.ACTION_QUIET_TODAY -> {
         TendEngine.quietToday(context)
+        return
+      }
+      TendIds.ACTION_ITEM_DISMISSED -> {
+        intent.getStringExtra(TendIds.EXTRA_REMINDER_ID)?.let { TendNotifications.onItemDismissed(context.applicationContext, it) }
         return
       }
       TendIds.ACTION_MOOD -> {

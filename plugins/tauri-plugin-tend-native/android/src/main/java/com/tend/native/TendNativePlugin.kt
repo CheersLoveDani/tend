@@ -68,13 +68,15 @@ class CalendarEventsArgs {
 @TauriPlugin(
   permissions = [
     Permission(strings = [Manifest.permission.POST_NOTIFICATIONS], alias = TendNativePlugin.ALIAS_NOTIFICATIONS),
-    Permission(strings = [Manifest.permission.READ_CALENDAR], alias = TendNativePlugin.ALIAS_CALENDAR)
+    Permission(strings = [Manifest.permission.READ_CALENDAR], alias = TendNativePlugin.ALIAS_CALENDAR),
+    Permission(strings = [Manifest.permission.ACTIVITY_RECOGNITION], alias = TendNativePlugin.ALIAS_ACTIVITY)
   ]
 )
 class TendNativePlugin(private val activity: Activity) : Plugin(activity) {
 
   companion object {
     const val ALIAS_NOTIFICATIONS = "notifications"
+    const val ALIAS_ACTIVITY = "activity"
     const val ALIAS_CALENDAR = "calendar"
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -329,13 +331,33 @@ class TendNativePlugin(private val activity: Activity) : Plugin(activity) {
           }
         }
       }
-      else -> health(invoke) { TendHealth.statusJson(activity) }
+      // No Health Connect: the phone's own step counter can still count.
+      else -> askForPhoneSteps(invoke)
     }
   }
 
   @ActivityCallback
   private fun onHealthResult(invoke: Invoke, @Suppress("UNUSED_PARAMETER") result: ActivityResult) {
-    // Re-check rather than trust the result: people can grant one and not the other.
+    // Then the phone's own counter, so steps don't wait for a fitness app to sync.
+    askForPhoneSteps(invoke)
+  }
+
+  /** "Physical activity" (Android 10+) lets Tend read the phone's step counter in the background. */
+  private fun askForPhoneSteps(invoke: Invoke) {
+    if (TendSteps.hasSensor(activity) && !TendSteps.permitted(activity) &&
+      Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+      getPermissionState(ALIAS_ACTIVITY) != PermissionState.DENIED
+    ) {
+      requestPermissionForAlias(ALIAS_ACTIVITY, invoke, "onActivityPermission")
+    } else {
+      onActivityPermission(invoke)
+    }
+  }
+
+  @PermissionCallback
+  private fun onActivityPermission(invoke: Invoke) {
+    TendSteps.schedule(activity.applicationContext)
+    // Re-check rather than trust the results: people can grant one and not the other.
     health(invoke) { TendHealth.statusJson(activity) }
   }
 
@@ -347,7 +369,8 @@ class TendNativePlugin(private val activity: Activity) : Plugin(activity) {
       7
     }
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P || TendHealth.status(activity) != "available") {
-      invoke.reject("Health Connect isn't available")
+      if (TendSteps.ready(activity)) health(invoke) { TendHealth.readPhoneOnly(activity, days) }
+      else invoke.reject("Health Connect isn't available")
       return
     }
     health(invoke) { TendHealth.read(activity, days) }
@@ -551,6 +574,8 @@ class TendNativePlugin(private val activity: Activity) : Plugin(activity) {
           resolvePermissions(invoke)
         }
       }
+      // The phone's own step counter. Resolves with the steps status rather than the permission list.
+      "activity" -> askForPhoneSteps(invoke)
       else -> invoke.reject("unknown permission kind: $kind")
     }
   }

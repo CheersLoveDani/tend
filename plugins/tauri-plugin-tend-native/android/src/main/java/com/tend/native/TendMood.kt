@@ -167,8 +167,18 @@ object TendMood {
       .setShowWhen(false)
       .setLocalOnly(true)
       .setPriority(NotificationCompat.PRIORITY_LOW)
-      .setTimeoutAfter(8_000L)
-    TendNotifications.activityPendingIntent(ctx, TendIds.RC_MOOD_OPEN, TendIds.LAUNCH_OPEN, null)?.let { builder.setContentIntent(it) }
+    if (state.moodReasons) {
+      // Room to tap "what's behind it", which opens Tend on the reasons.
+      val why = TendNotifications.activityPendingIntent(ctx, TendIds.RC_MOOD_WHY, TendIds.LAUNCH_MOOD_WHY, null)
+      builder.setTimeoutAfter(10L * 60L * 1000L)
+      why?.let {
+        builder.setContentIntent(it)
+        builder.addAction(0, "Add what's behind it", it)
+      }
+    } else {
+      builder.setTimeoutAfter(8_000L)
+      TendNotifications.activityPendingIntent(ctx, TendIds.RC_MOOD_OPEN, TendIds.LAUNCH_OPEN, null)?.let { builder.setContentIntent(it) }
+    }
     nm(ctx).notify(TendIds.MOOD_DONE_NOTIFICATION_ID, builder.build())
     TendNativePlugin.notifyPendingActions(ctx)
   }

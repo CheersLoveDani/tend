@@ -9,6 +9,10 @@ object TendIds {
   const val MOOD_NOTIFICATION_ID = 0x7E4D04
   const val MOOD_DONE_NOTIFICATION_ID = 0x7E4D05
 
+  /** Each waiting item's own card in the group is posted under this id with tag `ITEM_TAG + item id`. */
+  const val ITEM_NOTIFICATION_ID = 0x7E4D06
+  const val ITEM_TAG = "tend_item:"
+
   const val EXTRA_ACTION = "tend_action"
   const val EXTRA_REMINDER_ID = "tend_reminder_id"
   const val EXTRA_TITLE = "tend_title"
@@ -25,6 +29,7 @@ object TendIds {
   const val LAUNCH_NAG = "nag"
   const val LAUNCH_OPEN = "open"
   const val LAUNCH_REMINDER = "reminder"
+  const val LAUNCH_MOOD_WHY = "moodWhy"
 
   const val ACTION_ALARM = "com.tend.native.action.ALARM"
   const val ACTION_CHIME = "com.tend.native.action.CHIME"
@@ -41,6 +46,8 @@ object TendIds {
   const val ACTION_MOOD_TIME = "com.tend.native.action.MOOD_TIME"
   const val ACTION_MOOD = "com.tend.native.action.MOOD"
   const val ACTION_PERSISTENT_DISMISSED = "com.tend.native.action.PERSISTENT_DISMISSED"
+  const val ACTION_STEP_SAMPLE = "com.tend.native.action.STEP_SAMPLE"
+  const val ACTION_ITEM_DISMISSED = "com.tend.native.action.ITEM_DISMISSED"
 
   const val RC_OPEN = 0x7E4D10
   const val RC_NAG = 0x7E4D11
@@ -53,6 +60,8 @@ object TendIds {
   const val RC_MOOD_TIME = 0x7E4D18
   const val RC_WATCHDOG = 0x7E4D1A
   const val RC_MOOD_OPEN = 0x7E4D19
+  const val RC_MOOD_WHY = 0x7E4D1B
+  const val RC_STEP_SAMPLE = 0x7E4D1C
 
   const val SNOOZE_MS = 15L * 60L * 1000L
   const val HOUR_MS = 60L * 60L * 1000L

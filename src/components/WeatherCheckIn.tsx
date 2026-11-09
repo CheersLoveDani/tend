@@ -1,23 +1,62 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { useStore } from "../lib/store";
-import { WEATHERS, WEATHER_EVENT, moodEntry, todaysWeather, type Weather } from "../lib/weather";
+import { WEATHERS, WEATHER_EVENT, moodEntry, todaysMoodEntry, todaysWeather, type Weather } from "../lib/weather";
 import { sounds } from "../lib/sound";
+import { ReasonsPanel } from "./MoodReasons";
 
-/** "What's the weather like in you?" Five honest answers, all of them good for the tree. */
-export function WeatherCheckIn({ compact, onPicked }: { compact?: boolean; onPicked?: (w: Weather) => void }) {
+/**
+ * "What's the weather like in you?" Five honest answers, all of them good for the tree. Once one is
+ * picked, "what's behind it?" slides in underneath (when that's switched on). [askWhy]: show it
+ * straight away for today's check-in (the sheet opened from the mood notification).
+ */
+export function WeatherCheckIn({ compact, onPicked, askWhy }: { compact?: boolean; onPicked?: (w: Weather) => void; askWhy?: boolean }) {
   const store = useStore();
-  const current = todaysWeather(store.snap?.entries ?? []);
+  const entries = store.snap?.entries ?? [];
+  const current = todaysWeather(entries);
+  const entry = todaysMoodEntry(entries);
+  const [asked, setAsked] = useState(!!askWhy);
+  const { settings, updateSettings, reduceMotion } = store;
 
   const pick = async (v: Weather) => {
-    const saved = await store.saveEntry(moodEntry(store.snap?.entries ?? [], v));
+    const saved = await store.saveEntry(moodEntry(entries, v));
     if (!saved) return;
+    setAsked(true);
     onPicked?.(v);
     // The Garden answers this with its tree; a stormy one may offer a light day (StormyDay).
     window.dispatchEvent(new CustomEvent(WEATHER_EVENT, { detail: v }));
   };
 
-  return <WeatherFaces value={current} compact={compact} reduceMotion={store.reduceMotion} onPick={(v) => void pick(v)} />;
+  const showWhy = asked && settings.moodReasons && !!entry;
+  return (
+    <>
+      <WeatherFaces value={current} compact={compact} reduceMotion={reduceMotion} onPick={(v) => void pick(v)} />
+      <AnimatePresence initial={false}>
+        {showWhy && (
+          <motion.div
+            key="why"
+            className="reasons-wrap"
+            initial={reduceMotion ? { opacity: 0 } : { opacity: 0, height: 0, y: -8 }}
+            animate={{ opacity: 1, height: "auto", y: 0 }}
+            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, height: 0 }}
+            transition={reduceMotion ? { duration: 0.15 } : { height: { type: "spring", stiffness: 260, damping: 30 }, opacity: { duration: 0.3, delay: 0.35 }, y: { duration: 0.35, delay: 0.35 } }}
+          >
+            <ReasonsPanel
+              entry={entry!}
+              options={settings.moodReasonOptions}
+              useModel={settings.useModel}
+              reduceMotion={reduceMotion}
+              onSave={(reasons) => {
+                const latest = todaysMoodEntry(store.snap?.entries ?? []) ?? entry!;
+                void store.saveEntry({ ...latest, reasons });
+              }}
+              onAddOption={(r) => updateSettings({ moodReasonOptions: [...settings.moodReasonOptions, r] })}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  );
 }
 
 /**

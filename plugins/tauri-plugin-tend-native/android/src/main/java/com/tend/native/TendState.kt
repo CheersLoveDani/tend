@@ -174,7 +174,9 @@ data class NativeState(
   /** The daily weather check-in, "HH:mm", or null when off. */
   val moodTime: String? = null,
   /** "yyyy-MM-dd" of the last check-in: that day isn't asked again. */
-  val moodLoggedDay: String? = null
+  val moodLoggedDay: String? = null,
+  /** After a check-in, offer to add what's behind it (opens the app). */
+  val moodReasons: Boolean = false
 ) {
   /** The unlock listener only makes sense when there is something to nudge about. */
   val wantsUnlockService: Boolean get() = nagOnUnlock && pending.isNotEmpty()
@@ -236,6 +238,7 @@ data class NativeState(
       .put("cueStyle", cueStyle)
       .put("moodTime", moodTime ?: JSONObject.NULL)
       .put("moodLoggedDay", moodLoggedDay ?: JSONObject.NULL)
+      .put("moodReasons", moodReasons)
   }
 
   companion object {
@@ -282,7 +285,8 @@ data class NativeState(
         preWarnMinutes = o.optInt("preWarnMinutes", 0).coerceAtLeast(0),
         cueStyle = o.optString("cueStyle", "sound").let { if (it in CUE_STYLES) it else "sound" },
         moodTime = o.optStringOrNull("moodTime")?.takeIf { QuietHours.minutesOf(it) != null },
-        moodLoggedDay = o.optStringOrNull("moodLoggedDay")
+        moodLoggedDay = o.optStringOrNull("moodLoggedDay"),
+        moodReasons = o.optBoolean("moodReasons", false)
       )
     }
   }

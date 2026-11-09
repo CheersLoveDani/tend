@@ -165,6 +165,13 @@ export interface Entry {
   unit: string;
   note: string;
   at: number;
+  /** Why (mood check-ins). Omitted when empty. */
+  reasons?: MoodReason[];
+}
+
+export interface MoodReason {
+  label: string;
+  emoji: string;
 }
 
 export interface Suggestion {
@@ -230,6 +237,7 @@ export const api = {
   suggest: (title: string, notes: string, steps: string[], useModel: boolean) =>
     invoke<Suggestion>("suggest_reward", { title, notes, steps, useModel }),
   suggestSteps: (title: string) => invoke<StepIdea[]>("suggest_steps", { title }),
+  suggestEmoji: (text: string, useModel: boolean) => invoke<string>("suggest_emoji", { text, useModel }),
   modelStatus: () => invoke<{ present: boolean; size: number }>("model_status"),
   downloadModel: () => invoke<void>("download_model"),
   deleteModel: () => invoke<void>("delete_model"),

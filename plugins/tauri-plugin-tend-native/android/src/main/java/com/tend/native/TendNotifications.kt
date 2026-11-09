@@ -328,6 +328,15 @@ object TendNotifications {
       .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
       .setDeleteIntent(persistentDeletePendingIntent(ctx))
 
+    // With item cards showing, this becomes their group's summary: it does all the alerting
+    // (GROUP_ALERT_SUMMARY), and expanding it shows each item with its own buttons.
+    if (itemsToShow(ctx, state).isNotEmpty()) {
+      builder.setGroup(GROUP_KEY)
+        .setGroupSummary(true)
+        .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY)
+        .setSortKey("0")
+    }
+
     if (alert != null) {
       builder.setOnlyAlertOnce(false)
         .setCategory(NotificationCompat.CATEGORY_REMINDER)
@@ -394,6 +403,7 @@ object TendNotifications {
   fun postPersistent(ctx: Context, state: NativeState, added: CharSequence? = null) {
     ensureChannels(ctx)
     nm(ctx).notify(TendIds.PERSISTENT_NOTIFICATION_ID, buildPersistent(ctx, state, added))
+    syncItems(ctx, state)
   }
 
   /** Re-post the grouped notification so it alerts. */
@@ -402,11 +412,142 @@ object TendNotifications {
     ensureChannels(ctx)
     activeAlert = alert
     nm(ctx).notify(TendIds.PERSISTENT_NOTIFICATION_ID, buildPersistent(ctx, state, alert = alert))
+    syncItems(ctx, state)
   }
 
   fun cancelPersistent(ctx: Context) {
     activeAlert = null
     nm(ctx).cancel(TendIds.PERSISTENT_NOTIFICATION_ID)
+    syncItems(ctx, null)
+  }
+
+  // ---- one card per waiting item ---------------------------------------------------------------
+  //
+  // Like a pill-reminder checklist: expanding the notification lists every waiting item, each with
+  // its own Done / Taken button. They're children of one group, so they stay together under the
+  // summary above, which does the alerting; the cards themselves are always silent.
+  //
+  // Ticking one off only cancels that card. Everything is re-posted together only when a new item
+  // joins while others are already showing, so the group stays in order and in one piece.
+
+  private const val GROUP_KEY = "com.tend.native.STILL_TO_DO"
+
+  /** Android caps an app at ~50 notifications; past this many the summary's "and N more" covers it. */
+  private const val MAX_ITEM_CARDS = 12
+
+  /** Groups need Android 7. Swiped-away cards stay away until their item leaves the list. */
+  internal fun itemsToShow(ctx: Context, state: NativeState): List<PendingItem> {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N || state.pending.isEmpty()) return emptyList()
+    val dismissed = TendStore.dismissedItems(ctx)
+    return state.pending.filter { it.id !in dismissed }.take(MAX_ITEM_CARDS)
+  }
+
+  private fun itemTag(id: String) = TendIds.ITEM_TAG + id
+
+  /** What the card shows: when this changes, the card is re-posted (quietly). */
+  private fun itemSignature(item: PendingItem) =
+    "${item.title}|${item.time}|${item.stepsDone}/${item.stepsTotal}|${item.dose}|${item.reward}"
+
+  /** Doses first, then by time, untimed last: the order the app lists them in. */
+  private fun itemSortKey(item: PendingItem) =
+    "1${if (item.dose) 0 else 1}${item.time ?: "99:99"}${item.title.lowercase()}"
+
+  private fun itemText(item: PendingItem): String {
+    val parts = mutableListOf<String>()
+    if (!item.time.isNullOrBlank()) parts += item.time
+    if (item.stepsTotal > 0) parts += "${item.stepsDone}/${item.stepsTotal} steps"
+    if (!item.dose && item.reward > 0) parts += "${item.reward.toInt()} seeds"
+    return parts.joinToString(" · ").ifEmpty { "Whenever you're ready" }
+  }
+
+  private fun itemDismissPendingIntent(ctx: Context, id: String): PendingIntent =
+    PendingIntent.getBroadcast(
+      ctx,
+      TendIds.stableHash(TendIds.ACTION_ITEM_DISMISSED, id),
+      Intent(ctx, ReminderActionReceiver::class.java)
+        .setAction(TendIds.ACTION_ITEM_DISMISSED)
+        .setData(TendIds.reminderUri("dismissed", id))
+        .putExtra(TendIds.EXTRA_REMINDER_ID, id),
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    )
+
+  private fun buildItem(ctx: Context, item: PendingItem): Notification {
+    val title = if (item.dose) "Take ${item.title}" else item.title
+    val publicVersion = baseBuilder(ctx, CHANNEL_STILL_TO_DO)
+      .setContentTitle(if (item.dose) "A dose is waiting" else "Something is waiting")
+      .setContentText("Open Tend to see it")
+      .build()
+    val b = baseBuilder(ctx, CHANNEL_STILL_TO_DO)
+      .setContentTitle(title)
+      .setContentText(itemText(item))
+      .setGroup(GROUP_KEY)
+      .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY)
+      .setSortKey(itemSortKey(item))
+      .setOnlyAlertOnce(true)
+      .setSilent(true)
+      .setShowWhen(false)
+      .setLocalOnly(true)
+      .setCategory(NotificationCompat.CATEGORY_REMINDER)
+      .setPriority(NotificationCompat.PRIORITY_LOW)
+      .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+      .setPublicVersion(publicVersion)
+      .setDeleteIntent(itemDismissPendingIntent(ctx, item.id))
+    activityPendingIntent(ctx, TendIds.stableHash("open-reminder", item.id), TendIds.LAUNCH_REMINDER, item.id)
+      ?.let { b.setContentIntent(it) }
+    if (item.dose) {
+      b.addAction(0, "✓ Taken", reminderActionPendingIntent(ctx, TendIds.ACTION_DONE, item.id, item.title, ""))
+      b.addAction(0, "Snooze 15 min", reminderActionPendingIntent(ctx, TendIds.ACTION_SNOOZE, item.id, item.title, ""))
+    } else {
+      b.addAction(0, "✓ Done", reminderActionPendingIntent(ctx, TendIds.ACTION_DONE, item.id, item.title, ""))
+      if (item.hasStepsLeft) {
+        b.addAction(0, "✓ Next step", reminderActionPendingIntent(ctx, TendIds.ACTION_STEP, item.id, item.title, ""))
+      }
+      b.addAction(0, "1 h", reminderActionPendingIntent(ctx, TendIds.ACTION_SNOOZE_HOUR, item.id, item.title, ""))
+    }
+    return b.build()
+  }
+
+  /**
+   * Brings the item cards in line with [state] (null: take them all down). Cards whose item is gone
+   * are cancelled on their own and the rest are left alone, so ticking one off never re-alerts or
+   * reshuffles the others. When a new item arrives, every card is re-posted with it so the group
+   * stays whole.
+   */
+  @SuppressLint("MissingPermission")
+  @Synchronized
+  fun syncItems(ctx: Context, state: NativeState?) {
+    val nm = nm(ctx)
+    val posted = TendStore.postedItems(ctx)
+    val want = if (state == null) emptyList() else itemsToShow(ctx, state)
+    val wantIds = want.map { it.id }.toSet()
+
+    for (id in posted.keys) if (id !in wantIds) nm.cancel(itemTag(id), TendIds.ITEM_NOTIFICATION_ID)
+
+    val joined = want.any { it.id !in posted }
+    val next = LinkedHashMap<String, String>()
+    for (item in want) {
+      val sig = itemSignature(item)
+      if (joined || posted[item.id] != sig) nm.notify(itemTag(item.id), TendIds.ITEM_NOTIFICATION_ID, buildItem(ctx, item))
+      next[item.id] = sig
+    }
+    if (next != posted) TendStore.savePostedItems(ctx, next)
+
+    // Forget swipes for items that have left the list.
+    if (state != null) {
+      val live = state.pending.map { it.id }.toSet()
+      val dismissed = TendStore.dismissedItems(ctx)
+      val kept = dismissed.filter { it in live }.toSet()
+      if (kept.size != dismissed.size) TendStore.saveDismissedItems(ctx, kept)
+    }
+  }
+
+  /** The user swiped one card away. It stays in the summary's list; the group carries on without it. */
+  fun onItemDismissed(ctx: Context, id: String) {
+    TendStore.saveDismissedItems(ctx, TendStore.dismissedItems(ctx) + id)
+    val posted = TendStore.postedItems(ctx)
+    if (id in posted) TendStore.savePostedItems(ctx, posted - id)
+    // The summary drops its group flag if that was the last card.
+    TendEngine.refreshSurface(ctx, TendStore.loadState(ctx))
   }
 
   // ---- timed reminders and doses ---------------------------------------------------------------

@@ -5,9 +5,11 @@ import { api, isAndroid, type Hello, type SyncInfo } from "../lib/api";
 import { useStore } from "../lib/store";
 import { native, type PermissionKind, type Permissions } from "../lib/native";
 import { configureSound, preview, SOUND_NAMES, sounds, type SoundName } from "../lib/sound";
-import { endOfToday, isPaused, NUDGE_PRESETS, PRESET_TEXT, type Settings } from "../lib/settings";
+import { DEFAULT_MOOD_REASONS, endOfToday, isPaused, NUDGE_PRESETS, PRESET_TEXT, type Settings } from "../lib/settings";
 import { calendar, type CalendarAccess, type DeviceCalendar } from "../lib/calendar";
 import { Chevron, Minus, Plus, Sync } from "../components/Icons";
+import { ReasonOptionsEditor } from "../components/MoodReasons";
+import { openInsights } from "../lib/weather";
 import { appUpdater, appVersion } from "../lib/updater";
 import { backup, type BackupSource, type BackupStatus } from "../lib/backup";
 import { fitness, fitSupported, minuteMilestones, stepMilestones, type FitStatus } from "../lib/fitness";
@@ -39,9 +41,9 @@ function Toggle({ label, hint, checked, onChange }: { label: string; hint?: stri
   );
 }
 
-function Group({ title, children }: { title: string; children: ReactNode }) {
+function Group({ title, id, children }: { title: string; id?: string; children: ReactNode }) {
   return (
-    <section className="settings-group">
+    <section className="settings-group" id={id ? `settings-${id}` : undefined}>
       <h2 className="section-title">{title}</h2>
       <div className="settings-card">{children}</div>
     </section>
@@ -500,7 +502,7 @@ function MovementSettings() {
         : st.status === "update"
           ? "Tend reads them from Health Connect. Install or update it first, then come back."
           : on
-            ? `Counting since ${format(parseISO(s.fitSince!), "d MMM")}. ${rules}`
+            ? `Counting since ${format(parseISO(s.fitSince!), "d MMM")}.${st.phoneSteps ? " Steps come from this phone too, so they count even when your fitness app hasn't synced." : ""} ${rules}`
             : `From Google Fit, Samsung Health, Fitbit or any app that saves to Health Connect. Tend only reads, and nothing leaves your phone. ${rules}`;
 
   return (
@@ -541,6 +543,33 @@ function MovementSettings() {
           </span>
         )}
       </div>
+      {on && st?.phoneSensor && !st.phoneSteps && (
+        <div className="row">
+          <span className="row-text">
+            <span className="row-label">Count steps on this phone</span>
+            <span className="row-hint">Some apps (Google Fit, for one) only share steps when they're opened. Tend can count them itself with the phone's step sensor, in the background.</span>
+          </span>
+          <button
+            className="btn btn-soft"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                const r = await fitness.allowPhoneSteps();
+                setSt(r);
+                if (r.phoneSteps) void syncFit(true);
+                else toast("Tend needs “Physical activity” to count steps. You can allow it in Android's app settings.");
+              } catch (e) {
+                toast(String(e));
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            Allow
+          </button>
+        </div>
+      )}
       {on && goals}
     </>
   );
@@ -946,6 +975,50 @@ function DaySettings() {
   );
 }
 
+/** "What's behind it" after a check-in, and the reasons it offers. */
+function MoodReasonSettings() {
+  const { settings: s, updateSettings: set, reduceMotion } = useStore();
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Toggle
+        label="Ask what's behind the weather"
+        hint="After a check-in, tap what's behind it or type your own. Tend picks an emoji for new ones, and you can choose another."
+        checked={s.moodReasons}
+        onChange={(v) => set({ moodReasons: v })}
+      />
+      {s.moodReasons && (
+        <>
+          <button className="row disclosure" aria-expanded={open} onClick={() => setOpen(!open)}>
+            <span className="row-text">
+              <span className="row-label">Your reasons</span>
+              <span className="row-hint">{s.moodReasonOptions.map((r) => r.emoji).join(" ") || "None yet"}</span>
+            </span>
+            <Chevron size={16} className={open ? "is-open" : ""} />
+          </button>
+          {open && (
+            <div className="disclosure-body">
+              <ReasonOptionsEditor options={s.moodReasonOptions} useModel={s.useModel} reduceMotion={reduceMotion} onChange={(next) => set({ moodReasonOptions: next })} />
+              <button className="btn btn-quiet btn-small" onClick={() => set({ moodReasonOptions: DEFAULT_MOOD_REASONS })}>
+                Back to the starting set
+              </button>
+            </div>
+          )}
+        </>
+      )}
+      <div className="row">
+        <span className="row-text">
+          <span className="row-label">Your weather map</span>
+          <span className="row-hint">Charts, a calendar and a short note on each month.</span>
+        </span>
+        <button className="btn btn-soft" onClick={openInsights}>
+          Open
+        </button>
+      </div>
+    </>
+  );
+}
+
 /** Reward sounds, each one previewable and switchable on its own. */
 function SoundSettings() {
   const { settings: s, updateSettings: set } = useStore();
@@ -1283,8 +1356,9 @@ export function SettingsView() {
         <NudgeSettings autostart={autostart} setAutostart={setAutostart} />
       </Group>
 
-      <Group title="Your day">
+      <Group title="Your day" id="your-day">
         <DaySettings />
+        <MoodReasonSettings />
       </Group>
 
       <Group title="Look and feel">
@@ -1311,7 +1385,7 @@ export function SettingsView() {
         />
       </Group>
 
-      <Group title="Rewards">
+      <Group title="Rewards" id="rewards">
         <Toggle
           label="Surprise golden seeds"
           hint="Sometimes finishing something gives a few extra seeds. Never needed, never taken away."
@@ -1321,7 +1395,7 @@ export function SettingsView() {
         <ModelRow />
       </Group>
 
-      <Group title="Movement">
+      <Group title="Movement" id="movement">
         <MovementSettings />
       </Group>
 

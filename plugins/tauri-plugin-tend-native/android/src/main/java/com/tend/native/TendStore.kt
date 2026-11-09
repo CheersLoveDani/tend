@@ -18,6 +18,8 @@ object TendStore {
   private const val KEY_EXTRA_ALARMS = "extra_alarms"
   private const val KEY_NAG_DAY = "nag_day"
   private const val KEY_NAG_COUNT = "nag_count"
+  private const val KEY_POSTED_ITEMS = "posted_item_notifications"
+  private const val KEY_DISMISSED_ITEMS = "dismissed_item_notifications"
 
   private fun prefs(ctx: Context): SharedPreferences =
     ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -161,5 +163,32 @@ object TendStore {
   @Synchronized
   fun setNextChimeAt(ctx: Context, at: Long) {
     prefs(ctx).edit().putLong(KEY_NEXT_CHIME_AT, at).apply()
+  }
+
+  // ---- per-item notifications (children of the grouped "still to do" notification) ----------
+
+  /** Item id → what its notification showed when posted, so unchanged ones aren't re-posted. */
+  fun postedItems(ctx: Context): Map<String, String> {
+    val raw = prefs(ctx).getString(KEY_POSTED_ITEMS, null) ?: return emptyMap()
+    return try {
+      val o = JSONObject(raw)
+      o.keys().asSequence().associateWith { o.getString(it) }
+    } catch (_: Exception) {
+      emptyMap()
+    }
+  }
+
+  fun savePostedItems(ctx: Context, items: Map<String, String>) {
+    val o = JSONObject()
+    for ((k, v) in items) o.put(k, v)
+    prefs(ctx).edit().putString(KEY_POSTED_ITEMS, o.toString()).apply()
+  }
+
+  /** Items the user swiped out of the group: they stay in the summary but don't come back as cards. */
+  fun dismissedItems(ctx: Context): Set<String> =
+    HashSet(prefs(ctx).getStringSet(KEY_DISMISSED_ITEMS, emptySet()) ?: emptySet())
+
+  fun saveDismissedItems(ctx: Context, ids: Set<String>) {
+    prefs(ctx).edit().putStringSet(KEY_DISMISSED_ITEMS, HashSet(ids)).apply()
   }
 }

@@ -1,0 +1,753 @@
+/* Mood insights ("Your weather"). Weather colours form a diverging scale: gold for sun, a neutral
+   grey-green for partly cloudy, blue to indigo for rain and thunder. Two poles and a calm middle,
+   no red, nothing reads as a warning. Every coloured mark also carries its weather icon or label. */
+.mi-sheet {
+  --mi-5: #a8761a;
+  --mi-4: #d9a93a;
+  --mi-3: #b4bdb8;
+  --mi-2: #6aa6d8;
+  --mi-1: #4b5596;
+  --mi-tint: 16%;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .mi-sheet {
+    --mi-5: #f0c862;
+    --mi-4: #a98a45;
+    --mi-3: #55635c;
+    --mi-2: #5b93c6;
+    --mi-1: #a7b1ef;
+    --mi-tint: 24%;
+  }
+}
+:root[data-theme="dark"] .mi-sheet {
+  --mi-5: #f0c862;
+  --mi-4: #a98a45;
+  --mi-3: #55635c;
+  --mi-2: #5b93c6;
+  --mi-1: #a7b1ef;
+  --mi-tint: 24%;
+}
+
+.mi-fill-5 { fill: var(--mi-5); }
+.mi-fill-4 { fill: var(--mi-4); }
+.mi-fill-3 { fill: var(--mi-3); }
+.mi-fill-2 { fill: var(--mi-2); }
+.mi-fill-1 { fill: var(--mi-1); }
+.mi-bg-5 { background: var(--mi-5); }
+.mi-bg-4 { background: var(--mi-4); }
+.mi-bg-3 { background: var(--mi-3); }
+.mi-bg-2 { background: var(--mi-2); }
+.mi-bg-1 { background: var(--mi-1); }
+
+/* ---------- sheet ---------- */
+.mi-sheet {
+  width: min(760px, 100%);
+  height: min(96vh, 1000px);
+  max-height: none;
+  outline: none;
+  overflow: hidden;
+}
+@media (max-width: 820px) {
+  .mi-sheet {
+    height: calc(100% - var(--safe-t) - 8px);
+  }
+}
+.mi-head {
+  align-items: flex-start;
+}
+.mi-head .view-kicker {
+  margin: 0;
+  font-size: 13px;
+}
+.mi-head h2 {
+  font-size: 24px;
+}
+.mi-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 6px 18px 4px;
+  padding: 2px;
+  border-radius: 14px;
+  background: var(--paper-2);
+}
+.mi-switch .btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.mi-flip {
+  transform: rotate(180deg);
+}
+.mi-month {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 17px;
+}
+.mi-body {
+  flex: 1;
+  min-height: 0;
+  gap: 26px;
+  padding-top: 14px;
+  padding-bottom: calc(28px + var(--safe-b));
+  overscroll-behavior: contain;
+}
+.mi-section {
+  min-width: 0;
+}
+.mi-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-bottom: 10px;
+}
+.mi-section-head .section-title {
+  margin-bottom: 0;
+}
+.mi-span .chip {
+  padding: 5px 11px;
+  font-size: 13px;
+}
+.mi-empty {
+  margin: 0;
+  padding: 18px 20px;
+  border-radius: var(--radius-l);
+  border: 1.5px dashed var(--line);
+  color: var(--bark-2);
+  font-size: 15px;
+}
+
+/* ---------- hero ---------- */
+.mi-hero {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.mi-tile {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  padding: 16px;
+  border-radius: var(--radius-l);
+  background: var(--paper-2);
+}
+.mi-tile strong {
+  font-family: var(--font-display);
+  font-size: 40px;
+  line-height: 1.1;
+  font-weight: 650;
+}
+.mi-tile .mi-tile-icon {
+  font-size: 36px;
+}
+.mi-tile span {
+  color: var(--bark-2);
+  font-size: 14px;
+}
+.mi-compare {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--radius-m);
+  background: var(--moss-soft);
+  color: var(--bark);
+  font-size: 15px;
+}
+
+/* ---------- charts ---------- */
+.mi-chart {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+.mi-plot {
+  position: relative;
+  border-radius: var(--radius-m);
+  outline: none;
+}
+.mi-plot:focus-visible {
+  box-shadow: 0 0 0 2px var(--moss);
+}
+.mi-plot svg {
+  display: block;
+  overflow: visible;
+  touch-action: pan-y;
+}
+.mi-grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.mi-cross {
+  stroke: var(--bark-3);
+  stroke-width: 1;
+}
+.mi-ylabel {
+  font-size: 14px;
+}
+.mi-ylabel.is-small {
+  font-size: 12px;
+}
+.mi-xlabel {
+  fill: var(--bark-3);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.mi-path {
+  fill: none;
+  stroke: var(--moss);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.mi-area {
+  fill: var(--moss);
+  fill-opacity: 0.1;
+  stroke: none;
+}
+.mi-dot {
+  stroke: var(--paper);
+  stroke-width: 2;
+}
+.mi-hit {
+  fill: transparent;
+  cursor: crosshair;
+}
+
+.mi-tip {
+  position: absolute;
+  z-index: 2;
+  transform: translate(-50%, -100%);
+  display: grid;
+  gap: 1px;
+  min-width: 120px;
+  max-width: 200px;
+  padding: 8px 11px;
+  border-radius: 12px;
+  background: var(--bark);
+  color: var(--paper);
+  box-shadow: var(--shadow);
+  font-size: 13px;
+  pointer-events: none;
+  text-align: left;
+}
+.mi-tip.is-below {
+  transform: translate(-50%, 0);
+}
+.mi-tip-date {
+  opacity: 0.75;
+}
+.mi-tip-value {
+  font-size: 15px;
+}
+.mi-tip-reasons {
+  opacity: 0.85;
+}
+
+/* ---------- calendar ---------- */
+.mi-cal {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+.mi-cal-head {
+  text-align: center;
+  color: var(--bark-3);
+  font-size: 12px;
+  font-weight: 700;
+  padding-bottom: 2px;
+}
+.mi-cal-day {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 1px;
+  aspect-ratio: 1 / 1.05;
+  min-height: 42px;
+  border-radius: 12px;
+  background: var(--paper-2);
+  color: var(--bark-3);
+  transition: background 0.2s, box-shadow 0.2s, transform 0.1s;
+}
+.mi-cal-day:active:not(:disabled) {
+  transform: scale(0.95);
+}
+.mi-cal-day:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.mi-cal-day.has-mood {
+  color: var(--bark-2);
+}
+.mi-tint-5 { background: color-mix(in srgb, var(--mi-5) var(--mi-tint), var(--paper)); }
+.mi-tint-4 { background: color-mix(in srgb, var(--mi-4) var(--mi-tint), var(--paper)); }
+.mi-tint-3 { background: color-mix(in srgb, var(--mi-3) calc(var(--mi-tint) + 10%), var(--paper)); }
+.mi-tint-2 { background: color-mix(in srgb, var(--mi-2) var(--mi-tint), var(--paper)); }
+.mi-tint-1 { background: color-mix(in srgb, var(--mi-1) var(--mi-tint), var(--paper)); }
+.mi-cal-day.is-today {
+  box-shadow: inset 0 0 0 1.5px var(--bark-3);
+}
+.mi-cal-day.is-picked {
+  box-shadow: inset 0 0 0 2px var(--moss);
+}
+.mi-cal-num {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.mi-cal-icon {
+  font-size: 19px;
+  line-height: 1.1;
+}
+.mi-cal-day:not(.has-mood) .mi-cal-icon {
+  color: var(--bark-3);
+  opacity: 0.6;
+}
+@media (hover: hover) and (pointer: fine) {
+  .mi-cal-day:not(:disabled):hover {
+    box-shadow: inset 0 0 0 1.5px var(--moss-2);
+  }
+}
+.mi-cal-detail {
+  margin-top: 10px;
+  padding: 14px 16px;
+  border-radius: var(--radius-m);
+  background: var(--paper-2);
+  display: grid;
+  gap: 8px;
+}
+.mi-cal-detail p {
+  margin: 0;
+}
+.mi-cal-detail-date {
+  color: var(--bark-3);
+  font-size: 13px;
+}
+.mi-cal-detail-weather {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+}
+.mi-cal-detail-time {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--bark-3);
+}
+.mi-cal-detail-note {
+  color: var(--bark-2);
+  font-size: 14px;
+}
+.mi-reason-chip {
+  background: var(--paper);
+  cursor: default;
+}
+
+/* ---------- distribution ---------- */
+.mi-dist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.mi-dist-row {
+  display: grid;
+  grid-template-columns: minmax(118px, 34%) 1fr;
+  align-items: center;
+  gap: 10px;
+}
+.mi-dist-label {
+  font-size: 14px;
+  color: var(--bark-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mi-dist-track {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding-right: 28px;
+}
+.mi-dist-bar {
+  display: block;
+  height: 14px;
+  min-width: 4px;
+  border-radius: 0 4px 4px 0;
+}
+.mi-dist-count {
+  flex: none;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--bark);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- weekdays ---------- */
+.mi-week {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+.mi-week-col {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+.mi-week-track {
+  position: relative;
+  width: 100%;
+  height: 96px;
+  margin: 6px 0;
+}
+.mi-week-track::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--line);
+}
+.mi-week-dot {
+  position: absolute;
+  left: 50%;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--paper);
+}
+.mi-week-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+.mi-week-day {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--bark-3);
+}
+
+/* ---------- reasons ---------- */
+.mi-reasons {
+  display: grid;
+  gap: 14px;
+}
+.mi-reasons .hint {
+  margin: 0;
+}
+.mi-top {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.mi-top-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px 7px 13px;
+  border-radius: 99px;
+  background: var(--paper-2);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--bark);
+}
+.mi-top-chip strong {
+  min-width: 22px;
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: var(--paper);
+  text-align: center;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.mi-sides {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+@media (max-width: 520px) {
+  .mi-sides {
+    grid-template-columns: 1fr;
+  }
+}
+.mi-side {
+  padding: 14px 16px;
+  border-radius: var(--radius-m);
+  background: var(--paper-2);
+}
+.mi-side h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--bark-2);
+}
+.mi-side ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.mi-side li {
+  display: grid;
+}
+.mi-side-name {
+  font-weight: 700;
+}
+.mi-side-meta {
+  font-size: 13px;
+  color: var(--bark-3);
+}
+
+/* ---------- report ---------- */
+.mi-report {
+  padding: 20px 22px;
+  border-radius: var(--radius-l);
+  background: linear-gradient(160deg, var(--pollen-soft), var(--moss-soft));
+}
+.mi-report h3 {
+  font-size: 19px;
+  margin-bottom: 10px;
+}
+.mi-report ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+.mi-report li {
+  position: relative;
+  padding-left: 18px;
+  line-height: 1.45;
+}
+.mi-report li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 0.62em;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--moss);
+}
+.mi-report-empty {
+  margin: 0;
+  color: var(--bark-2);
+}
+
+@media (max-width: 420px) {
+  .mi-body {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .mi-switch {
+    margin-left: 12px;
+    margin-right: 12px;
+  }
+  .mi-tile {
+    padding: 14px;
+  }
+  .mi-tile strong {
+    font-size: 34px;
+  }
+  .mi-cal {
+    gap: 3px;
+  }
+  .mi-cal-icon {
+    font-size: 16px;
+  }
+  .mi-dist-row {
+    grid-template-columns: minmax(104px, 40%) 1fr;
+  }
+}
+
+/* ---------- "what's behind it" after a check-in ---------- */
+.reasons-wrap {
+  overflow: hidden;
+}
+.reasons {
+  padding-top: 14px;
+}
+.reasons-ask {
+  margin: 0 0 8px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--bark-2);
+}
+.reason-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.reason-chip svg {
+  margin-left: 2px;
+}
+.reason-add {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--line);
+  color: var(--bark-3);
+}
+.reason-new {
+  overflow: hidden;
+}
+.reason-new-row,
+.reason-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 10px;
+}
+.reason-new-row input,
+.reason-edit-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  border-radius: var(--radius-s);
+  border: 1.5px solid var(--line);
+  background: var(--paper);
+}
+.reason-new-row input:focus,
+.reason-edit-row input:focus {
+  outline: none;
+  border-color: var(--moss);
+}
+.reason-emoji {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  border: 0;
+  background: var(--paper-2);
+  font-size: 22px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: box-shadow 0.2s;
+}
+.reason-emoji.is-open,
+.reason-emoji:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--moss);
+}
+.reason-keep {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 2px 2px;
+  font-size: 14px;
+  color: var(--bark-2);
+  cursor: pointer;
+}
+.reason-keep input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--moss);
+}
+.emoji-grid {
+  overflow: hidden;
+}
+.emoji-grid-inner {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+  gap: 4px;
+  padding: 10px 0 2px;
+}
+.emoji-cell {
+  height: 40px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  font-size: 20px;
+  cursor: pointer;
+}
+.emoji-cell:hover {
+  background: var(--paper-2);
+}
+.emoji-cell.is-on {
+  background: var(--moss-soft);
+}
+.reason-editor {
+  width: 100%;
+}
+.reason-edit-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.reason-edit-list li {
+  overflow: hidden;
+}
+.reason-edit-row.is-new {
+  padding-top: 14px;
+}
+.weather-map-btn {
+  margin-top: 12px;
+  display: inline-flex;
+  gap: 8px;
+}
+
+/* ---------- the "something new" pop-up ---------- */
+.feature-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.feature-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: var(--radius-m);
+  background: var(--paper-2);
+  transition: background 0.3s;
+}
+.feature-row.is-on {
+  background: var(--moss-soft);
+}
+.feature-emoji {
+  font-size: 26px;
+  flex: none;
+}
+.feature-text {
+  flex: 1;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.feature-row .btn {
+  flex: none;
+}
+.feature-on {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 700;
+  color: var(--moss);
+  padding: 0 8px;
+}
+
+/* ---------- desktop mood pop-up with reasons ---------- */
+.mood-pop-why {
+  padding: 0 4px;
+}
+.mood-pop-done {
+  display: block;
+  margin: 12px 0 0 auto;
+}
+.mood-pop:has(.mood-pop-why) {
+  align-content: start;
+  overflow-y: auto;
+}

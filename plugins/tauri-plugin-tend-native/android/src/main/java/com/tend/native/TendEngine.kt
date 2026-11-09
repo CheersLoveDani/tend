@@ -24,6 +24,7 @@ object TendEngine {
     TendAlarms.sync(ctx, state, fireMissedAlarms)
     TendAlarms.syncChime(ctx, state)
     TendMood.sync(ctx, state)
+    TendSteps.schedule(ctx)
     refreshSurface(ctx, state)
   }
 

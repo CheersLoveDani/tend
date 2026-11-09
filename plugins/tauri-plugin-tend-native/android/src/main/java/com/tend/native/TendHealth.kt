@@ -19,7 +19,7 @@ import java.time.ZoneId
 
 /**
  * Steps and workouts from Health Connect, where Google Fit, Samsung Health, Fitbit and most
- * fitness apps keep their data. Read-only, on-device, and only while Tend is open.
+ * fitness apps keep their data, plus the phone's own step counter (TendSteps). Read-only, on-device.
  */
 object TendHealth {
   /** The Health Connect app on Android 13 and older (it's part of the system from 14). */
@@ -43,13 +43,34 @@ object TendHealth {
   suspend fun granted(context: Context): Set<String> =
     HealthConnectClient.getOrCreate(context).permissionController.getGrantedPermissions()
 
+  /**
+   * The phone's own step counter (TendSteps) counts as a steps source too, so steps work without
+   * Health Connect, and without waiting for a fitness app to sync into it.
+   */
   suspend fun statusJson(context: Context): JSObject {
-    val status = status(context)
-    val granted = if (status == "available" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) granted(context) else emptySet()
+    val hc = status(context)
+    val granted = if (hc == "available" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) granted(context) else emptySet()
+    val phone = TendSteps.ready(context)
     return JSObject()
-      .put("status", status)
-      .put("steps", STEPS in granted)
+      .put("status", if (hc != "available" && phone) "available" else hc)
+      .put("healthConnect", hc)
+      .put("steps", STEPS in granted || phone)
       .put("workouts", WORKOUTS in granted)
+      .put("phoneSteps", phone)
+      .put("phoneSensor", TendSteps.hasSensor(context))
+  }
+
+  /** Days from the phone's own counter, when Health Connect can't be read. */
+  fun readPhoneOnly(context: Context, days: Int): JSObject {
+    TendSteps.sample(context)
+    val own = TendSteps.days(context)
+    val today = LocalDate.now()
+    val list = JSArray()
+    for (i in (days - 1) downTo 0) {
+      val d = today.minusDays(i.toLong()).toString()
+      list.put(JSObject().put("date", d).put("steps", own[d] ?: 0L))
+    }
+    return JSObject().put("days", list).put("workouts", JSArray())
   }
 
   /** Step totals per local day and workouts over the last `days` days, today included. */
@@ -60,6 +81,10 @@ object TendHealth {
     val zone = ZoneId.systemDefault()
     val today = LocalDate.now(zone)
     val first = today.minusDays((days - 1).toLong())
+
+    // A fresh reading of the phone's own counter, merged in below (the higher count wins each day).
+    TendSteps.sample(context)
+    val own = TendSteps.days(context)
 
     val dayList = JSArray()
     if (STEPS in granted) {
@@ -72,11 +97,14 @@ object TendHealth {
         )
       )
       for (b in buckets) {
-        dayList.put(
-          JSObject()
-            .put("date", b.startTime.toLocalDate().toString())
-            .put("steps", b.result[StepsRecord.COUNT_TOTAL] ?: 0L)
-        )
+        val date = b.startTime.toLocalDate().toString()
+        val steps = maxOf(b.result[StepsRecord.COUNT_TOTAL] ?: 0L, own[date] ?: 0L)
+        dayList.put(JSObject().put("date", date).put("steps", steps))
+      }
+    } else if (own.isNotEmpty()) {
+      for (i in (days - 1) downTo 0) {
+        val d = today.minusDays(i.toLong()).toString()
+        dayList.put(JSObject().put("date", d).put("steps", own[d] ?: 0L))
       }
     }
 

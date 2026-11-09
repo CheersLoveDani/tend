@@ -372,6 +372,12 @@ async fn suggest_steps(state: State<'_, AppState>, title: String) -> Res<Vec<ten
 }
 
 #[tauri::command]
+async fn suggest_emoji(state: State<'_, AppState>, text: String, use_model: bool) -> Res<String> {
+    let dir = state.data_dir.join("model");
+    tauri::async_runtime::spawn_blocking(move || suggest::emoji(&dir, &text, use_model)).await.map_err(err)
+}
+
+#[tauri::command]
 fn model_status(state: State<AppState>) -> suggest::ModelStatus {
     suggest::status(&state.data_dir.join("model"))
 }
@@ -570,6 +576,7 @@ pub fn run() {
             set_settings,
             suggest_reward,
             suggest_steps,
+            suggest_emoji,
             model_status,
             download_model,
             delete_model,

@@ -7,6 +7,17 @@ import { Leaf } from "./Icons";
 /** What each release changed, newest first. Shown once after updating; new installs never see it. */
 export const CHANGES: { version: string; title: string; items: string[] }[] = [
   {
+    version: "0.5.0",
+    title: "Your weather, mapped",
+    items: [
+      "Expand Tend's notification to see everything that's waiting, each with its own Done or Taken button. Ticking one off leaves the rest be.",
+      "After a weather check-in, tap what's behind it or type your own. Tend picks an emoji for new ones, and you can change it.",
+      "A weather map in the Garden: daily charts, a calendar, what brightens your days, and a short note on each month.",
+      "Steps can now be counted by your phone itself, so they show up even when your fitness app hasn't synced (Settings → Movement).",
+      "New things you haven't tried yet are offered once when you open Tend. Everything stays in Settings.",
+    ],
+  },
+  {
     version: "0.4.1",
     title: "One notification",
     items: [
@@ -50,13 +61,19 @@ function pending(version: string, lastSeen: string | null) {
   return CHANGES.find((c) => compareVersions(c.version, version) <= 0 && (!lastSeen || compareVersions(c.version, lastSeen) > 0)) ?? null;
 }
 
+/** The "what changed" note still to show, if any. null while the version is loading too, so others can wait. */
+export function useWhatsNewNote() {
+  const { settings } = useStore();
+  const [version, setVersion] = useState<string | null>(null);
+  useEffect(() => void appVersion().then(setVersion), []);
+  const note = version && settings.onboarded ? pending(version, settings.lastSeenVersion) : null;
+  return { version, note, waiting: !version || !!note };
+}
+
 /** A calm, dismissible "what changed" card, shown once per release. Waits while anything else is open. */
 export function WhatsNew() {
   const { settings, updateSettings, nag, snap } = useStore();
-  const [version, setVersion] = useState<string | null>(null);
-  useEffect(() => void appVersion().then(setVersion), []);
-
-  const note = version && settings.onboarded ? pending(version, settings.lastSeenVersion) : null;
+  const { version, note } = useWhatsNewNote();
 
   // A release without a note just moves the marker on, so an older note never shows later.
   useEffect(() => {

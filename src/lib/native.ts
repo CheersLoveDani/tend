@@ -19,7 +19,7 @@ export interface Permissions {
 export type PermissionKind = keyof Permissions;
 
 export interface LaunchAction {
-  action: "nag" | "open" | "reminder" | null;
+  action: "nag" | "open" | "reminder" | "moodWhy" | null;
   reminderId?: string;
 }
 
@@ -135,6 +135,7 @@ export async function pushNativeState(snap: Snapshot, s: Settings) {
       preWarnMinutes: s.preWarnMinutes,
       cueStyle: s.cueStyle,
       moodTime: s.moodCheckIn,
+      moodReasons: s.moodReasons,
       // The day of the last check-in: no need to ask again that day.
       moodLoggedDay: snap.entries.filter((e) => e.kind === "mood").reduce<string | null>((d, e) => {
         const day = ymd(new Date(e.at));
