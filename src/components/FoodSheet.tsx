@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
 import { api, isAndroid, type Food, type FoodInfo, type Meal, type SavedFood } from "../lib/api";
 import { friendlyError, useStore } from "../lib/store";
-import { canUseCamera, COMMON, estimate, forGrams, infoTitle, kcalText, MEALS, mealFor, readLabel, scanFoodBarcode, splitCount, type Common } from "../lib/food";
+import { canUseCamera, COMMON, estimate, forGrams, infoTitle, kcalText, MEALS, mealFor, readLabel, scanFoodBarcode, splitCount, type Common, guessFruitVeg } from "../lib/food";
 import { sounds } from "../lib/sound";
 import { Close, Seed } from "./Icons";
 import "../food.css";
@@ -62,6 +62,7 @@ export function FoodSheet({ initial, start = null, onClose }: Props) {
   const [meal, setMeal] = useState<Meal>(initial?.meal ?? mealFor(Date.now()));
   const [when, setWhen] = useState(localInput(initial?.at ?? Date.now()));
   const [note, setNote] = useState(initial?.note ?? "");
+  const [fruitVeg, setFruitVeg] = useState<boolean | null>(initial?.fruitVeg ?? null);
   const [barcode, setBarcode] = useState(initial?.barcode ?? "");
   const [source, setSource] = useState<Source>(initial?.source ?? "");
   const [info, setInfo] = useState<FoodInfo | null>(() => (initial ? (savedFor(initial)?.info ?? null) : null));
@@ -277,6 +278,7 @@ export function FoodSheet({ initial, start = null, onClose }: Props) {
         barcode,
         note: note.trim(),
         at,
+        fruitVeg,
       },
       info ? { ...info, name: info.name || name.trim(), barcode: barcode || info.barcode } : null,
     );
@@ -528,6 +530,10 @@ export function FoodSheet({ initial, start = null, onClose }: Props) {
             ))}
           </div>
 
+          {settings.foodGoals.fruitVeg != null && (
+            <FruitVegChip on={fruitVeg ?? guessFruitVeg(name, emoji)} onChange={setFruitVeg} />
+          )}
+
           <textarea className="notes" rows={2} placeholder="Anything worth remembering" value={note} onChange={(e) => setNote(e.target.value)} />
           <label className="date-pair one">
             <span>When</span>
@@ -548,5 +554,14 @@ export function FoodSheet({ initial, start = null, onClose }: Props) {
         </div>
       </motion.div>
     </motion.div>
+  );
+}
+
+/** "Counts as fruit or veg", guessed from the name until it's tapped. */
+function FruitVegChip({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button className={`chip food-fv ${on ? "is-on" : ""}`} aria-pressed={on} onClick={() => onChange(!on)}>
+      <span aria-hidden>🥦</span> Counts as fruit or veg
+    </button>
   );
 }

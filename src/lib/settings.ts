@@ -1,5 +1,14 @@
 import type { MoodReason } from "./api";
 
+export interface FoodGoals {
+  /** Times to eat something (meals and snacks close together count once). */
+  meals: number | null;
+  /** Portions of fruit and veg. */
+  fruitVeg: number | null;
+  /** Glasses of water. */
+  water: number | null;
+}
+
 export interface Settings {
   sound: boolean;
   volume: number;
@@ -55,6 +64,8 @@ export interface Settings {
   foodShowCalories: boolean;
   /** A rough daily guide (kcal) shown as a soft ring; null = no guide. Never a limit. */
   foodGuide: number | null;
+  /** Gentle daily food goals; null = that goal is off. Reaching one is celebrated, missing one is never mentioned. */
+  foodGoals: FoodGoals;
   /** A daily "how's the weather in you?" at this time ("HH:MM"), answered right from the notification; null = off. */
   moodCheckIn: string | null;
   /** Last app version whose "what changed" note was seen. */
@@ -130,6 +141,7 @@ export const defaultSettings: Settings = {
   foodTracking: false, // offered by the "something new" pop-up; never switched on unasked
   foodShowCalories: true,
   foodGuide: null,
+  foodGoals: { meals: 3, fruitVeg: 5, water: 6 },
   moodCheckIn: "20:00",
   lastSeenVersion: null,
   modelConsent: null,

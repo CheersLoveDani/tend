@@ -232,3 +232,54 @@
     padding: 6px 2px;
   }
 }
+
+/* today's goals */
+.food-goals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+  padding: 14px;
+  margin-bottom: 18px;
+  border-radius: var(--radius-l);
+  background: var(--paper);
+  box-shadow: var(--shadow);
+}
+.food-goal {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 4px;
+  text-align: center;
+}
+.food-ring {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+}
+.food-ring svg {
+  position: absolute;
+  inset: 0;
+}
+.food-ring-mid {
+  position: relative;
+  font-size: 22px;
+  line-height: 1;
+}
+.food-goal-num {
+  font-family: var(--font-display);
+  font-size: 17px;
+  color: var(--bark);
+}
+.food-goal-label {
+  font-size: 12px;
+  color: var(--bark-3);
+}
+.food-goal.is-met .food-guide-fill {
+  stroke: var(--pollen);
+}
+.food-goal-add {
+  margin-top: 4px;
+}
+.food-fv {
+  justify-self: start;
+}

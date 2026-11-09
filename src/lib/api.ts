@@ -107,6 +107,8 @@ export interface Food {
   barcode: string;
   note: string;
   at: number;
+  /** Counts toward the fruit & veg goal; null/missing = guessed from the name. */
+  fruitVeg?: boolean | null;
 }
 
 /** What's known about a product (Open Food Facts, a label photo, or a past log). */

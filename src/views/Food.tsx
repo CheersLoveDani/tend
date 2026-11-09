@@ -1,9 +1,11 @@
 import { AnimatePresence, motion } from "motion/react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { format, isToday, isYesterday } from "date-fns";
 import type { Food as FoodItem, SavedFood } from "../lib/api";
 import { useStore } from "../lib/store";
-import { canUseCamera, dayTotal, kcalText, mealFor, MEALS } from "../lib/food";
+import { canUseCamera, dayTotal, goalProgress, isWater, kcalText, mealFor, MEALS, waterGlass, type GoalProgress } from "../lib/food";
+import { cheer } from "../lib/cheer";
+import type { FoodGoals } from "../lib/settings";
 import { sounds } from "../lib/sound";
 import { Plus, Trash } from "../components/Icons";
 import type { FoodStart } from "../components/FoodSheet";
@@ -44,6 +46,7 @@ export function Food({ onAdd, onEdit }: Props) {
   }, [snap.foods, todayKey]);
 
   const total = dayTotal(todays);
+  const eaten = todays.filter((f) => !isWater(f));
   const guide = showKcal ? settings.foodGuide : null;
   const again = snap.foodLib.slice(0, 8);
 
@@ -69,9 +72,9 @@ export function Food({ onAdd, onEdit }: Props) {
     <div className="view">
       <header className="view-head">
         <p className="view-kicker">Food</p>
-        <h1>{todays.length === 0 ? "What have you had today?" : todays.length === 1 ? "One thing noted today" : `${todays.length} things noted today`}</h1>
+        <h1>{eaten.length === 0 ? "What have you had today?" : eaten.length === 1 ? "One thing noted today" : `${eaten.length} things noted today`}</h1>
         <p className="view-sub">
-          {todays.length === 0
+          {eaten.length === 0
             ? "Nothing yet. If you haven't eaten in a while, a little something might help."
             : showKcal && total.kcal > 0
               ? `About ${kcalText(total.kcal)} so far${total.missing ? `, plus ${total.missing} without a number` : ""}.`
@@ -79,7 +82,16 @@ export function Food({ onAdd, onEdit }: Props) {
         </p>
       </header>
 
-      {guide != null && todays.length > 0 && <GuideRing kcal={total.kcal} guide={guide} />}
+      <TodaysGoals
+        progress={goalProgress(todays)}
+        goals={settings.foodGoals}
+        kcal={total.kcal}
+        guide={guide}
+        onWater={() => {
+          sounds.tap();
+          void store.saveFood(waterGlass(Date.now()));
+        }}
+      />
 
       <div className="food-actions">
         <button className="btn btn-primary" onClick={() => onAdd()}>
@@ -185,32 +197,93 @@ function FoodRow({ f, showKcal, onEdit }: { f: FoodItem; showKcal: boolean; onEd
   );
 }
 
-/** A soft ring that fills toward the guide. Past it, it just stays full: no red, no warning. */
-function GuideRing({ kcal, guide }: { kcal: number; guide: number }) {
+/** One soft ring. Past the goal it just stays full: no red, no warning. */
+function Ring({ part, children, size = 68 }: { part: number; children: ReactNode; size?: number }) {
   const { reduceMotion } = useStore();
-  const r = 34;
+  const r = size / 2 - 6;
   const c = 2 * Math.PI * r;
-  const part = Math.min(1, kcal / guide);
+  const mid = size / 2;
   return (
-    <div className="food-guide">
-      <svg width="84" height="84" viewBox="0 0 84 84" aria-hidden>
-        <circle cx="42" cy="42" r={r} className="food-guide-track" />
+    <span className="food-ring" style={{ width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
+        <circle cx={mid} cy={mid} r={r} className="food-guide-track" />
         <motion.circle
-          cx="42"
-          cy="42"
+          cx={mid}
+          cy={mid}
           r={r}
           className="food-guide-fill"
           strokeDasharray={c}
           initial={false}
-          animate={{ strokeDashoffset: c * (1 - part) }}
+          animate={{ strokeDashoffset: c * (1 - Math.max(0, Math.min(1, part))) }}
           transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 60, damping: 18 }}
-          transform="rotate(-90 42 42)"
+          transform={`rotate(-90 ${mid} ${mid})`}
         />
       </svg>
-      <p className="food-guide-text">
-        <span className="food-guide-num">{kcalText(kcal, true)}</span>
-        <span className="hint">of a rough {guide.toLocaleString()} guide. Bodies need different amounts on different days.</span>
-      </p>
-    </div>
+      <span className="food-ring-mid">{children}</span>
+    </span>
+  );
+}
+
+const GOAL_TEXT: Record<keyof GoalProgress, { emoji: string; label: string; done: (n: number) => string }> = {
+  meals: { emoji: "🍽️", label: "Times eaten", done: (n) => `${n === 1 ? "You've eaten" : `${n} times eaten`} today. That's looking after yourself.` },
+  fruitVeg: { emoji: "🥦", label: "Fruit & veg", done: (n) => `${n} portions of fruit and veg today. Lovely.` },
+  water: { emoji: "💧", label: "Water", done: (n) => `${n} glasses of water today. Nicely done.` },
+};
+
+/** Today's goals as soft rings. Reaching one gets a quiet cheer; nothing is ever said about missing one. */
+function TodaysGoals({ progress, goals, kcal, guide, onWater }: { progress: GoalProgress; goals: FoodGoals; kcal: number; guide: number | null; onWater: () => void }) {
+  const { toast } = useStore();
+  const keys = (Object.keys(GOAL_TEXT) as (keyof GoalProgress)[]).filter((k) => goals[k] != null);
+  const before = useRef<GoalProgress | null>(null);
+
+  useEffect(() => {
+    const prev = before.current;
+    before.current = progress;
+    if (!prev) return;
+    for (const k of keys) {
+      const g = goals[k]!;
+      if (prev[k] < g && progress[k] >= g) {
+        cheer();
+        toast(GOAL_TEXT[k].done(progress[k]));
+        break;
+      }
+    }
+  }, [progress.meals, progress.fruitVeg, progress.water]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (keys.length === 0 && guide == null) return null;
+  return (
+    <section className="food-goals" aria-label="Today's goals">
+      {keys.map((k) => {
+        const g = goals[k]!;
+        const n = progress[k];
+        return (
+          <div key={k} className={`food-goal ${n >= g ? "is-met" : ""}`}>
+            <Ring part={n / g}>
+              <span aria-hidden>{GOAL_TEXT[k].emoji}</span>
+            </Ring>
+            <span className="food-goal-num">
+              {n} <span className="hint">of {g}</span>
+            </span>
+            <span className="food-goal-label">{GOAL_TEXT[k].label}</span>
+            {k === "water" && (
+              <button className="btn btn-soft btn-small food-goal-add" onClick={onWater} aria-label="Add a glass of water">
+                + Glass
+              </button>
+            )}
+          </div>
+        );
+      })}
+      {guide != null && (
+        <div className={`food-goal ${kcal >= guide ? "is-met" : ""}`}>
+          <Ring part={kcal / guide}>
+            <span aria-hidden>🔥</span>
+          </Ring>
+          <span className="food-goal-num">
+            {kcalText(kcal, true)} <span className="hint">of ~{guide.toLocaleString()}</span>
+          </span>
+          <span className="food-goal-label">Rough guide</span>
+        </div>
+      )}
+    </section>
   );
 }

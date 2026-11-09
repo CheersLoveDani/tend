@@ -6,7 +6,7 @@ import { api, isAndroid, type Hello, type SyncInfo } from "../lib/api";
 import { useStore } from "../lib/store";
 import { native, type PermissionKind, type Permissions } from "../lib/native";
 import { configureSound, preview, SOUND_NAMES, sounds, type SoundName } from "../lib/sound";
-import { DEFAULT_MOOD_REASONS, endOfToday, isPaused, NUDGE_PRESETS, PRESET_TEXT, type Settings } from "../lib/settings";
+import { DEFAULT_MOOD_REASONS, endOfToday, isPaused, NUDGE_PRESETS, PRESET_TEXT, type Settings, type FoodGoals } from "../lib/settings";
 import { calendar, type CalendarAccess, type DeviceCalendar } from "../lib/calendar";
 import { Chevron, Close, Minus, Plus, Sync } from "../components/Icons";
 import { ReasonOptionsEditor } from "../components/MoodReasons";
@@ -46,32 +46,39 @@ function Toggle({ label, hint, checked, onChange }: { label: string; hint?: stri
 
 // ---- tabs and search ---------------------------------------------------------------------------
 
-type SettingsTab = "nudges" | "day" | "look" | "movement" | "data";
+type SettingsTab = "tasks" | "medicine" | "food" | "garden" | "mood" | "movement" | "app";
 
 const SETTINGS_TABS: { id: SettingsTab; label: string }[] = [
-  { id: "nudges", label: "Nudges" },
-  { id: "day", label: "Your day" },
-  { id: "look", label: "Look & rewards" },
+  { id: "tasks", label: "Tasks" },
+  { id: "medicine", label: "Medicine" },
+  { id: "food", label: "Food" },
+  { id: "garden", label: "Garden" },
+  { id: "mood", label: "Mood" },
   { id: "movement", label: "Movement" },
-  { id: "data", label: "Data & sync" },
+  { id: "app", label: "App" },
 ];
 
 /** Where each section (Group `id`) lives, for links from elsewhere (the new-feature pop-up). */
 const SECTION_TAB: Record<string, SettingsTab> = {
-  nudges: "nudges",
-  "your-day": "day",
-  food: "day",
-  look: "look",
-  rewards: "look",
-  wildlife: "look",
+  nudges: "tasks",
+  calendar: "tasks",
+  medicine: "medicine",
+  "medicine-diary": "medicine",
+  food: "food",
+  "food-goals": "food",
+  wildlife: "garden",
+  rewards: "garden",
+  "your-day": "mood",
+  mood: "mood",
   movement: "movement",
-  data: "data",
-  sync: "data",
-  updates: "data",
+  look: "app",
+  data: "app",
+  sync: "app",
+  updates: "app",
 };
 
 const SettingsFilter = createContext<{ tab: SettingsTab; query: string; report: (id: string, n: number) => void }>({
-  tab: "nudges",
+  tab: "tasks",
   query: "",
   report: () => {},
 });
@@ -223,7 +230,7 @@ function useSettingsNav() {
     } catch {
       /* fine */
     }
-    return "nudges";
+    return "tasks";
   });
   const [query, setQuery] = useState("");
   const counts = useRef(new Map<string, number>());
@@ -985,7 +992,7 @@ function NudgeSettings({ autostart, setAutostart }: { autostart: boolean | null;
           <button className="row disclosure" aria-expanded={fine} onClick={() => setFine(!fine)}>
             <span className="row-text">
               <span className="row-label">Fine-tune</span>
-              <span className="row-hint">How nudges sound, repeats, heads-ups and dose reminders.</span>
+              <span className="row-hint">How nudges sound, repeats and heads-ups.</span>
             </span>
             <Chevron size={16} className={fine ? "is-open" : ""} />
           </button>
@@ -1026,30 +1033,6 @@ function NudgeSettings({ autostart, setAutostart }: { autostart: boolean | null;
                   { value: "15", label: "15 min" },
                 ]}
               />
-              <Choice
-                label="Dose reminders repeat"
-                hint="Until the dose is taken or skipped."
-                value={String(s.doseNagMinutes)}
-                onChange={(v) => set({ doseNagMinutes: Number(v) })}
-                options={[
-                  { value: "0", label: "Once" },
-                  { value: "15", label: "Every 15 min" },
-                  { value: "30", label: "Every 30 min" },
-                  { value: "60", label: "Hourly" },
-                ]}
-              />
-              {s.doseNagMinutes > 0 && (
-                <Choice
-                  label="For up to"
-                  value={String(s.doseNagUntilMinutes)}
-                  onChange={(v) => set({ doseNagUntilMinutes: Number(v) })}
-                  options={[
-                    { value: "60", label: "1 hour" },
-                    { value: "120", label: "2 hours" },
-                    { value: "240", label: "4 hours" },
-                  ]}
-                />
-              )}
             </div>
           )}
         </>
@@ -1059,6 +1042,49 @@ function NudgeSettings({ autostart, setAutostart }: { autostart: boolean | null;
 }
 
 /** The phone's calendars on Today (read-only), and the stormy-day offer. */
+const GOAL_ROWS: { key: keyof FoodGoals; label: string; hint: string; unit: string; on: number; min: number; max: number }[] = [
+  { key: "meals", label: "Eat regularly", hint: "Meals and snacks close together count as one time.", unit: "times", on: 3, min: 1, max: 8 },
+  { key: "fruitVeg", label: "Fruit & veg", hint: "Guessed from what you note; tap “Counts as fruit or veg” to change it.", unit: "portions", on: 5, min: 1, max: 10 },
+  { key: "water", label: "Water", hint: "A + Glass button on the Food tab adds one.", unit: "glasses", on: 6, min: 1, max: 12 },
+];
+
+/** Daily food goals: a soft ring each on the Food tab. */
+function FoodGoalSettings() {
+  const { settings: s, updateSettings: set } = useStore();
+  const goals = s.foodGoals;
+  const put = (k: keyof FoodGoals, v: number | null) => set({ foodGoals: { ...goals, [k]: v } });
+  return (
+    <>
+      <div className="row">
+        <span className="row-text">
+          <span className="row-hint">Each goal fills a ring on the Food tab and gets a little cheer when you reach it. Nothing is ever said about the ones you don't.</span>
+        </span>
+      </div>
+      {GOAL_ROWS.map((g) => (
+        <div key={g.key}>
+          <Toggle label={g.label} hint={g.hint} checked={goals[g.key] != null} onChange={(v) => put(g.key, v ? g.on : null)} />
+          {goals[g.key] != null && (
+            <Stepper label="Each day" value={goals[g.key]!} step={1} min={g.min} max={g.max} unit={g.unit} onChange={(v) => put(g.key, v)} />
+          )}
+        </div>
+      ))}
+      {s.foodShowCalories && (
+        <>
+          <Toggle
+            label="A rough calorie guide"
+            hint="A ring that fills as the day goes. It's a guide, not a limit: it never turns red or tells you off."
+            checked={s.foodGuide != null}
+            onChange={(v) => set({ foodGuide: v ? 2000 : null })}
+          />
+          {s.foodGuide != null && (
+            <Stepper label="Guide" value={s.foodGuide} step={100} min={800} max={5000} unit="kcal" onChange={(v) => set({ foodGuide: v })} />
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
 function FoodSettings() {
   const { settings: s, updateSettings: set } = useStore();
   return (
@@ -1077,19 +1103,6 @@ function FoodSettings() {
             checked={s.foodShowCalories}
             onChange={(v) => set({ foodShowCalories: v })}
           />
-          {s.foodShowCalories && (
-            <>
-              <Toggle
-                label="A rough daily guide"
-                hint="A soft ring that fills as the day goes. It's a guide, not a limit: it never turns red or tells you off."
-                checked={s.foodGuide != null}
-                onChange={(v) => set({ foodGuide: v ? 2000 : null })}
-              />
-              {s.foodGuide != null && (
-                <Stepper label="Guide" value={s.foodGuide} step={100} min={800} max={5000} unit="kcal" onChange={(v) => set({ foodGuide: v })} />
-              )}
-            </>
-          )}
           <div className="row">
             <span className="row-text">
               <span className="row-label">Where numbers come from</span>
@@ -1105,7 +1118,54 @@ function FoodSettings() {
   );
 }
 
-function DaySettings() {
+/** How dose reminders behave (they ignore quiet hours and "quiet for today"). */
+function DoseSettings() {
+  const { settings: s, updateSettings: set } = useStore();
+  if (!isAndroid)
+    return (
+      <div className="row">
+        <span className="row-text">
+          <span className="row-label">Dose reminders</span>
+          <span className="row-hint">On this computer, doses remind at their time. On your phone they can repeat until taken or skipped. Quiet hours never hush a dose.</span>
+        </span>
+      </div>
+    );
+  return (
+    <>
+  <Choice
+    label="Dose reminders repeat"
+    hint="Until the dose is taken or skipped."
+    value={String(s.doseNagMinutes)}
+    onChange={(v) => set({ doseNagMinutes: Number(v) })}
+    options={[
+      { value: "0", label: "Once" },
+      { value: "15", label: "Every 15 min" },
+      { value: "30", label: "Every 30 min" },
+      { value: "60", label: "Hourly" },
+    ]}
+  />
+  {s.doseNagMinutes > 0 && (
+    <Choice
+      label="For up to"
+      value={String(s.doseNagUntilMinutes)}
+      onChange={(v) => set({ doseNagUntilMinutes: Number(v) })}
+      options={[
+        { value: "60", label: "1 hour" },
+        { value: "120", label: "2 hours" },
+        { value: "240", label: "4 hours" },
+      ]}
+    />
+  )}
+      <div className="row">
+        <span className="row-text">
+          <span className="row-hint">Doses always remind, even in quiet hours or on a quiet day.</span>
+        </span>
+      </div>
+    </>
+  );
+}
+
+function CalendarSettings() {
   const { settings: s, updateSettings: set, toast } = useStore();
   const [status, setStatus] = useState<CalendarAccess["status"] | null>(null);
   const [cals, setCals] = useState<DeviceCalendar[] | null>(null);
@@ -1199,6 +1259,15 @@ function DaySettings() {
           )}
         </>
       )}
+    </>
+  );
+}
+
+/** The daily check-in and the stormy-day offer. */
+function MoodDaySettings() {
+  const { settings: s, updateSettings: set } = useStore();
+  return (
+    <>
       <Toggle
         label="Offer a lighter day when it's stormy"
         hint="When you check in with thunder, Tend can offer to keep just one thing and let the rest wait until tomorrow. Doses never move."
@@ -1549,7 +1618,7 @@ function UpdatesGroup() {
     failed: `Version ${state.version} could not be fetched. Try again.`,
   };
   return (
-    <Group title="Updates" id="updates" tab="data" keywords="version stable unstable channel download install">
+    <Group title="Updates" id="updates" tab="app" keywords="version stable unstable channel download install">
       <div className="row">
         <span className="row-text">
           <span className="row-label">Tend {version}</span>
@@ -1703,21 +1772,58 @@ export function SettingsView() {
       <Group
         title="Nudges"
         id="nudges"
-        tab="nudges"
-        keywords="notifications reminders chime unlock quiet hours preset gentle persistent fine-tune sound vibrate silent heads-up dose repeat remind again autostart start with windows"
+        tab="tasks"
+        keywords="notifications reminders tasks chime unlock quiet hours preset gentle persistent fine-tune sound vibrate silent heads-up repeat remind again autostart start with windows"
       >
         <NudgeSettings autostart={autostart} setAutostart={setAutostart} />
       </Group>
 
-      <Group title="Your day" id="your-day" tab="day" keywords="calendar mood weather check-in stormy reasons emoji">
-        <DaySettings />
-        <MoodReasonSettings />
+      <Group title="Calendar" id="calendar" tab="tasks" keywords="calendar events google today">
+        <CalendarSettings />
       </Group>
-      <Group title="Food" id="food" tab="day" keywords="food meals eat calories kcal barcode label diet nutrition">
+
+      <Group title="Dose reminders" id="medicine" tab="medicine" keywords="medicine medication meds dose doses pills repeat remind taken skipped">
+        <DoseSettings />
+      </Group>
+
+      <Group title="Medicine diary" id="medicine-diary" tab="medicine" keywords="medicine medication health diary export import copy json">
+        <HealthData />
+      </Group>
+
+      <Group title="Food log" id="food" tab="food" keywords="food meals eat calories kcal barcode label diet nutrition">
         <FoodSettings />
       </Group>
 
-      <Group title="Look and feel" id="look" tab="look" keywords="sounds volume theme dark light night day motion animation">
+      {s.foodTracking && (
+        <Group title="Daily food goals" id="food-goals" tab="food" keywords="food goals target meals eat regularly fruit veg vegetables five a day water drink glasses hydration calories guide">
+          <FoodGoalSettings />
+        </Group>
+      )}
+
+      <Group title="Garden wildlife" id="wildlife" tab="garden" keywords="wren pet bird animals visitors nest field notes hemisphere seasons">
+        <WildlifeSettings />
+      </Group>
+
+      <Group title="Seeds and helper" id="rewards" tab="garden" keywords="seeds golden bonus rewards helper model ai suggestions tree">
+        <Toggle
+          label="Surprise golden seeds"
+          hint="Sometimes finishing something gives a few extra seeds. Never needed, never taken away."
+          checked={s.surpriseBonuses}
+          onChange={(v) => set({ surpriseBonuses: v })}
+        />
+        <ModelRow />
+      </Group>
+
+      <Group title="Weather inside" id="your-day" tab="mood" keywords="mood weather check-in stormy lighter day reasons emoji why">
+        <MoodDaySettings />
+        <MoodReasonSettings />
+      </Group>
+
+      <Group title="Movement" id="movement" tab="movement" keywords="steps workouts exercise fitness health connect google fit goal">
+        <MovementSettings />
+      </Group>
+
+      <Group title="Look and feel" id="look" tab="app" keywords="sounds volume theme dark light night day motion animation">
         <SoundSettings />
         <Choice
           label="Reduce motion"
@@ -1741,30 +1847,11 @@ export function SettingsView() {
         />
       </Group>
 
-      <Group title="Garden wildlife" id="wildlife" tab="look" keywords="wren pet bird animals visitors nest field notes hemisphere seasons">
-        <WildlifeSettings />
-      </Group>
-
-      <Group title="Rewards" id="rewards" tab="look" keywords="seeds golden bonus helper model ai suggestions">
-        <Toggle
-          label="Surprise golden seeds"
-          hint="Sometimes finishing something gives a few extra seeds. Never needed, never taken away."
-          checked={s.surpriseBonuses}
-          onChange={(v) => set({ surpriseBonuses: v })}
-        />
-        <ModelRow />
-      </Group>
-
-      <Group title="Movement" id="movement" tab="movement" keywords="steps workouts exercise fitness health connect google fit goal">
-        <MovementSettings />
-      </Group>
-
-      <Group title="Your data" id="data" tab="data" keywords="backup restore export import passphrase medicine diary">
+      <Group title="Backup" id="data" tab="app" keywords="backup restore export import passphrase data">
         <BackupSettings />
-        <HealthData />
       </Group>
 
-      <Group title="Sync between devices" id="sync" tab="data" keywords="pair qr code computer phone wi-fi">
+      <Group title="Sync between devices" id="sync" tab="app" keywords="pair qr code computer phone wi-fi">
         {sync?.hosting && (
           <div className="pair-host">
             <p className="row-hint">

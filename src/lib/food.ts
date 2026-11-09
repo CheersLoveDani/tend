@@ -254,3 +254,69 @@ export async function readLabel(): Promise<LabelGuess | null> {
   if (res.cancelled) return null;
   return api.parseLabel(res.text);
 }
+
+// ---- daily goals -------------------------------------------------------------------------------
+
+const FRUIT_VEG = new RegExp(
+  "\\b(" +
+    [
+      "fruits?", "veg", "veggies?", "vegetables?", "salads?", "smoothies?",
+      "apples?", "bananas?", "oranges?", "satsumas?", "clementines?", "mandarins?", "pears?", "grapes?", "berry", "berries",
+      "strawberry", "strawberries", "raspberry", "raspberries", "blueberry", "blueberries", "melons?", "watermelons?", "mangos?", "mangoes",
+      "pineapples?", "kiwis?", "raisins?", "sultanas?", "avocados?", "plums?", "peach", "peaches", "cherry", "cherries", "apricots?",
+      "nectarines?", "dates", "figs?", "lettuce", "carrots?", "broccoli", "peas", "sweetcorn", "tomato", "tomatoes", "beans", "lentils",
+      "chickpeas", "spinach", "cucumbers?", "peppers?", "onions?", "mushrooms?", "courgettes?", "zucchini", "cabbage", "cauliflower",
+      "kale", "beetroot", "parsnips?", "sprouts", "leeks?", "celery", "sweet potato(es)?", "squash", "aubergines?", "eggplants?",
+      "coleslaw", "stir fry veg",
+    ].join("|") +
+    ")\\b",
+  "i",
+);
+const FRUIT_VEG_EMOJI = new Set(["🍎", "🍏", "🍌", "🍊", "🍋", "🍐", "🍇", "🍓", "🫐", "🍈", "🍉", "🥭", "🍍", "🥝", "🍑", "🍒", "🥑", "🥗", "🥕", "🥦", "🫛", "🌽", "🍅", "🥒", "🫑", "🥬", "🧅", "🍄", "🍆", "🫘"]);
+
+/** A best guess at whether a food counts as fruit or veg (potatoes and chips don't, like the UK's 5 a day). */
+export function guessFruitVeg(name: string, emoji = ""): boolean {
+  if (/\b(chips|crisps|fries|potato(es)?|jam|ketchup|juice drink|cake|pie)\b/i.test(name) && !/sweet potato/i.test(name)) return false;
+  return FRUIT_VEG.test(name) || FRUIT_VEG_EMOJI.has(emoji);
+}
+
+export const isWater = (f: Pick<Food, "name" | "emoji">) => f.emoji === "💧" || /^(a )?(glass of |bottle of )?(still |sparkling )?water$/i.test(f.name.trim());
+export const countsAsFruitVeg = (f: Food) => !isWater(f) && (f.fruitVeg ?? guessFruitVeg(f.name, f.emoji));
+
+/** Times eaten today: things noted within 45 minutes of each other count as one sitting. */
+export function sittings(foods: Food[]): number {
+  const times = foods.filter((f) => !isWater(f)).map((f) => f.at).sort((a, b) => a - b);
+  let n = 0;
+  let last = -Infinity;
+  for (const t of times) {
+    if (t - last > 45 * 60_000) n++;
+    last = t;
+  }
+  return n;
+}
+
+export interface GoalProgress {
+  meals: number;
+  fruitVeg: number;
+  water: number;
+}
+
+export function goalProgress(today: Food[]): GoalProgress {
+  return { meals: sittings(today), fruitVeg: today.filter(countsAsFruitVeg).length, water: today.filter(isWater).length };
+}
+
+/** A glass of water, ready to save. */
+export const waterGlass = (at: number): Food => ({
+  id: "",
+  name: "Water",
+  emoji: "💧",
+  meal: "",
+  kcal: 0,
+  amount: "1 glass",
+  grams: 250,
+  source: "manual",
+  barcode: "",
+  note: "",
+  at,
+  fruitVeg: false,
+});

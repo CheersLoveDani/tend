@@ -82,7 +82,7 @@ export const FEATURES: Feature[] = [
     blurb: "See today's events from your phone's calendars next to your tasks. Tend only reads them.",
     available: () => isAndroid,
     isOn: (s) => s.calendarEnabled,
-    section: "your-day",
+    section: "calendar",
   },
   {
     id: "movement",

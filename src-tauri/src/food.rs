@@ -52,6 +52,9 @@ pub struct Food {
     pub note: String,
     #[serde(default)]
     pub at: i64,
+    /// Counts toward the fruit & veg goal; `None` = guessed from the name on the device.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fruit_veg: Option<bool>,
 }
 
 /// What's known about a food product (Open Food Facts, a label, or a past log).
@@ -501,7 +504,7 @@ mod tests {
     }
 
     fn food(name: &str) -> Food {
-        Food { id: String::new(), name: name.into(), emoji: "🍎".into(), meal: "snack".into(), kcal: Some(95.0), amount: "1".into(), grams: None, source: "estimate".into(), barcode: String::new(), note: String::new(), at: 0 }
+        Food { id: String::new(), name: name.into(), emoji: "🍎".into(), meal: "snack".into(), kcal: Some(95.0), amount: "1".into(), grams: None, source: "estimate".into(), barcode: String::new(), note: String::new(), at: 0, fruit_veg: None }
     }
 
     #[test]
