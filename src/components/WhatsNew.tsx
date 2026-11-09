@@ -7,6 +7,13 @@ import { Leaf } from "./Icons";
 /** What each release changed, newest first. Shown once after updating; new installs never see it. */
 export const CHANGES: { version: string; title: string; items: string[] }[] = [
   {
+    version: "0.5.1",
+    title: "Pick your updates",
+    items: [
+      "Choose stable or unstable updates. Stable is tried and tested; unstable gets new things first. Switch any time in Settings → Updates.",
+    ],
+  },
+  {
     version: "0.5.0",
     title: "Your weather, mapped",
     items: [

@@ -14,6 +14,7 @@ import { EntrySheet } from "./components/EntrySheet";
 import { Welcome } from "./views/Welcome";
 import { WhatsNew, useWhatsNewNote } from "./components/WhatsNew";
 import { FeatureOffer } from "./components/FeatureOffer";
+import { ChannelChoice } from "./components/ChannelChoice";
 import { MoodInsights } from "./views/MoodInsights";
 import { OPEN_SETTINGS_EVENT } from "./lib/features";
 import { Editor } from "./components/Editor";
@@ -371,7 +372,8 @@ function Shell() {
       <AnimatePresence>
         {offerShown && <UpdateOffer key="update" version={offer!} onClose={dismissOffer} />}
       </AnimatePresence>
-      <FeatureOffer blocked={sheetOpen || insights || moodWhy || offerShown || whatsNew.waiting} />
+      <ChannelChoice blocked={sheetOpen || insights || moodWhy || offerShown || whatsNew.waiting} />
+      <FeatureOffer blocked={sheetOpen || insights || moodWhy || offerShown || whatsNew.waiting || (appUpdater.supported && !settings.channelAsked)} />
       <StormyDay />
       <Toasts />
       <RewardLayer />

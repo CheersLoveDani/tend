@@ -61,6 +61,8 @@ export interface Settings {
   moodReasonOptions: MoodReason[];
   /** Stable releases only, or unstable pre-releases too (updater.ts). */
   updateChannel: "stable" | "unstable";
+  /** The channel question (ChannelChoice) has been answered. New installs start on stable without asking. */
+  channelAsked: boolean;
   /** Features (ids from features.ts) already offered in the "something new" pop-up. */
   seenFeatures: string[];
 }
@@ -117,6 +119,7 @@ export const defaultSettings: Settings = {
   moodReasonOptions: DEFAULT_MOOD_REASONS,
   seenFeatures: [],
   updateChannel: "stable",
+  channelAsked: false,
 };
 
 /** Quiet / Gentle / Persistent: what onboarding and Settings offer as one-tap starting points. */

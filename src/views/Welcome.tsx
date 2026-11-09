@@ -47,7 +47,7 @@ export function Welcome() {
     };
     // What's on by default counts as seen. Anything needing a permission is offered on a later visit.
     markJustOnboarded();
-    updateSettings({ ...patch, seenFeatures: seenOnInstall({ ...settings, ...patch }) });
+    updateSettings({ ...patch, channelAsked: true, seenFeatures: seenOnInstall({ ...settings, ...patch }) });
     if (consent) {
       if (onMobileData()) toast("You're on mobile data, so the helper waits. Download it from Settings when you're on Wi-Fi.");
       else
