@@ -1242,6 +1242,20 @@ function UpdatesGroup() {
         )}
       </div>
       <Toggle label="Download updates automatically" checked={s.autoUpdate} onChange={(v) => set({ autoUpdate: v })} />
+      <Choice
+        label="Update channel"
+        hint={
+          s.updateChannel === "unstable"
+            ? "Unstable: new things first, while they're still being tried. Expect the odd rough edge. Your data stays put either way."
+            : "Stable: tried-and-tested releases only."
+        }
+        value={s.updateChannel}
+        onChange={(v) => set({ updateChannel: v })}
+        options={[
+          { value: "stable", label: "Stable" },
+          { value: "unstable", label: "Unstable" },
+        ]}
+      />
     </Group>
   );
 }

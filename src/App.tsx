@@ -52,11 +52,19 @@ const UPDATE_RETRY_INTERVAL_MS = 2 * 60 * 1000;
  * Updates download by themselves (when allowed) but are only installed when asked.
  * Returns the version to offer, once per launch per version.
  */
-function useAppUpdates(autoUpdate: boolean) {
+function useAppUpdates(autoUpdate: boolean, channel: "stable" | "unstable") {
   const [state, setState] = useState<UpdateState>(appUpdater.getState());
   const [offer, setOffer] = useState<string | null>(null);
   const auto = useRef(autoUpdate);
   auto.current = autoUpdate;
+
+  // Switching channel looks again straight away.
+  const firstChannel = useRef(true);
+  useEffect(() => {
+    appUpdater.setChannel(channel);
+    if (firstChannel.current) return void (firstChannel.current = false);
+    void appUpdater.check(auto.current);
+  }, [channel]);
 
   useEffect(() => {
     if (!appUpdater.supported) return;
@@ -134,7 +142,7 @@ function UpdateOffer({ version, onClose }: { version: string; onClose: () => voi
 function Shell() {
   const store = useStore();
   const { snap, settings, reduceMotion } = store;
-  const { updating, offer, dismissOffer } = useAppUpdates(settings.autoUpdate);
+  const { updating, offer, dismissOffer } = useAppUpdates(settings.autoUpdate, settings.updateChannel);
   const [tab, setTabNow] = useState<Tab>("today");
   // Tabs visited before this one, so back retraces them.
   const tabHistory = useRef<Tab[]>([]);

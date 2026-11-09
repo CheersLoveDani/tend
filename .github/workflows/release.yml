@@ -4,6 +4,12 @@ name: Release
 # Cargo.toml) to build and publish the Windows installer and the Android APK.
 # Installed copies update themselves from that release: Windows through the
 # signed latest.json, Android by downloading the APK.
+#
+# Stable vs unstable (see CLAUDE.md): a tag with a dash, like v0.6.0-1, is an
+# unstable build from the `unstable` branch. It's published as a GitHub
+# pre-release, which the stable channel never sees ("latest" skips pre-releases);
+# apps set to the unstable channel pick it up. The part after the dash must be a
+# plain number, because Windows MSI versions can't hold anything else.
 on:
   push:
     tags: ['v*']
@@ -28,6 +34,8 @@ concurrency:
 
 env:
   TAG: ${{ inputs.tag || github.ref_name }}
+  # vX.Y.Z-N tags are unstable pre-releases.
+  UNSTABLE: ${{ contains(inputs.tag || github.ref_name, '-') }}
 
 jobs:
   windows:
@@ -52,10 +60,10 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
         with:
           tagName: ${{ env.TAG }}
-          releaseName: Tend ${{ env.TAG }}
-          releaseBody: Windows installs update themselves. On Android, install the APK below once; after that Tend offers each new version itself.
+          releaseName: Tend ${{ env.TAG }}${{ env.UNSTABLE == 'true' && ' (unstable)' || '' }}
+          releaseBody: ${{ env.UNSTABLE == 'true' && 'Unstable build, for trying new things early. Apps on the unstable channel (Settings → Updates) get it automatically; stable apps never see it.' || 'Windows installs update themselves. On Android, install the APK below once; after that Tend offers each new version itself.' }}
           releaseDraft: false
-          prerelease: false
+          prerelease: ${{ env.UNSTABLE == 'true' }}
           includeUpdaterJson: true
 
   android:

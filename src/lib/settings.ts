@@ -59,6 +59,8 @@ export interface Settings {
   moodReasons: boolean;
   /** The reasons offered as one-tap chips, in order. */
   moodReasonOptions: MoodReason[];
+  /** Stable releases only, or unstable pre-releases too (updater.ts). */
+  updateChannel: "stable" | "unstable";
   /** Features (ids from features.ts) already offered in the "something new" pop-up. */
   seenFeatures: string[];
 }
@@ -114,6 +116,7 @@ export const defaultSettings: Settings = {
   moodReasons: true,
   moodReasonOptions: DEFAULT_MOOD_REASONS,
   seenFeatures: [],
+  updateChannel: "stable",
 };
 
 /** Quiet / Gentle / Persistent: what onboarding and Settings offer as one-tap starting points. */

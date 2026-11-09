@@ -7,6 +7,7 @@ mod model;
 mod rewards;
 mod suggest;
 mod sync;
+mod update;
 
 use std::sync::{Arc, Mutex};
 
@@ -606,6 +607,9 @@ pub fn run() {
             backup_now,
             backup_written,
             restore_backup,
+            update::update_check,
+            update::update_download,
+            update::update_install,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Tend")

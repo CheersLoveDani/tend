@@ -4,28 +4,67 @@ import { isAndroid } from "./api";
 // Keeps Tend itself up to date from this project's GitHub releases.
 // Desktop: signed installers listed in the release's latest.json, installed in place.
 // Android: the APK attached to the release, handed to the system installer (which asks first).
+//
+// Two channels. Stable follows GitHub's "latest" release, which never includes pre-releases.
+// Unstable follows the newest release of any kind: unstable builds are GitHub pre-releases tagged
+// vX.Y.Z-N (built from the `unstable` branch), and a newer stable release wins there too.
+
+export type UpdateChannel = "stable" | "unstable";
 
 const LATEST_RELEASE = "https://api.github.com/repos/CheersLoveDani/tend/releases/latest";
+const ALL_RELEASES = "https://api.github.com/repos/CheersLoveDani/tend/releases?per_page=20";
+const STABLE_MANIFEST = "https://github.com/CheersLoveDani/tend/releases/latest/download/latest.json";
 /** Installers are only ever taken from this project's own releases. */
 const RELEASE_DOWNLOADS = "https://github.com/CheersLoveDani/tend/releases/download/";
 
 const inTauri = "__TAURI_INTERNALS__" in window;
 
-/** -1, 0 or 1 comparing dotted versions; a leading "v" and pre-release tags are ignored. */
+/**
+ * -1, 0 or 1 comparing versions like semver: a leading "v" is ignored, and a pre-release
+ * ("0.6.0-2") comes before its release ("0.6.0") and after the one before it ("0.6.0-1").
+ */
 export function compareVersions(a: string, b: string): number {
-  const parts = (v: string) =>
-    v
-      .replace(/^v/i, "")
-      .split(/[-+]/)[0]
-      .split(".")
-      .map((n) => Number.parseInt(n, 10) || 0);
-  const pa = parts(a);
-  const pb = parts(b);
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+  const split = (v: string) => {
+    const s = v.replace(/^v/i, "").split("+")[0];
+    const dash = s.indexOf("-");
+    const core = dash < 0 ? s : s.slice(0, dash);
+    const pre = dash < 0 ? "" : s.slice(dash + 1);
+    return { core: core.split(".").map((n) => Number.parseInt(n, 10) || 0), pre: pre ? pre.split(".") : [] };
+  };
+  const pa = split(a);
+  const pb = split(b);
+  for (let i = 0; i < Math.max(pa.core.length, pb.core.length); i++) {
+    const diff = (pa.core[i] ?? 0) - (pb.core[i] ?? 0);
+    if (diff !== 0) return diff > 0 ? 1 : -1;
+  }
+  // Same release number: having no pre-release tag is newer than having one.
+  if (!pa.pre.length || !pb.pre.length) return pa.pre.length === pb.pre.length ? 0 : pa.pre.length ? -1 : 1;
+  for (let i = 0; i < Math.max(pa.pre.length, pb.pre.length); i++) {
+    const x = pa.pre[i];
+    const y = pb.pre[i];
+    if (x === undefined || y === undefined) return x === undefined ? -1 : 1;
+    const numeric = /^\d+$/.test(x) && /^\d+$/.test(y);
+    const diff = numeric ? Number(x) - Number(y) : x.localeCompare(y);
     if (diff !== 0) return diff > 0 ? 1 : -1;
   }
   return 0;
+}
+
+let channel: UpdateChannel = "stable";
+
+interface GhRelease {
+  tag_name?: string;
+  draft?: boolean;
+  assets?: { name?: string; browser_download_url?: string }[];
+}
+
+/** The release this channel follows: GitHub's latest for stable, the newest of all for unstable. */
+async function channelRelease(): Promise<GhRelease | null> {
+  const res = await fetch(channel === "unstable" ? ALL_RELEASES : LATEST_RELEASE, { headers: { Accept: "application/vnd.github+json" } });
+  if (!res.ok) throw new Error(`GitHub answered ${res.status}`);
+  if (channel === "stable") return (await res.json()) as GhRelease;
+  const all = ((await res.json()) as GhRelease[]).filter((r) => !r.draft && r.tag_name);
+  return all.sort((x, y) => compareVersions(y.tag_name!, x.tag_name!))[0] ?? null;
 }
 
 export async function appVersion(): Promise<string> {
@@ -51,20 +90,25 @@ export interface UpdateState {
 }
 
 function desktopDriver(): UpdateDriver {
-  let pending: import("@tauri-apps/plugin-updater").Update | null = null;
   return {
     async find() {
-      const { check } = await import("@tauri-apps/plugin-updater");
-      pending = await check();
-      return pending ? { version: pending.version } : null;
+      let url = STABLE_MANIFEST;
+      if (channel === "unstable") {
+        const release = await channelRelease();
+        const manifest = release?.assets?.find((a) => a.name === "latest.json" && a.browser_download_url?.startsWith(RELEASE_DOWNLOADS));
+        // A release whose installers are still being built is picked up on a later check.
+        if (!manifest?.browser_download_url) return null;
+        url = manifest.browser_download_url;
+      }
+      // Checked, downloaded and installed by src-tauri/src/update.rs (signature verified there).
+      const version = await invoke<string | null>("update_check", { url });
+      return version ? { version } : null;
     },
     async download() {
-      await pending!.download();
+      await invoke("update_download");
     },
     async apply() {
-      await pending!.install();
-      const { relaunch } = await import("@tauri-apps/plugin-process");
-      await relaunch();
+      await invoke("update_install");
     },
   };
 }
@@ -73,10 +117,8 @@ function androidDriver(): UpdateDriver {
   let apkUrl: string | null = null;
   return {
     async find() {
-      const res = await fetch(LATEST_RELEASE, { headers: { Accept: "application/vnd.github+json" } });
-      if (!res.ok) throw new Error(`GitHub answered ${res.status}`);
-      const release = (await res.json()) as { tag_name?: string; assets?: { name?: string; browser_download_url?: string }[] };
-      if (!release.tag_name || compareVersions(release.tag_name, await appVersion()) <= 0) return null;
+      const release = await channelRelease();
+      if (!release?.tag_name || compareVersions(release.tag_name, await appVersion()) <= 0) return null;
       apkUrl =
         release.assets?.find((a) => a.name?.endsWith(".apk") && a.browser_download_url?.startsWith(RELEASE_DOWNLOADS))?.browser_download_url ?? null;
       // A release whose APK is still being built is picked up on a later check.
@@ -114,6 +156,12 @@ function createUpdater(driver: UpdateDriver | null) {
 
   return {
     supported: driver !== null,
+    /** Which releases to follow. A switch forgets anything found on the other channel. */
+    setChannel(next: UpdateChannel) {
+      if (next === channel) return;
+      channel = next;
+      if (!busy()) set("idle", null);
+    },
     getState: () => state,
     subscribe(listener: (s: UpdateState) => void) {
       listeners.add(listener);
