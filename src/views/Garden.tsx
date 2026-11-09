@@ -8,6 +8,7 @@ import { Sky } from "../components/Sky";
 import { WeatherCheckIn } from "../components/WeatherCheckIn";
 import { MovingCard } from "../components/MovingCard";
 import { AutoHeight } from "../components/AutoHeight";
+import { useGardenLife } from "../components/GardenLife";
 import { openInsights, todaysWeather, weatherDays, weatherOf, type Quote, type Weather } from "../lib/weather";
 
 /** A check-in just happened: the tree reacts and a quote appears. */
@@ -30,6 +31,7 @@ const STAGES = ["Seed", "Sprout", "Seedling", "Sapling", "Young tree", "Leafy tr
 
 export function Garden({ moment, onMomentDone }: { moment?: WeatherMoment | null; onMomentDone?: () => void }) {
   const { snap, reduceMotion } = useStore();
+  const life = useGardenLife(snap?.level.level ?? 1);
   useEffect(() => {
     if (!moment) return;
     document.querySelector(".main")?.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
@@ -69,9 +71,13 @@ export function Garden({ moment, onMomentDone }: { moment?: WeatherMoment | null
             animate={response ?? undefined}
             transition={{ duration: moment?.weather === 1 ? 2.4 : 2, ease: "easeInOut", delay: 0.35 }}
           >
-            <Tree level={level.level} progress={progress} size={280} still={reduceMotion} />
+            <div className="wl-stage">
+              <Tree level={level.level} progress={progress} size={280} still={reduceMotion} />
+              {life.layer}
+            </div>
           </motion.div>
         </Sky>
+        {life.caption}
         {/* The quote eases the rest of the page down instead of shoving it. */}
         <AutoHeight className="garden-moment" reduceMotion={reduceMotion}>
           <AnimatePresence mode="wait">

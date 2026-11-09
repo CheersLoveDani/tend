@@ -5,6 +5,8 @@ import "@fontsource/atkinson-hyperlegible/400.css";
 import "@fontsource/atkinson-hyperlegible/700.css";
 import "./styles.css";
 import "./mood.css";
+import "./wildlife.css";
+import "./garden-life.css";
 import App from "./App";
 
 if (/android/i.test(navigator.userAgent)) document.documentElement.setAttribute("data-android", "");

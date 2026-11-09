@@ -63,6 +63,15 @@ export interface Settings {
   updateChannel: "stable" | "unstable";
   /** The channel question (ChannelChoice) has been answered. New installs start on stable without asking. */
   channelAsked: boolean;
+  /** Wildlife in the garden (wildlife.ts): a wren that lives in the tree, and visitors through the seasons. */
+  wildlife: boolean;
+  /** When the wren moved in (epoch ms); null until the first thing is finished. */
+  wildlifeSince: number | null;
+  wildlifeName: string;
+  /** Visitors asked to stay for good. */
+  wildlifeKept: string[];
+  /** Southern hemisphere seasons; null = guess from the time zone. */
+  wildlifeSouth: boolean | null;
   /** Features (ids from features.ts) already offered in the "something new" pop-up. */
   seenFeatures: string[];
 }
@@ -118,6 +127,11 @@ export const defaultSettings: Settings = {
   moodReasons: true,
   moodReasonOptions: DEFAULT_MOOD_REASONS,
   seenFeatures: [],
+  wildlife: true,
+  wildlifeSince: null,
+  wildlifeName: "Pip",
+  wildlifeKept: [],
+  wildlifeSouth: null,
   updateChannel: "stable",
   channelAsked: false,
 };

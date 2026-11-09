@@ -1,0 +1,267 @@
+/* Garden wildlife (src/components/Critters.tsx). Natural colours stay the same in both
+   themes; dark mode lifts the darkest ones a touch and adds a faint moonlit rim so small
+   silhouettes don't sink into the night sky. */
+.wl {
+  --wl-ink: #231f1b;
+  --wl-rim: color-mix(in srgb, var(--paper) 55%, transparent);
+  display: block;
+  overflow: visible;
+  flex: none;
+  filter: drop-shadow(0 0 0.5px var(--wl-rim));
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .wl {
+    --wl-rim: color-mix(in srgb, var(--bark) 45%, transparent);
+    --wl-swallow: #34518f;
+    --wl-swallow-2: #2a4277;
+    --wl-hog-tip: #6f5741;
+  }
+}
+:root[data-theme="dark"] .wl {
+  --wl-rim: color-mix(in srgb, var(--bark) 45%, transparent);
+  --wl-swallow: #34518f;
+  --wl-swallow-2: #2a4277;
+  --wl-hog-tip: #6f5741;
+}
+
+/* shared */
+.wl-eye {
+  fill: var(--wl-ink);
+}
+.wl-lid {
+  fill: none;
+  stroke: var(--wl-ink);
+  stroke-width: 0.7;
+  stroke-linecap: round;
+}
+.wl-beak-dark {
+  fill: #3a322b;
+}
+.wl-leg path,
+.wl-leg {
+  fill: none;
+  stroke: #9a7462;
+  stroke-width: 0.9;
+  stroke-linecap: round;
+}
+.wl-bars {
+  fill: none;
+  stroke: #c9a27a;
+  stroke-width: 0.6;
+  stroke-linecap: round;
+}
+
+/* wren */
+.wl-wren {
+  fill: #8d6041;
+}
+.wl-wren-dark {
+  fill: #6c4a31;
+}
+.wl-wren-belly {
+  fill: #c8a27c;
+}
+.wl-wren-brow {
+  fill: none;
+  stroke: #ead6b4;
+  stroke-width: 1;
+  stroke-linecap: round;
+}
+
+/* blue tit + chick */
+.wl-tit-blue {
+  fill: #3f7cc0;
+}
+.wl-tit-back {
+  fill: #86a160;
+}
+.wl-tit-belly {
+  fill: #eccb3f;
+}
+.wl-tit-cheek {
+  fill: #f8f7ef;
+}
+.wl-tit-stripe {
+  fill: #1f3352;
+}
+.wl-tit-collar {
+  fill: none;
+  stroke: #1f3352;
+  stroke-width: 0.8;
+  stroke-linecap: round;
+}
+.wl-tit-bar {
+  fill: none;
+  stroke: #f4f2e8;
+  stroke-width: 0.8;
+  stroke-linecap: round;
+}
+.wl-bluetit .wl-leg path {
+  stroke: #6f7f92;
+}
+.wl-chick {
+  fill: #cfc7a0;
+}
+.wl-chick-belly {
+  fill: #ecdc8c;
+}
+.wl-chick-cap {
+  fill: #c3bc98;
+}
+.wl-chick-wing {
+  fill: #a9a690;
+}
+.wl-gape {
+  fill: #f0b43a;
+}
+
+/* swallow */
+.wl-swallow {
+  fill: var(--wl-swallow, #253f74);
+}
+.wl-swallow-dark {
+  fill: var(--wl-swallow-2, #1c2f58);
+}
+.wl-swallow-streamer {
+  fill: none;
+  stroke: var(--wl-swallow-2, #1c2f58);
+  stroke-width: 1.1;
+  stroke-linecap: round;
+}
+.wl-swallow-belly {
+  fill: #f1e6cf;
+}
+.wl-swallow-red {
+  fill: #c4472f;
+}
+
+/* butterfly (peacock) */
+.wl-fly-fore {
+  fill: #b9432e;
+}
+.wl-fly-hind {
+  fill: #93332a;
+}
+.wl-fly-ring {
+  fill: #efc64a;
+}
+.wl-fly-blue {
+  fill: #5b7fc4;
+}
+.wl-fly-dark,
+.wl-fly-body {
+  fill: #2c211c;
+}
+.wl-fly-antenna {
+  fill: none;
+  stroke: #2c211c;
+  stroke-width: 0.6;
+  stroke-linecap: round;
+}
+
+/* hedgehog */
+.wl-hog-spines {
+  fill: #8a6b4d;
+}
+.wl-hog-tips {
+  fill: none;
+  stroke: var(--wl-hog-tip, #5e4632);
+  stroke-width: 0.9;
+  stroke-linecap: round;
+}
+.wl-hog-face {
+  fill: #cdae86;
+}
+.wl-leg-hog {
+  fill: #6b5440;
+}
+
+/* squirrel */
+.wl-sq {
+  fill: #c2652f;
+}
+.wl-sq-tail {
+  fill: #b5582a;
+}
+.wl-sq-dark {
+  fill: #9c4b24;
+}
+.wl-sq-belly {
+  fill: #f0dcc0;
+}
+
+/* robin */
+.wl-robin {
+  fill: #8b6c4b;
+}
+.wl-robin-dark {
+  fill: #6f5539;
+}
+.wl-robin-breast {
+  fill: #e2703a;
+}
+.wl-robin-belly {
+  fill: #eee5d4;
+}
+
+/* tawny owl */
+.wl-owl {
+  fill: #8e6a45;
+}
+.wl-owl-dark {
+  fill: #6f5134;
+}
+.wl-owl-belly {
+  fill: #bb9163;
+}
+.wl-owl-disc {
+  fill: #c89f70;
+}
+.wl-owl-brow {
+  fill: none;
+  stroke: #e3cca4;
+  stroke-width: 0.9;
+  stroke-linecap: round;
+}
+.wl-owl-streak {
+  fill: none;
+  stroke: #7a5a3a;
+  stroke-width: 0.8;
+  stroke-linecap: round;
+}
+.wl-owl-spot {
+  fill: #d8bf96;
+}
+.wl-owl-beak {
+  fill: #d9c49a;
+}
+.wl-owl-talon {
+  fill: none;
+  stroke: #9b8a70;
+  stroke-width: 0.8;
+  stroke-linecap: round;
+}
+
+/* nest + eggs */
+.wl-nest {
+  fill: #8a6a4a;
+}
+.wl-nest-back {
+  fill: #6f543a;
+}
+.wl-nest-hollow {
+  fill: #4a3727;
+}
+.wl-twig {
+  fill: none;
+  stroke: #a9875f;
+  stroke-width: 0.8;
+  stroke-linecap: round;
+}
+.wl-egg {
+  fill: #f6efe2;
+}
+.wl-egg-spot {
+  fill: #b5583a;
+}

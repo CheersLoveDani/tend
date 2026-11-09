@@ -1,0 +1,108 @@
+/* ---------- garden wildlife: placement, caption, field notes ---------- */
+.wl-stage {
+  position: relative;
+  display: inline-block;
+}
+.wl-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.wl-creature,
+.wl-nest {
+  position: absolute;
+  /* The point is where the feet are. */
+  transform: translate(-50%, -100%);
+  line-height: 0;
+}
+.wl-creature {
+  padding: 4px;
+  margin: -4px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  pointer-events: auto;
+  box-sizing: content-box;
+  -webkit-tap-highlight-color: transparent;
+}
+.wl-creature:focus-visible {
+  outline: 2px solid var(--moss);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+.wl-caption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  margin: 10px 2px 0;
+}
+.wl-caption-text {
+  flex: 1;
+  margin: 0;
+  font-size: 14px;
+  color: var(--bark-2);
+}
+.wl-caption-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+.wl-tally {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.wl-tally-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-m);
+  background: var(--paper-2);
+}
+.wl-tally-item > span {
+  display: grid;
+}
+.wl-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 14px;
+  border-left: 2px solid var(--line);
+  display: grid;
+  gap: 14px;
+}
+.wl-timeline li {
+  position: relative;
+  display: grid;
+  gap: 2px;
+}
+.wl-timeline li::before {
+  content: "";
+  position: absolute;
+  left: -20px;
+  top: 6px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--moss);
+  box-shadow: 0 0 0 3px var(--paper);
+}
+.wl-timeline-date {
+  font-size: 12px;
+  color: var(--bark-3);
+}
+.row-input {
+  width: 140px;
+  padding: 8px 12px;
+  border-radius: var(--radius-s);
+  border: 1.5px solid var(--line);
+  background: var(--paper);
+  color: var(--bark);
+}
+.row-input:focus {
+  outline: none;
+  border-color: var(--moss);
+}

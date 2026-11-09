@@ -30,6 +30,18 @@ export interface Feature {
 
 export const FEATURES: Feature[] = [
   {
+    id: "wildlife",
+    emoji: "🐦",
+    title: "Wildlife in your garden",
+    blurb: "A little wren moves into your tree and lives there, always content. Visitors come and go with the seasons, and blue tits nest in spring.",
+    available: () => true,
+    isOn: (s) => s.wildlife,
+    turnOn: { wildlife: true },
+    section: "wildlife",
+    keys: ["wildlife"],
+    offPatch: { wildlife: false },
+  },
+  {
     id: "mood-reasons",
     emoji: "🌦️",
     title: "What's behind the weather",

@@ -7,6 +7,16 @@ import { Leaf } from "./Icons";
 /** What each release changed, newest first. Shown once after updating; new installs never see it. */
 export const CHANGES: { version: string; title: string; items: string[] }[] = [
   {
+    version: "0.5.2-1",
+    title: "Someone's moved in",
+    items: [
+      "A little wren moves into your tree and lives there, happy whatever the weather. Give it a name in Settings.",
+      "Visitors come and go with the seasons: swallows, a hedgehog, a robin in winter. Blue tits nest in spring, and sometimes a chick stays on.",
+      "Nothing ever leaves because you were away. Field notes in the Garden keep everyone who's visited.",
+      "Settings now has tabs and a search bar.",
+    ],
+  },
+  {
     version: "0.5.1",
     title: "Pick your updates",
     items: [

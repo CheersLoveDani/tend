@@ -11,6 +11,8 @@ import { calendar, type CalendarAccess, type DeviceCalendar } from "../lib/calen
 import { Chevron, Close, Minus, Plus, Sync } from "../components/Icons";
 import { ReasonOptionsEditor } from "../components/MoodReasons";
 import { openInsights } from "../lib/weather";
+import { guessSouth } from "../lib/wildlife";
+import { SPECIES_INFO, type Species } from "../components/Critters";
 import { appUpdater, appVersion } from "../lib/updater";
 import { backup, type BackupSource, type BackupStatus } from "../lib/backup";
 import { fitness, fitSupported, minuteMilestones, stepMilestones, type FitStatus } from "../lib/fitness";
@@ -60,6 +62,7 @@ const SECTION_TAB: Record<string, SettingsTab> = {
   "your-day": "day",
   look: "look",
   rewards: "look",
+  wildlife: "look",
   movement: "movement",
   data: "data",
   sync: "data",
@@ -1182,6 +1185,73 @@ function DaySettings() {
   );
 }
 
+/** The wren and its visitors. */
+function WildlifeSettings() {
+  const { settings: s, updateSettings: set } = useStore();
+  const [name, setName] = useState(s.wildlifeName);
+  useEffect(() => setName(s.wildlifeName), [s.wildlifeName]);
+  const south = s.wildlifeSouth ?? guessSouth();
+  return (
+    <>
+      <Toggle
+        label="Wildlife in your garden"
+        hint={
+          s.wildlife
+            ? s.wildlifeSince
+              ? `${s.wildlifeName || "Pip"} the wren lives in your tree. Visitors come and go with the seasons; nothing ever leaves because you were away.`
+              : "A wren moves in the first time you finish something."
+            : "A little wren that lives in your tree, always content, and visitors through the seasons. Never needs looking after."
+        }
+        checked={s.wildlife}
+        onChange={(v) => set({ wildlife: v })}
+      />
+      {s.wildlife && (
+        <>
+          <div className="row">
+            <span className="row-text">
+              <span className="row-label">Your wren's name</span>
+            </span>
+            <input
+              className="row-input"
+              value={name}
+              maxLength={20}
+              aria-label="Your wren's name"
+              onChange={(e) => setName(e.target.value)}
+              onBlur={() => set({ wildlifeName: name.trim() || "Pip" })}
+              onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+            />
+          </div>
+          <Choice
+            label="Seasons"
+            hint="Which half of the world your garden's in, so swallows come in the right spring."
+            value={south ? "south" : "north"}
+            onChange={(v) => set({ wildlifeSouth: v === "south" })}
+            options={[
+              { value: "north", label: "North" },
+              { value: "south", label: "South" },
+            ]}
+          />
+          {s.wildlifeKept.length > 0 && (
+            <div className="row">
+              <span className="row-text">
+                <span className="row-label">Staying for good</span>
+                <span className="row-hint">Visitors you asked to stay. Tap one to let it come and go with the seasons again.</span>
+              </span>
+              <div className="chips">
+                {s.wildlifeKept.map((k) => (
+                  <button key={k} className="chip" onClick={() => set({ wildlifeKept: s.wildlifeKept.filter((x) => x !== k) })}>
+                    {SPECIES_INFO[k as Species]?.name ?? k} ×
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
 /** "What's behind it" after a check-in, and the reasons it offers. */
 function MoodReasonSettings() {
   const { settings: s, updateSettings: set, reduceMotion } = useStore();
@@ -1619,6 +1689,10 @@ export function SettingsView() {
             { value: "dark", label: "Night" },
           ]}
         />
+      </Group>
+
+      <Group title="Garden wildlife" id="wildlife" tab="look" keywords="wren pet bird animals visitors nest field notes hemisphere seasons">
+        <WildlifeSettings />
       </Group>
 
       <Group title="Rewards" id="rewards" tab="look" keywords="seeds golden bonus helper model ai suggestions">

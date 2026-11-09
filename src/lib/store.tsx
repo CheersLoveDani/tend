@@ -9,6 +9,7 @@ import { autoBackup } from "./backup";
 import { earnedText, fitness, fitSupported, type FitData } from "./fitness";
 import { holdBackNewFeatures } from "./features";
 import { openMoodWhy } from "./weather";
+import { cheer } from "./cheer";
 
 export type Toast = { id: number; text: string; undo?: () => void };
 
@@ -130,7 +131,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     (e: RewardEvent) => {
       if (e.kind === "none") return;
       if (e.kind === "undo") sounds.undo();
-      else setRewards((q) => [...q, e]);
+      else {
+        setRewards((q) => [...q, e]);
+        cheer();
+      }
     },
     [],
   );

@@ -4,6 +4,7 @@ import { useStore } from "../lib/store";
 import { WEATHERS, WEATHER_EVENT, moodEntry, todaysMoodEntry, todaysWeather, type Weather } from "../lib/weather";
 import { sounds } from "../lib/sound";
 import { ReasonsPanel } from "./MoodReasons";
+import { cheer } from "../lib/cheer";
 
 /**
  * "What's the weather like in you?" Five honest answers, all of them good for the tree. Once one is
@@ -25,6 +26,7 @@ export function WeatherCheckIn({ compact, onPicked, askWhy }: { compact?: boolea
     onPicked?.(v);
     // The Garden answers this with its tree; a stormy one may offer a light day (StormyDay).
     window.dispatchEvent(new CustomEvent(WEATHER_EVENT, { detail: v }));
+    cheer();
   };
 
   const showWhy = asked && settings.moodReasons && !!entry;
