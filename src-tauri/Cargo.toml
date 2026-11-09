@@ -1,6 +1,6 @@
 [package]
 name = "tend"
-version = "0.5.0"
+version = "0.5.1"
 publish = false
 description = "Tend — a gentle, rewarding reminder app"
 authors = ["Dani Fullerton"]
