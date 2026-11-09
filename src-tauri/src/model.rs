@@ -139,4 +139,8 @@ pub struct Snapshot {
     pub dose_alarms: Vec<DoseSlot>,
     /// Health diary for the last 90 days, newest first.
     pub entries: Vec<Entry>,
+    /// Food log for the last 90 days, newest first.
+    pub foods: Vec<crate::food::Food>,
+    /// Foods eaten before, most recent first.
+    pub food_lib: Vec<crate::food::SavedFood>,
 }

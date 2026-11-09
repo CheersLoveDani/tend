@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { api, SOMEDAY, type DoseSlot, type Entry, type Med, type MedInput, type Reminder, type ReminderInput, type RewardEvent, type Snapshot } from "./api";
+import { api, SOMEDAY, type DoseSlot, type Entry, type Food, type FoodInfo, type Med, type MedInput, type Reminder, type ReminderInput, type RewardEvent, type Snapshot } from "./api";
 import { defaultSettings, endOfToday, isPaused, type Settings } from "./settings";
 import { configureSound, sounds } from "./sound";
 import { applyActions, native, pushNativeState } from "./native";
@@ -78,6 +78,8 @@ interface Store {
   undoDose: (d: DoseSlot) => Promise<void>;
   saveEntry: (e: Entry) => Promise<boolean>;
   deleteEntry: (e: Entry) => Promise<void>;
+  saveFood: (f: Food, info?: FoodInfo | null) => Promise<boolean>;
+  deleteFood: (f: Food) => Promise<void>;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -401,6 +403,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           await api.deleteEntry(e.id);
           await refresh();
           toast(`Removed ${e.name}`, () => void api.saveEntry(e).then(refresh));
+        } catch (err) {
+          fail(err);
+        }
+      },
+      saveFood: async (f, info) => {
+        try {
+          reward(await api.saveFood(f, info ?? null));
+          await refresh();
+          return true;
+        } catch (err) {
+          fail(err);
+          return false;
+        }
+      },
+      deleteFood: async (f) => {
+        try {
+          await api.deleteFood(f.id);
+          await refresh();
+          toast(`Removed ${f.name}`, () => void api.saveFood(f, null).then(refresh));
         } catch (err) {
           fail(err);
         }

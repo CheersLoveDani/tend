@@ -7,6 +7,16 @@ import { Leaf } from "./Icons";
 /** What each release changed, newest first. Shown once after updating; new installs never see it. */
 export const CHANGES: { version: string; title: string; items: string[] }[] = [
   {
+    version: "0.6.0-1",
+    title: "A food log, if you'd like one",
+    items: [
+      "Note what you eat in a new Food tab. A name is enough, and calories are optional. Turn it on in Settings → Your day → Food.",
+      "On your phone, scan a barcode and Tend looks up the calories on Open Food Facts, or take a photo of the label and Tend reads it right on your phone.",
+      "Rough estimates for everyday foods: type \"2 eggs\" or \"a bowl of porridge\". Foods you've had before are one tap to add again.",
+      "Hide the numbers entirely, or set a soft daily guide. It's never a limit, and it never turns red.",
+    ],
+  },
+  {
     version: "0.5.2-1",
     title: "Someone's moved in",
     items: [

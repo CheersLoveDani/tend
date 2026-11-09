@@ -2,6 +2,7 @@ mod actions;
 mod backup;
 mod db;
 mod fitness;
+mod food;
 mod meds;
 mod model;
 mod rewards;
@@ -89,6 +90,8 @@ fn snapshot(app: AppHandle, state: State<AppState>) -> Res<Snapshot> {
         doses: meds::today_slots(&db).map_err(err)?,
         dose_alarms: meds::upcoming_slots(&db, 7).map_err(err)?,
         entries: meds::entries(&db, &entries_since).map_err(err)?,
+        foods: food::foods(&db, &entries_since).map_err(err)?,
+        food_lib: food::library(&db, 60).map_err(err)?,
     })
 }
 
@@ -238,6 +241,47 @@ fn delete_entry(app: AppHandle, state: State<AppState>, id: String) -> Res<()> {
     meds::delete_entry(&state.db.lock().unwrap(), &id).map_err(err)?;
     after_local_change(&app);
     Ok(())
+}
+
+// ---- food ----
+
+#[tauri::command]
+fn save_food(app: AppHandle, state: State<AppState>, food: food::Food, info: Option<food::FoodInfo>) -> Res<RewardEvent> {
+    let e = food::save_food(&state.db.lock().unwrap(), food, info).map_err(err)?;
+    after_local_change(&app);
+    Ok(e)
+}
+
+#[tauri::command]
+fn delete_food(app: AppHandle, state: State<AppState>, id: String) -> Res<()> {
+    food::delete_food(&state.db.lock().unwrap(), &id).map_err(err)?;
+    after_local_change(&app);
+    Ok(())
+}
+
+#[tauri::command]
+fn forget_food(app: AppHandle, state: State<AppState>, id: String) -> Res<()> {
+    food::forget_saved(&state.db.lock().unwrap(), &id).map_err(err)?;
+    after_local_change(&app);
+    Ok(())
+}
+
+/// Asks Open Food Facts about a barcode. Only the barcode number leaves the device.
+#[tauri::command]
+async fn food_barcode(code: String) -> Res<Option<food::FoodInfo>> {
+    tauri::async_runtime::spawn_blocking(move || food::lookup_barcode(&code)).await.map_err(err)?.map_err(err)
+}
+
+/// Searches Open Food Facts by name. Only the words typed leave the device.
+#[tauri::command]
+async fn food_search(query: String) -> Res<Vec<food::FoodInfo>> {
+    tauri::async_runtime::spawn_blocking(move || food::search(&query)).await.map_err(err)?.map_err(err)
+}
+
+/// Finds the calorie numbers in text read off a nutrition label.
+#[tauri::command]
+fn food_parse_label(text: String) -> food::LabelGuess {
+    food::parse_label(&text)
 }
 
 /// Pays seeds for steps and workouts read from Health Connect on the phone.
@@ -598,6 +642,12 @@ pub fn run() {
             med_history,
             save_entry,
             delete_entry,
+            save_food,
+            delete_food,
+            forget_food,
+            food_barcode,
+            food_search,
+            food_parse_label,
             fit_award,
             export_health,
             import_health,

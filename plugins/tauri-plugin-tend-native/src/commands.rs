@@ -115,6 +115,13 @@ pub(crate) async fn calendar_list<R: Runtime>(app: AppHandle<R>) -> Result<serde
 
 /// Event instances overlapping [from, to) (epoch ms) from `ids` (empty = all visible):
 /// `{ events: [{ id, calendarId, title, start, end, allDay, color, location }] }`.
+/// Takes a photo with the camera app and reads its text on the device (for nutrition labels):
+/// `{ text, cancelled }`. Desktop has no camera here: always `{ text: "", cancelled: true }`.
+#[command]
+pub(crate) async fn read_label<R: Runtime>(app: AppHandle<R>) -> Result<serde_json::Value> {
+    app.tend_native().read_label()
+}
+
 #[command]
 pub(crate) async fn calendar_events<R: Runtime>(
     app: AppHandle<R>,

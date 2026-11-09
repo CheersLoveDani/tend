@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
+import android.provider.MediaStore
 import android.provider.Settings
 import android.webkit.WebView
 import androidx.activity.result.ActivityResult
@@ -29,6 +30,11 @@ import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
 import androidx.health.connect.client.PermissionController
 import kotlinx.coroutines.runBlocking
+import com.google.android.gms.tasks.Tasks
+import com.google.mlkit.common.MlKitException
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import org.json.JSONObject
 import java.io.File
 import java.lang.ref.WeakReference
@@ -522,6 +528,64 @@ class TendNativePlugin(private val activity: Activity) : Plugin(activity) {
   }
 
   private fun updateFile() = File(File(activity.cacheDir, "updates"), "update.apk")
+
+  // ---- food labels -----------------------------------------------------------------------------
+
+  private fun labelFile() = File(File(activity.cacheDir, "labels"), "label.jpg")
+
+  /** Opens the camera app for one photo of a nutrition label; `onLabelPhoto` reads it. */
+  @Command
+  fun readLabel(invoke: Invoke) {
+    try {
+      val file = labelFile()
+      file.parentFile?.mkdirs()
+      file.delete()
+      val uri = FileProvider.getUriForFile(activity, activity.packageName + ".tendupdates", file)
+      val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
+        putExtra(MediaStore.EXTRA_OUTPUT, uri)
+        addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+      }
+      startActivityForResult(invoke, intent, "onLabelPhoto")
+    } catch (e: ActivityNotFoundException) {
+      invoke.reject("There's no camera app to take the photo with.")
+    } catch (e: SecurityException) {
+      invoke.reject("Tend needs permission to use the camera. You can allow it in Android's settings.")
+    } catch (e: Exception) {
+      invoke.reject(e.message ?: e.toString())
+    }
+  }
+
+  /** Reads the text in the photo with ML Kit, on the device. The photo is deleted straight after. */
+  @ActivityCallback
+  private fun onLabelPhoto(invoke: Invoke, result: ActivityResult) {
+    val file = labelFile()
+    if (result.resultCode != Activity.RESULT_OK || !file.exists() || file.length() == 0L) {
+      file.delete()
+      invoke.resolve(JSObject().put("text", "").put("cancelled", true))
+      return
+    }
+    Thread {
+      try {
+        // Reads the photo's rotation from its EXIF data.
+        val image = InputImage.fromFilePath(activity, Uri.fromFile(file))
+        val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+        try {
+          val text = Tasks.await(recognizer.process(image))
+          invoke.resolve(JSObject().put("text", text.text).put("cancelled", false))
+        } finally {
+          recognizer.close()
+        }
+      } catch (e: Exception) {
+        val unavailable = (e.cause as? MlKitException)?.errorCode == MlKitException.UNAVAILABLE
+        invoke.reject(
+          if (unavailable) "Your phone is still fetching its label reader. Try again in a minute."
+          else "Couldn't read that photo. Try again with the label flat and well lit."
+        )
+      } finally {
+        file.delete()
+      }
+    }.start()
+  }
 
   @SuppressLint("BatteryLife")
   @Command

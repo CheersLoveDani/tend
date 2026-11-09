@@ -149,6 +149,11 @@
             </intent-filter>
         </activity-alias>
 
+        <!-- Fetch the on-device text reader (food labels) with the app, not on first use. -->
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="ocr" />
+
         <!-- Shares the downloaded update with the system installer. -->
         <provider
             android:name="com.tend.native.TendUpdateFileProvider"

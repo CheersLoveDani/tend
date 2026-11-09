@@ -18,6 +18,7 @@ const COMMANDS: &[&str] = &[
     "calendar_request",
     "calendar_list",
     "calendar_events",
+    "read_label",
     // Needed so `addPluginListener('tend-native', ...)` passes the ACL.
     "register_listener",
     "remove_listener",

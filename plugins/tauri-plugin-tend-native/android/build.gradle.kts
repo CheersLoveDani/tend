@@ -36,5 +36,8 @@ dependencies {
     // Steps and workouts. Google Fit, Samsung Health, Fitbit and others write into Health Connect.
     implementation("androidx.health.connect:connect-client:1.1.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    // Reads nutrition labels from a photo, on the device. Uses Google Play services' shared model
+    // (like the barcode scanner), so it adds almost nothing to the app's size.
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.1")
     implementation(project(":tauri-android"))
 }

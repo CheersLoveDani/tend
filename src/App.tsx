@@ -1,13 +1,15 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { StoreProvider, toastMs, useStore, type Toast } from "./lib/store";
-import type { Entry, EntryKind, Med, Reminder } from "./lib/api";
+import type { Entry, EntryKind, Food as FoodItem, Med, Reminder } from "./lib/api";
 import { Today } from "./views/Today";
 import { Upcoming } from "./views/Upcoming";
 import { Garden } from "./views/Garden";
 import { SettingsView } from "./views/SettingsView";
 import { Nag } from "./views/Nag";
 import { Meds } from "./views/Meds";
+import { Food } from "./views/Food";
+import { FoodSheet, type FoodStart } from "./components/FoodSheet";
 import { MedEditor } from "./components/MedEditor";
 import { MedDetail } from "./components/MedDetail";
 import { EntrySheet } from "./components/EntrySheet";
@@ -23,7 +25,7 @@ import { Tree } from "./components/Tree";
 import { Sky } from "./components/Sky";
 import { OPEN_INSIGHTS_EVENT, OPEN_MOOD_WHY_EVENT, pickQuote, todaysWeather, WEATHER_EVENT, type Weather } from "./lib/weather";
 import type { WeatherMoment } from "./views/Garden";
-import { Calendar, Gear, Pill, Plus, Seed, Sprout, Sun } from "./components/Icons";
+import { Bowl, Calendar, Gear, Pill, Plus, Seed, Sprout, Sun } from "./components/Icons";
 import { sounds } from "./lib/sound";
 import { isAndroid } from "./lib/api";
 import { appUpdater, appVersion, type UpdateState } from "./lib/updater";
@@ -35,11 +37,12 @@ import { StormyDay } from "./components/StormyDay";
 import { WeatherCheckIn } from "./components/WeatherCheckIn";
 import { closeTopOverlay } from "./lib/backStack";
 
-type Tab = "today" | "meds" | "upcoming" | "garden" | "settings";
+type Tab = "today" | "meds" | "food" | "upcoming" | "garden" | "settings";
 
 const TABS: { id: Tab; label: string; icon: typeof Sun }[] = [
   { id: "today", label: "Today", icon: Sun },
   { id: "meds", label: "Medicine", icon: Pill },
+  { id: "food", label: "Food", icon: Bowl },
   { id: "upcoming", label: "Coming up", icon: Calendar },
   { id: "garden", label: "Garden", icon: Sprout },
   { id: "settings", label: "Settings", icon: Gear },
@@ -156,7 +159,13 @@ function Shell() {
   const [medEditing, setMedEditing] = useState<{ med: Med | null } | null>(null);
   const [medOpen, setMedOpen] = useState<string | null>(null);
   const [entry, setEntry] = useState<{ kind: EntryKind; initial?: Entry } | null>(null);
-  const sheetOpen = !!(editing || medEditing || medOpen || entry);
+  const [food, setFood] = useState<{ initial?: FoodItem; start?: FoodStart } | null>(null);
+  const sheetOpen = !!(editing || medEditing || medOpen || entry || food);
+  // The Food tab only shows when the food log is switched on.
+  const tabs = TABS.filter((t) => t.id !== "food" || settings.foodTracking);
+  useEffect(() => {
+    if (tab === "food" && !settings.foodTracking) setTabNow("today");
+  }, [tab, settings.foodTracking]);
   // Logging the weather in the Garden lets you watch the tree respond. From Today it answers in
   // place instead (changing tabs on input is disorienting, WCAG 3.2.2).
   const [moment, setMoment] = useState<WeatherMoment | null>(null);
@@ -215,6 +224,7 @@ function Shell() {
     if (insights) return setInsights(false);
     if (moodWhy) return setMoodWhy(false);
     if (entry) return setEntry(null);
+    if (food) return setFood(null);
     if (medEditing) return setMedEditing(null);
     if (editing) return setEditing(null);
     if (medOpen) return setMedOpen(null);
@@ -285,7 +295,7 @@ function Shell() {
         </div>
         <LevelBadge />
         <nav className="rail-nav" aria-label="Main">
-          {TABS.map((t) => (
+          {tabs.map((t) => (
             <button key={t.id} className={`rail-link ${tab === t.id ? "is-on" : ""}`} onClick={() => setTab(t.id)} aria-current={tab === t.id ? "page" : undefined}>
               {tab === t.id && <motion.span layoutId="rail-pill" className="pill-bg" transition={{ type: "spring", stiffness: 400, damping: 34 }} />}
               <t.icon size={18} />
@@ -311,6 +321,7 @@ function Shell() {
             transition={{ duration: 0.18 }}
           >
             {tab === "today" && <Today onEdit={edit} onAdd={() => add()} onOpenMed={setMedOpen} />}
+            {tab === "food" && <Food onAdd={(start) => setFood({ start })} onEdit={(f) => setFood({ initial: f })} />}
             {tab === "meds" && <Meds onAddMed={() => setMedEditing({ med: null })} onOpenMed={setMedOpen} onEntry={(kind, initial) => setEntry({ kind, initial })} />}
             {tab === "upcoming" && <Upcoming onEdit={edit} onAdd={(d) => add(d)} />}
             {tab === "garden" && <Garden moment={moment} onMomentDone={() => setMoment(null)} />}
@@ -322,10 +333,11 @@ function Shell() {
       {tab !== "settings" && (
         <motion.button
           className="fab"
-          aria-label={tab === "meds" ? "New medication" : "New reminder"}
+          aria-label={tab === "meds" ? "New medication" : tab === "food" ? "Add food" : "New reminder"}
           onClick={() => {
             sounds.tap();
             if (tab === "meds") setMedEditing({ med: null });
+            else if (tab === "food") setFood({});
             else add();
           }}
           whileTap={{ scale: 0.9 }}
@@ -337,8 +349,8 @@ function Shell() {
         </motion.button>
       )}
 
-      <nav className="tabbar" aria-label="Main">
-        {TABS.map((t) => (
+      <nav className={`tabbar ${tabs.length > 5 ? "has-6" : ""}`} aria-label="Main">
+        {tabs.map((t) => (
           <button key={t.id} className={`tab ${tab === t.id ? "is-on" : ""}`} onClick={() => setTab(t.id)} aria-current={tab === t.id ? "page" : undefined}>
             {tab === t.id && <motion.span layoutId="tab-pill" className="pill-bg" transition={{ type: "spring", stiffness: 400, damping: 34 }} />}
             <t.icon size={20} />
@@ -362,6 +374,7 @@ function Shell() {
           />
         )}
       </AnimatePresence>
+      <AnimatePresence>{food && <FoodSheet key="food" initial={food.initial} start={food.start} onClose={() => setFood(null)} />}</AnimatePresence>
       <AnimatePresence>{entry && <EntrySheet key="entry" kind={entry.kind} initial={entry.initial} onClose={() => setEntry(null)} />}</AnimatePresence>
       <AnimatePresence>{insights && <MoodInsights key="insights" onClose={() => setInsights(false)} />}</AnimatePresence>
       <AnimatePresence>{moodWhy && <MoodWhySheet key="mood-why" onClose={() => setMoodWhy(false)} />}</AnimatePresence>

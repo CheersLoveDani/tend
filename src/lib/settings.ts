@@ -49,6 +49,12 @@ export interface Settings {
   calendarIds: string[];
   /** On a stormy check-in, gently offer to pick one thing and move the rest to tomorrow. */
   stormyLightDay: boolean;
+  /** The Food tab: note what you eat. */
+  foodTracking: boolean;
+  /** Show calorie numbers in the food log. Off = just what you ate, no numbers anywhere. */
+  foodShowCalories: boolean;
+  /** A rough daily guide (kcal) shown as a soft ring; null = no guide. Never a limit. */
+  foodGuide: number | null;
   /** A daily "how's the weather in you?" at this time ("HH:MM"), answered right from the notification; null = off. */
   moodCheckIn: string | null;
   /** Last app version whose "what changed" note was seen. */
@@ -121,6 +127,9 @@ export const defaultSettings: Settings = {
   calendarEnabled: false, // needs calendar access: offered by the "something new" pop-up
   calendarIds: [],
   stormyLightDay: true,
+  foodTracking: false, // offered by the "something new" pop-up; never switched on unasked
+  foodShowCalories: true,
+  foodGuide: null,
   moodCheckIn: "20:00",
   lastSeenVersion: null,
   modelConsent: null,

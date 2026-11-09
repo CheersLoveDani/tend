@@ -66,6 +66,16 @@ export const FEATURES: Feature[] = [
     section: "your-day",
   },
   {
+    id: "food",
+    emoji: "🥣",
+    title: "Food log",
+    blurb: "Jot down what you eat, or scan a barcode and Tend fills in the calories. No targets unless you want one, and numbers can be hidden.",
+    available: () => true,
+    isOn: (s) => s.foodTracking,
+    turnOn: { foodTracking: true },
+    section: "food",
+  },
+  {
     id: "calendar",
     emoji: "📅",
     title: "Your calendar on Today",

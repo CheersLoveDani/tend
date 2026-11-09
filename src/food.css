@@ -1,0 +1,234 @@
+/* ---------- food log ---------- */
+
+.food-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.food-actions .btn,
+.food-tools .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.food-again {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 2px 2px 6px;
+  margin: 0 -2px;
+}
+.food-again-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 200px;
+  padding: 8px 14px 8px 10px;
+  border-radius: 99px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+  color: var(--bark);
+  font-weight: 700;
+  font-size: 14px;
+}
+.food-again-chip > span:first-child {
+  font-size: 18px;
+}
+.food-again-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.food-main {
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+}
+.food-row-emoji {
+  font-size: 22px;
+  line-height: 1;
+}
+.food-row-text {
+  display: grid;
+  min-width: 0;
+}
+.food-row-text .diary-kind {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.food-row-amount {
+  color: var(--bark-3);
+  font-size: 13px;
+}
+.food-main .diary-note {
+  grid-column: 2 / -1;
+}
+.food-day-total {
+  font-weight: 400;
+}
+
+.food-guide {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  margin-bottom: 18px;
+  border-radius: var(--radius-l);
+  background: var(--paper);
+  box-shadow: var(--shadow);
+}
+.food-guide svg {
+  flex: none;
+}
+.food-guide-track,
+.food-guide-fill {
+  fill: none;
+  stroke-width: 9;
+}
+.food-guide-track {
+  stroke: var(--moss-soft);
+}
+.food-guide-fill {
+  stroke: var(--moss-2);
+  stroke-linecap: round;
+}
+.food-guide-text {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+.food-guide-num {
+  font-family: var(--font-display);
+  font-size: 20px;
+  color: var(--bark);
+}
+
+/* the sheet */
+.food-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.food-name .field-input {
+  flex: 1;
+  min-width: 0;
+}
+.food-emoji {
+  flex: none;
+  font-size: 26px;
+  line-height: 1;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--paper-2);
+}
+.food-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.food-code {
+  display: flex;
+  gap: 8px;
+}
+.food-code .field-input {
+  flex: 1;
+  min-width: 0;
+}
+.food-busy,
+.food-message {
+  margin: 0;
+}
+.food-suggest {
+  display: grid;
+  gap: 4px;
+}
+.food-option {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--radius-m);
+  background: var(--paper-2);
+  text-align: left;
+  color: var(--bark);
+}
+.food-option:hover {
+  background: var(--moss-soft);
+}
+.food-option-emoji {
+  font-size: 20px;
+}
+.food-option-text {
+  display: grid;
+  min-width: 0;
+}
+.food-option-name {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.food-option-meta {
+  font-size: 13px;
+  color: var(--bark-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.food-option-kcal {
+  font-size: 13px;
+  color: var(--bark-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.food-count {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.food-count-n {
+  min-width: 2.5ch;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+.food-count-what {
+  color: var(--bark-2);
+  min-width: 0;
+}
+.food-kcal-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  color: var(--bark-2);
+}
+.food-kcal-field .field-input {
+  flex: 1;
+  min-width: 0;
+  max-width: 160px;
+}
+.food-meals {
+  align-self: start;
+}
+
+/* Six tabs on a phone: a little tighter. */
+@media (max-width: 820px) {
+  .tabbar.has-6 {
+    grid-template-columns: repeat(6, 1fr);
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+  .tabbar.has-6 .tab {
+    font-size: 11px;
+    padding: 6px 2px;
+  }
+}

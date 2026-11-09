@@ -90,6 +90,25 @@ export function installMock() {
     { id: "m2", name: "Sertraline", strength: "50 mg", form: "capsule", icon: "capsule", color: "sky", notes: "With breakfast", schedule: { kind: "daily", every: 1, days: [], onDays: 0, offDays: 0, times: [{ time: "08:05", amount: 1 }, { time: "21:00", amount: 1 }] }, startDate: plusDays(-30), endDate: null, stock: 4, stockAt: 0, refillAt: 7, paused: false, critical: true, reward: 5, createdAt: 0 },
   ];
   const logged = new Map<string, { status: string; at: number }>();
+  // ?food: the food log switched on, with a little history.
+  if (q.has("food")) settings = { ...settings, foodTracking: true, seenFeatures: ["food"] };
+  const H = 3_600_000;
+  const foods: any[] = q.has("food")
+    ? [
+        { id: "f1", name: "Porridge", emoji: "🥣", meal: "breakfast", kcal: 220, amount: "a bowl", grams: 250, source: "estimate", barcode: "", note: "", at: Date.now() - 5 * H },
+        { id: "f2", name: "Coffee with milk", emoji: "☕", meal: "breakfast", kcal: 35, amount: "a mug", grams: 250, source: "estimate", barcode: "", note: "", at: Date.now() - 5 * H },
+        { id: "f3", name: "Leftover curry", emoji: "🍛", meal: "lunch", kcal: null, amount: "", grams: null, source: "", barcode: "", note: "", at: Date.now() - 1 * H },
+        { id: "f4", name: "Twix", emoji: "🍫", meal: "snack", kcal: 250, amount: "whole pack (50 g)", grams: 50, source: "barcode", barcode: "5000159484695", note: "", at: Date.now() - 26 * H },
+        { id: "f5", name: "Pasta with sauce", emoji: "🍝", meal: "dinner", kcal: 550, amount: "a bowl", grams: 350, source: "estimate", barcode: "", note: "", at: Date.now() - 30 * H },
+      ]
+    : [];
+  const twix = { name: "Twix", brand: "Twix", barcode: "5000159484695", kcal100: 495, kcalServing: 248, servingG: 50, servingText: "1 pack (50 g)", packG: 50, unit: "g" };
+  const foodLib: any[] = q.has("food")
+    ? [
+        { id: "n:porridge", name: "Porridge", emoji: "🥣", info: null, lastKcal: 220, lastAmount: "a bowl", lastGrams: 250, uses: 4, lastUsed: Date.now() - 5 * H },
+        { id: "5000159484695", name: "Twix", emoji: "🍫", info: twix, lastKcal: 250, lastAmount: "whole pack (50 g)", lastGrams: 50, uses: 2, lastUsed: Date.now() - 26 * H },
+      ]
+    : [];
   const entries: any[] = [
     { id: "e1", kind: "mood", name: "Mood", value: 4, value2: null, unit: "", note: "", at: Date.now() - 3_600_000 },
     { id: "e2", kind: "measurement", name: "Blood pressure", value: 122, value2: 79, unit: "mmHg", note: "", at: Date.now() - 86_400_000 },
@@ -131,7 +150,38 @@ export function installMock() {
           doses: doses(),
           doseAlarms: [],
           entries: entries.filter((e) => !e.deleted),
+          foods: foods.filter((f) => !f.deleted).sort((a, b) => b.at - a.at),
+          foodLib: foodLib.filter((f) => !f.deleted).sort((a, b) => b.lastUsed - a.lastUsed),
         };
+      case "save_food": {
+        const f = { ...args.food, id: args.food.id || Math.random().toString(36).slice(2), at: args.food.at || Date.now() };
+        const at = foods.findIndex((x) => x.id === f.id);
+        if (at >= 0) foods[at] = f;
+        else foods.push(f);
+        const libId = f.barcode || `n:${f.name.toLowerCase()}`;
+        const saved = foodLib.find((x) => x.id === libId);
+        const next = { id: libId, name: f.name, emoji: f.emoji, info: args.info ?? saved?.info ?? null, lastKcal: f.kcal, lastAmount: f.amount, lastGrams: f.grams, uses: (saved?.uses ?? 0) + 1, lastUsed: Date.now() };
+        if (saved) Object.assign(saved, next);
+        else foodLib.push(next);
+        const paid = ledger.has(`${f.id}:log`);
+        ledger.set(`${f.id}:log`, 2);
+        return doseEvent(f.id, paid ? 0 : 2, before);
+      }
+      case "delete_food":
+        foods.find((f) => f.id === args.id).deleted = true;
+        ledger.delete(`${args.id}:log`);
+        return null;
+      case "forget_food":
+        foodLib.find((f) => f.id === args.id).deleted = true;
+        return null;
+      case "food_barcode":
+        return new Promise((ok) => setTimeout(() => ok(args.code === "5000159484695" ? twix : null), 500));
+      case "food_search":
+        return new Promise((ok) =>
+          setTimeout(() => ok([{ name: `${args.query} (sample)`, brand: "Brand", barcode: "123456789", kcal100: 180, kcalServing: 90, servingG: 50, servingText: "1 pot (50 g)", packG: 200, unit: "g" }]), 600),
+        );
+      case "food_parse_label":
+        return { kcal100: 250, kcalServing: 75, servingG: 30, servingText: "per 30g portion", unit: "g", seen: [250, 75] };
       case "save_med": {
         const i = args.input;
         const existing = meds.find((m) => m.id === i.id);

@@ -85,6 +85,64 @@ export interface Snapshot {
   doseAlarms: DoseSlot[];
   /** Health diary for the last 90 days, newest first. */
   entries: Entry[];
+  /** Food log for the last 90 days, newest first. */
+  foods: Food[];
+  /** Foods eaten before, most recent first. */
+  foodLib: SavedFood[];
+}
+
+export type Meal = "breakfast" | "lunch" | "dinner" | "snack" | "";
+
+/** Something eaten. `kcal` is optional: a name alone is a perfectly good entry. */
+export interface Food {
+  id: string;
+  name: string;
+  emoji: string;
+  meal: Meal;
+  kcal: number | null;
+  /** How much, in words ("1 bowl", "150 g"). */
+  amount: string;
+  grams: number | null;
+  source: "barcode" | "label" | "search" | "estimate" | "manual" | "";
+  barcode: string;
+  note: string;
+  at: number;
+}
+
+/** What's known about a product (Open Food Facts, a label photo, or a past log). */
+export interface FoodInfo {
+  name: string;
+  brand: string;
+  barcode: string;
+  kcal100: number | null;
+  kcalServing: number | null;
+  servingG: number | null;
+  servingText: string;
+  packG: number | null;
+  /** "ml" for drinks, else "g". */
+  unit: string;
+}
+
+export interface SavedFood {
+  id: string;
+  name: string;
+  emoji: string;
+  info: FoodInfo | null;
+  lastKcal: number | null;
+  lastAmount: string;
+  lastGrams: number | null;
+  uses: number;
+  lastUsed: number;
+}
+
+/** What a nutrition label photo seems to say. Always shown to check before saving. */
+export interface LabelGuess {
+  kcal100: number | null;
+  kcalServing: number | null;
+  servingG: number | null;
+  servingText: string;
+  unit: string;
+  seen: number[];
 }
 
 export type ScheduleKind = "daily" | "interval" | "weekdays" | "cycle" | "asNeeded";
@@ -262,6 +320,13 @@ export const api = {
   medHistory: (id: string, days: number) => invoke<DayAdherence[]>("med_history", { id, days }),
   saveEntry: (entry: Entry) => invoke<RewardEvent>("save_entry", { entry }),
   deleteEntry: (id: string) => invoke<void>("delete_entry", { id }),
+  saveFood: (food: Food, info: FoodInfo | null) => invoke<RewardEvent>("save_food", { food, info }),
+  deleteFood: (id: string) => invoke<void>("delete_food", { id }),
+  forgetFood: (id: string) => invoke<void>("forget_food", { id }),
+  /** Open Food Facts; null when the product isn't known. Only the number leaves the device. */
+  foodBarcode: (code: string) => invoke<FoodInfo | null>("food_barcode", { code }),
+  foodSearch: (query: string) => invoke<FoodInfo[]>("food_search", { query }),
+  parseLabel: (text: string) => invoke<LabelGuess>("food_parse_label", { text }),
   exportHealth: () => invoke<string>("export_health"),
   importHealth: (json: string) => invoke<[number, number, number]>("import_health", { json }),
 };

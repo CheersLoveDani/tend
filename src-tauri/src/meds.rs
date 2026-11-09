@@ -247,7 +247,7 @@ pub struct HealthExport {
 
 // ---- storage -------------------------------------------------------------------------------
 
-fn put<T: Serialize>(db: &Db, kind: &str, id: &str, k1: &str, k2: &str, value: &T, deleted: bool) -> Result<()> {
+pub(crate) fn put<T: Serialize>(db: &Db, kind: &str, id: &str, k1: &str, k2: &str, value: &T, deleted: bool) -> Result<()> {
     let mut it = Item {
         kind: kind.into(),
         id: id.into(),
@@ -261,7 +261,7 @@ fn put<T: Serialize>(db: &Db, kind: &str, id: &str, k1: &str, k2: &str, value: &
     db.put_item(&mut it)
 }
 
-fn parse<T: DeserializeOwned>(it: &Item) -> Option<T> {
+pub(crate) fn parse<T: DeserializeOwned>(it: &Item) -> Option<T> {
     serde_json::from_value(it.data.clone()).ok()
 }
 
@@ -273,7 +273,7 @@ fn save_dose(db: &Db, d: &Dose, deleted: bool) -> Result<()> {
     put(db, DOSE, &d.id, &d.med_id, &d.date, d, deleted)
 }
 
-fn entry_day(at: i64) -> String {
+pub(crate) fn entry_day(at: i64) -> String {
     Local.timestamp_millis_opt(at).single().map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default()
 }
 
@@ -598,7 +598,7 @@ pub fn add_stock(db: &Db, id: &str, amount: f64) -> Result<Med> {
     Ok(m)
 }
 
-fn ledger(subject: &str, kind: &str, amount: i64, void: bool) -> LedgerEntry {
+pub(crate) fn ledger(subject: &str, kind: &str, amount: i64, void: bool) -> LedgerEntry {
     LedgerEntry {
         id: format!("{subject}:{kind}"),
         reminder_id: subject.into(),

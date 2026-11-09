@@ -60,6 +60,7 @@ const SETTINGS_TABS: { id: SettingsTab; label: string }[] = [
 const SECTION_TAB: Record<string, SettingsTab> = {
   nudges: "nudges",
   "your-day": "day",
+  food: "day",
   look: "look",
   rewards: "look",
   wildlife: "look",
@@ -1058,6 +1059,52 @@ function NudgeSettings({ autostart, setAutostart }: { autostart: boolean | null;
 }
 
 /** The phone's calendars on Today (read-only), and the stormy-day offer. */
+function FoodSettings() {
+  const { settings: s, updateSettings: set } = useStore();
+  return (
+    <>
+      <Toggle
+        label="Food log"
+        hint="A Food tab to note what you eat. A name is enough; calories are optional."
+        checked={s.foodTracking}
+        onChange={(v) => set({ foodTracking: v })}
+      />
+      {s.foodTracking && (
+        <>
+          <Toggle
+            label="Show calories"
+            hint="Turn off to keep the log about what you ate, with no numbers anywhere."
+            checked={s.foodShowCalories}
+            onChange={(v) => set({ foodShowCalories: v })}
+          />
+          {s.foodShowCalories && (
+            <>
+              <Toggle
+                label="A rough daily guide"
+                hint="A soft ring that fills as the day goes. It's a guide, not a limit: it never turns red or tells you off."
+                checked={s.foodGuide != null}
+                onChange={(v) => set({ foodGuide: v ? 2000 : null })}
+              />
+              {s.foodGuide != null && (
+                <Stepper label="Guide" value={s.foodGuide} step={100} min={800} max={5000} unit="kcal" onChange={(v) => set({ foodGuide: v })} />
+              )}
+            </>
+          )}
+          <div className="row">
+            <span className="row-text">
+              <span className="row-label">Where numbers come from</span>
+              <span className="row-hint">
+                Barcodes and searches are looked up on Open Food Facts, a free, open food database. Only the barcode or the words you type are sent. Label photos are read on your phone and
+                deleted straight after. Everyday foods use rough built-in estimates.
+              </span>
+            </span>
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
 function DaySettings() {
   const { settings: s, updateSettings: set, toast } = useStore();
   const [status, setStatus] = useState<CalendarAccess["status"] | null>(null);
@@ -1665,6 +1712,9 @@ export function SettingsView() {
       <Group title="Your day" id="your-day" tab="day" keywords="calendar mood weather check-in stormy reasons emoji">
         <DaySettings />
         <MoodReasonSettings />
+      </Group>
+      <Group title="Food" id="food" tab="day" keywords="food meals eat calories kcal barcode label diet nutrition">
+        <FoodSettings />
       </Group>
 
       <Group title="Look and feel" id="look" tab="look" keywords="sounds volume theme dark light night day motion animation">

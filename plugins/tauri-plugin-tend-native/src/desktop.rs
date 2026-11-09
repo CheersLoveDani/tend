@@ -95,4 +95,8 @@ impl<R: Runtime> TendNative<R> {
     pub fn move_to_back(&self) -> crate::Result<()> {
         Ok(())
     }
+
+    pub fn read_label(&self) -> crate::Result<serde_json::Value> {
+        Ok(serde_json::json!({ "text": "", "cancelled": true }))
+    }
 }

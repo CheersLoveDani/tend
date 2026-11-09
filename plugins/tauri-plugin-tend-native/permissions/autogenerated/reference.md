@@ -23,6 +23,7 @@ Allows all Tend native commands and the plugin event listeners (`action`, `pendi
 - `allow-calendar-request`
 - `allow-calendar-list`
 - `allow-calendar-events`
+- `allow-read-label`
 - `allow-register-listener`
 - `allow-remove-listener`
 
@@ -395,6 +396,32 @@ Enables the open_backup_file command without any pre-configured scope.
 <td>
 
 Denies the open_backup_file command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`tend-native:allow-read-label`
+
+</td>
+<td>
+
+Enables the read_label command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`tend-native:deny-read-label`
+
+</td>
+<td>
+
+Denies the read_label command without any pre-configured scope.
 
 </td>
 </tr>

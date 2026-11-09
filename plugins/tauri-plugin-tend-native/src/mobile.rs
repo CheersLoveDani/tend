@@ -114,6 +114,10 @@ impl<R: Runtime> TendNative<R> {
         self.0.run_mobile_plugin("calendarEvents", args).map_err(Into::into)
     }
 
+    pub fn read_label(&self) -> crate::Result<serde_json::Value> {
+        self.0.run_mobile_plugin("readLabel", ()).map_err(Into::into)
+    }
+
     pub fn move_to_back(&self) -> crate::Result<()> {
         self.0
             .run_mobile_plugin::<serde_json::Value>("moveToBack", ())
