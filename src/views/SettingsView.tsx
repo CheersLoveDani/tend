@@ -1,13 +1,14 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
+import { OPEN_SETTINGS_EVENT, takeSettingsSection } from "../lib/features";
 import { api, isAndroid, type Hello, type SyncInfo } from "../lib/api";
 import { useStore } from "../lib/store";
 import { native, type PermissionKind, type Permissions } from "../lib/native";
 import { configureSound, preview, SOUND_NAMES, sounds, type SoundName } from "../lib/sound";
 import { DEFAULT_MOOD_REASONS, endOfToday, isPaused, NUDGE_PRESETS, PRESET_TEXT, type Settings } from "../lib/settings";
 import { calendar, type CalendarAccess, type DeviceCalendar } from "../lib/calendar";
-import { Chevron, Minus, Plus, Sync } from "../components/Icons";
+import { Chevron, Close, Minus, Plus, Sync } from "../components/Icons";
 import { ReasonOptionsEditor } from "../components/MoodReasons";
 import { openInsights } from "../lib/weather";
 import { appUpdater, appVersion } from "../lib/updater";
@@ -41,13 +42,219 @@ function Toggle({ label, hint, checked, onChange }: { label: string; hint?: stri
   );
 }
 
-function Group({ title, id, children }: { title: string; id?: string; children: ReactNode }) {
+// ---- tabs and search ---------------------------------------------------------------------------
+
+type SettingsTab = "nudges" | "day" | "look" | "movement" | "data";
+
+const SETTINGS_TABS: { id: SettingsTab; label: string }[] = [
+  { id: "nudges", label: "Nudges" },
+  { id: "day", label: "Your day" },
+  { id: "look", label: "Look & rewards" },
+  { id: "movement", label: "Movement" },
+  { id: "data", label: "Data & sync" },
+];
+
+/** Where each section (Group `id`) lives, for links from elsewhere (the new-feature pop-up). */
+const SECTION_TAB: Record<string, SettingsTab> = {
+  nudges: "nudges",
+  "your-day": "day",
+  look: "look",
+  rewards: "look",
+  movement: "movement",
+  data: "data",
+  sync: "data",
+  updates: "data",
+};
+
+const SettingsFilter = createContext<{ tab: SettingsTab; query: string; report: (id: string, n: number) => void }>({
+  tab: "nudges",
+  query: "",
+  report: () => {},
+});
+
+const norm = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+const matches = (text: string, q: string) => q.split(/\s+/).every((w) => norm(text).includes(w));
+
+/**
+ * One section of Settings. Shown on its tab; while searching, every section shows only its matching
+ * rows (or all of them when the section's title or `keywords` match). Rows are matched by their text,
+ * so nothing needs registering. `keywords` covers what's tucked away in closed "Fine-tune" style
+ * disclosures and other words people might search for.
+ */
+function Group({ title, id, tab, keywords = "", children }: { title: string; id?: string; tab: SettingsTab; keywords?: string; children: ReactNode }) {
+  const { tab: current, query, report } = useContext(SettingsFilter);
+  const card = useRef<HTMLDivElement>(null);
+  const [hidden, setHidden] = useState(false);
+  const q = norm(query.trim());
+  const key = id ?? title;
+
+  useLayoutEffect(() => {
+    const el = card.current;
+    if (!el) return;
+    // Matching rows show on their own. The whole section shows when its title matches, or when
+    // only its keywords do (the match is tucked inside something closed, like "Fine-tune").
+    const apply = () => {
+      if (!filter(!q || matches(title, q)) && q && matches(keywords, q)) filter(true);
+    };
+    const filter = (whole: boolean) => {
+      let shown = 0;
+      for (const child of Array.from(el.children) as HTMLElement[]) {
+        const rows = child.matches(".row") ? [child] : (Array.from(child.querySelectorAll(".row")) as HTMLElement[]);
+        if (rows.length > 1 || (rows.length === 1 && rows[0] !== child)) {
+          let any = false;
+          for (const r of rows) {
+            const ok = whole || matches(r.textContent ?? "", q);
+            r.toggleAttribute("data-search-hidden", !ok);
+            any ||= ok;
+          }
+          child.toggleAttribute("data-search-hidden", !any);
+          if (any) shown++;
+        } else {
+          const ok = whole || matches(child.textContent ?? "", q);
+          child.toggleAttribute("data-search-hidden", !ok);
+          if (ok) shown++;
+        }
+      }
+      setHidden(!!q && shown === 0);
+      report(key, q ? shown : -1);
+      return shown > 0;
+    };
+    apply();
+    // Rows come and go (disclosures open, data loads): keep the filter applied.
+    const watch = new MutationObserver(() => {
+      watch.disconnect();
+      apply();
+      watch.observe(el, { childList: true, subtree: true });
+    });
+    watch.observe(el, { childList: true, subtree: true });
+    return () => watch.disconnect();
+  }, [q, title, keywords, key, report]);
+
+  if (!q && tab !== current) return null;
   return (
-    <section className="settings-group" id={id ? `settings-${id}` : undefined}>
+    <section className="settings-group" id={id ? `settings-${id}` : undefined} hidden={hidden}>
       <h2 className="section-title">{title}</h2>
-      <div className="settings-card">{children}</div>
+      <div className="settings-card" ref={card}>
+        {children}
+      </div>
     </section>
   );
+}
+
+/** The tab strip and search box above Settings. */
+function SettingsNav({
+  tab,
+  setTab,
+  query,
+  setQuery,
+}: {
+  tab: SettingsTab;
+  setTab: (t: SettingsTab) => void;
+  query: string;
+  setQuery: (q: string) => void;
+}) {
+  const searching = !!query.trim();
+  return (
+    <div className="settings-nav">
+      <div className="settings-search">
+        <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden>
+          <circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" strokeWidth="2" />
+          <path d="M16 16l4.5 4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+        <input
+          type="search"
+          value={query}
+          placeholder="Search settings"
+          aria-label="Search settings"
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => e.key === "Escape" && setQuery("")}
+        />
+        {query && (
+          <button className="btn btn-quiet btn-icon" aria-label="Clear search" onClick={() => setQuery("")}>
+            <Close size={15} />
+          </button>
+        )}
+      </div>
+      <AnimatePresence initial={false}>
+        {!searching && (
+          <motion.div
+            key="tabs"
+            className="segmented settings-tabs"
+            role="tablist"
+            aria-label="Settings sections"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+          >
+            {SETTINGS_TABS.map((t) => (
+              <button
+                key={t.id}
+                role="tab"
+                aria-selected={tab === t.id}
+                className={tab === t.id ? "is-on" : ""}
+                onClick={() => {
+                  if (t.id !== tab) sounds.tap();
+                  setTab(t.id);
+                }}
+              >
+                {tab === t.id && <motion.span layoutId="settings-tab-pill" className="pill-bg" />}
+                <span>{t.label}</span>
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/** Tab and search state, plus "how many sections matched" for the empty state. */
+function useSettingsNav() {
+  const [tab, setTab] = useState<SettingsTab>(() => {
+    const pending = takeSettingsSection();
+    if (pending && SECTION_TAB[pending]) return SECTION_TAB[pending];
+    try {
+      const saved = localStorage.getItem("tend.settings.tab") as SettingsTab | null;
+      if (saved && SETTINGS_TABS.some((t) => t.id === saved)) return saved;
+    } catch {
+      /* fine */
+    }
+    return "nudges";
+  });
+  const [query, setQuery] = useState("");
+  const counts = useRef(new Map<string, number>());
+  const [found, setFound] = useState(-1);
+  const report = useRef((id: string, n: number) => {
+    counts.current.set(id, n);
+    const vals = [...counts.current.values()];
+    setFound(vals.some((v) => v < 0) ? -1 : vals.reduce((a, b) => a + b, 0));
+  }).current;
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("tend.settings.tab", tab);
+    } catch {
+      /* fine */
+    }
+  }, [tab]);
+  // Sections unmount when leaving a tab; start counting afresh on each new search.
+  useEffect(() => {
+    if (!query.trim()) counts.current.clear();
+  }, [query]);
+  // A link to a section while Settings is already open.
+  useEffect(() => {
+    const on = (e: Event) => {
+      const t = SECTION_TAB[(e as CustomEvent<string>).detail];
+      takeSettingsSection();
+      if (t) {
+        setQuery("");
+        setTab(t);
+      }
+    };
+    window.addEventListener(OPEN_SETTINGS_EVENT, on);
+    return () => window.removeEventListener(OPEN_SETTINGS_EVENT, on);
+  }, []);
+  return { tab, setTab, query, setQuery, report, found };
 }
 
 function Choice<T extends string>({
@@ -1225,7 +1432,7 @@ function UpdatesGroup() {
     failed: `Version ${state.version} could not be fetched. Try again.`,
   };
   return (
-    <Group title="Updates">
+    <Group title="Updates" id="updates" tab="data" keywords="version stable unstable channel download install">
       <div className="row">
         <span className="row-text">
           <span className="row-label">Tend {version}</span>
@@ -1261,6 +1468,7 @@ function UpdatesGroup() {
 }
 
 export function SettingsView() {
+  const nav = useSettingsNav();
   const { settings: s, updateSettings: set, toast, refresh } = useStore();
   const [sync, setSync] = useState<SyncInfo | null>(null);
   const [hosts, setHosts] = useState<Hello[] | null>(null);
@@ -1358,6 +1566,7 @@ export function SettingsView() {
   const servers = sync?.peers.filter((p) => !p.isClient) ?? [];
   const clients = sync?.peers.filter((p) => p.isClient) ?? [];
 
+  const isSearching = !!nav.query.trim();
   return (
     <div className="view settings">
       <header className="view-head">
@@ -1366,16 +1575,29 @@ export function SettingsView() {
 
       <PermissionBanner />
 
-      <Group title="Nudges">
+      <SettingsNav tab={nav.tab} setTab={nav.setTab} query={nav.query} setQuery={nav.setQuery} />
+      {isSearching && nav.found === 0 && (
+        <p className="settings-empty">
+          Nothing called “{nav.query.trim()}” here. Try another word, like <em>sound</em>, <em>quiet</em> or <em>backup</em>.
+        </p>
+      )}
+
+      <SettingsFilter.Provider value={{ tab: nav.tab, query: nav.query, report: nav.report }}>
+      <Group
+        title="Nudges"
+        id="nudges"
+        tab="nudges"
+        keywords="notifications reminders chime unlock quiet hours preset gentle persistent fine-tune sound vibrate silent heads-up dose repeat remind again autostart start with windows"
+      >
         <NudgeSettings autostart={autostart} setAutostart={setAutostart} />
       </Group>
 
-      <Group title="Your day" id="your-day">
+      <Group title="Your day" id="your-day" tab="day" keywords="calendar mood weather check-in stormy reasons emoji">
         <DaySettings />
         <MoodReasonSettings />
       </Group>
 
-      <Group title="Look and feel">
+      <Group title="Look and feel" id="look" tab="look" keywords="sounds volume theme dark light night day motion animation">
         <SoundSettings />
         <Choice
           label="Reduce motion"
@@ -1399,7 +1621,7 @@ export function SettingsView() {
         />
       </Group>
 
-      <Group title="Rewards" id="rewards">
+      <Group title="Rewards" id="rewards" tab="look" keywords="seeds golden bonus helper model ai suggestions">
         <Toggle
           label="Surprise golden seeds"
           hint="Sometimes finishing something gives a few extra seeds. Never needed, never taken away."
@@ -1409,16 +1631,16 @@ export function SettingsView() {
         <ModelRow />
       </Group>
 
-      <Group title="Movement" id="movement">
+      <Group title="Movement" id="movement" tab="movement" keywords="steps workouts exercise fitness health connect google fit goal">
         <MovementSettings />
       </Group>
 
-      <Group title="Your data">
+      <Group title="Your data" id="data" tab="data" keywords="backup restore export import passphrase medicine diary">
         <BackupSettings />
         <HealthData />
       </Group>
 
-      <Group title="Sync between devices">
+      <Group title="Sync between devices" id="sync" tab="data" keywords="pair qr code computer phone wi-fi">
         {sync?.hosting && (
           <div className="pair-host">
             <p className="row-hint">
@@ -1513,6 +1735,7 @@ export function SettingsView() {
       </Group>
 
       <UpdatesGroup />
+      </SettingsFilter.Provider>
 
       <p className="about">Tend keeps everything on your devices. Nothing is sent anywhere except between your own paired devices.</p>
     </div>

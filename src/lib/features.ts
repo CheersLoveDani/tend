@@ -108,4 +108,14 @@ export const wasJustOnboarded = () => justOnboarded;
 
 /** Ask the shell to open Settings at a section. */
 export const OPEN_SETTINGS_EVENT = "tend:open-settings";
-export const openSettings = (section: string) => window.dispatchEvent(new CustomEvent(OPEN_SETTINGS_EVENT, { detail: section }));
+let pendingSection: string | null = null;
+export const openSettings = (section: string) => {
+  // Kept for Settings to read when it opens on the right tab (it may not be mounted yet).
+  pendingSection = section;
+  window.dispatchEvent(new CustomEvent(OPEN_SETTINGS_EVENT, { detail: section }));
+};
+export const takeSettingsSection = () => {
+  const s = pendingSection;
+  pendingSection = null;
+  return s;
+};
