@@ -38,11 +38,14 @@ export function Today({ onEdit, onAdd, onOpenMed }: { onEdit: (r: Reminder) => v
     return { earlier, todays, done, possible, gathered };
   }, [snap, t]);
 
+  // The reaction folds away by itself, unless "what's behind it?" is open underneath: then it stays
+  // until closed, so it never vanishes while someone is still writing.
+  const asksWhy = store.settings.moodReasons;
   useEffect(() => {
-    if (!reaction) return;
+    if (!reaction || asksWhy) return;
     const timer = window.setTimeout(() => setReaction(null), 15_000);
     return () => window.clearTimeout(timer);
-  }, [reaction?.key]);
+  }, [reaction?.key, asksWhy]);
 
   const open = todays.length;
   // Medicine first: due doses, then the rest of today's. Taken ones live on the Medicine tab.
