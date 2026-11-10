@@ -7,6 +7,13 @@ import { Leaf } from "./Icons";
 /** What each release changed, newest first. Shown once after updating; new installs never see it. */
 export const CHANGES: { version: string; title: string; items: string[] }[] = [
   {
+    version: "0.6.0-3",
+    title: "Time to write why",
+    items: [
+      "The weather check-in on Today now stays open while you write what's behind it. Close it with the ✕ when you're done.",
+    ],
+  },
+  {
     version: "0.6.0-2",
     title: "Settings by area, and food goals",
     items: [
