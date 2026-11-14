@@ -310,6 +310,8 @@ export const api = {
     invoke<Peer>("pair_any", { hosts, port, code, device }),
   forgetPeer: (id: string) => invoke<void>("forget_peer", { id }),
   syncNow: () => invoke<SyncOutcome>("sync_now"),
+  /** While on, edits on the paired computer arrive as they happen. */
+  setLiveSync: (on: boolean) => invoke<void>("set_live_sync", { on }),
   /** Moves several reminders at once (use SOMEDAY to park them). */
   moveMany: (ids: string[], date: string) => invoke<number>("move_reminders", { ids, date }),
   saveMed: (input: MedInput) => invoke<Med>("save_med", { input }),

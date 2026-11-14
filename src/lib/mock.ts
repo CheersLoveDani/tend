@@ -361,6 +361,8 @@ export function installMock() {
         return { deviceId: "web", name: "Preview", hosting: true, code: "482913", port: 47821, addresses: ["192.168.1.20"], peers: [] };
       case "sync_now":
         return { peers: 0, ok: 0, changed: 0, errors: [] };
+      case "set_live_sync":
+        return null;
       case "discover_hosts":
         return [];
       case "plugin:tend-native|health_status":

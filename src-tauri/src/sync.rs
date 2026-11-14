@@ -16,13 +16,18 @@ use sha2::Sha256;
 use std::collections::HashMap;
 use std::io::Read;
 use std::net::{IpAddr, Ipv4Addr, UdpSocket};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::db::{Db, Item, now_ms};
 use crate::model::{LedgerEntry, Reminder};
 
+#[cfg(not(test))]
 pub const HTTP_PORT: u16 = 47821;
+/// Tests use their own port so they don't meet a Tend that's running on this computer.
+#[cfg(test)]
+pub const HTTP_PORT: u16 = 47831;
 pub const UDP_PORT: u16 = 47822;
 const DISCOVER: &[u8] = b"TEND_DISCOVER";
 /// Wrong pairing codes one address may send before it is paused, and how many wrong
@@ -39,6 +44,9 @@ const MAX_TRACKED_ADDRS: usize = 1024;
 const MAX_SKEW_MS: i64 = 5 * 60 * 1000;
 const MAX_SYNC_BODY: u64 = 16 * 1024 * 1024;
 const MAX_SMALL_BODY: u64 = 4 * 1024;
+/// How long the host holds a /wait open before answering "nothing new".
+const WAIT_FOR: Duration = Duration::from_secs(25);
+const MAX_WAITERS: usize = 16;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -148,6 +156,8 @@ pub struct SyncState {
     code: Mutex<PairCode>,
     /// Nonces of recently accepted /sync requests, so a captured request can't be replayed.
     seen: Mutex<HashMap<String, i64>>,
+    /// Open /wait requests, capped so they can't pile up threads.
+    waiters: AtomicUsize,
 }
 
 impl SyncState {
@@ -164,6 +174,7 @@ impl SyncState {
                 by_addr: HashMap::new(),
             }),
             seen: Mutex::new(HashMap::new()),
+            waiters: AtomicUsize::new(0),
         }
     }
 
@@ -329,6 +340,30 @@ pub fn serve(db: Arc<Mutex<Db>>, state: Arc<SyncState>, on_change: impl Fn() + S
                     nonce: header("X-Tend-Nonce"),
                     sig: header("X-Tend-Sig"),
                 };
+                if req.url() == "/wait" {
+                    // Held open on its own thread so syncs keep flowing meanwhile.
+                    if state.waiters.fetch_add(1, Ordering::SeqCst) >= MAX_WAITERS {
+                        state.waiters.fetch_sub(1, Ordering::SeqCst);
+                        let _ = req.respond(
+                            tiny_http::Response::from_string(r#"{"error":"busy"}"#).with_status_code(429).with_header(json),
+                        );
+                        continue;
+                    }
+                    let db = db.clone();
+                    let state = state.clone();
+                    std::thread::spawn(move || {
+                        let (status, out, reply_sig) = wait_for_change(&db, &state, &body, &signed);
+                        state.waiters.fetch_sub(1, Ordering::SeqCst);
+                        let mut response =
+                            tiny_http::Response::from_string(out).with_status_code(status).with_header(json);
+                        if let Some(sig) = reply_sig {
+                            response = response
+                                .with_header(tiny_http::Header::from_bytes(&b"X-Tend-Sig"[..], sig.as_bytes()).unwrap());
+                        }
+                        let _ = req.respond(response);
+                    });
+                    continue;
+                }
                 let from = req.remote_addr().map_or(IpAddr::V4(Ipv4Addr::UNSPECIFIED), |a| a.ip());
                 let (status, out, changed, reply_sig) = handle(&db, &state, req.url(), &body, &signed, from);
                 if changed {
@@ -402,21 +437,7 @@ fn handle(
             ))
         }
         "/sync" => {
-            let unauthorised = || anyhow!("unauthorised");
-            let tok: String = db
-                .conn
-                .query_row("SELECT token FROM peers WHERE id=?1 AND is_client=1", [&signed.device], |r| r.get(0))
-                .optional()?
-                .ok_or_else(unauthorised)?;
-            let now = now_ms();
-            let time: i64 = signed.time.parse().map_err(|_| unauthorised())?;
-            if (now - time).abs() > MAX_SKEW_MS
-                || signed.nonce.len() < 16
-                || !verify(&tok, &["req", &signed.time, &signed.nonce, body], &signed.sig)
-                || !state.fresh_nonce(&signed.nonce, time, now)
-            {
-                return Err(unauthorised());
-            }
+            let tok = authorise(&db, state, body, signed)?;
             let peer = signed.device.clone();
             let req: SyncBody = serde_json::from_str(body)?;
             let changed = db.apply_remote(&req.reminders, &req.ledger, &req.items)?;
@@ -448,7 +469,106 @@ fn handle(
     }
 }
 
+/// Checks a signed request from a paired client and returns its token.
+fn authorise(db: &Db, state: &SyncState, body: &str, signed: &SignedRequest) -> Result<String> {
+    let unauthorised = || anyhow!("unauthorised");
+    let tok: String = db
+        .conn
+        .query_row("SELECT token FROM peers WHERE id=?1 AND is_client=1", [&signed.device], |r| r.get(0))
+        .optional()?
+        .ok_or_else(unauthorised)?;
+    let now = now_ms();
+    let time: i64 = signed.time.parse().map_err(|_| unauthorised())?;
+    if (now - time).abs() > MAX_SKEW_MS
+        || signed.nonce.len() < 16
+        || !verify(&tok, &["req", &signed.time, &signed.nonce, body], &signed.sig)
+        || !state.fresh_nonce(&signed.nonce, time, now)
+    {
+        return Err(unauthorised());
+    }
+    Ok(tok)
+}
+
+#[derive(Serialize, Deserialize)]
+struct WaitBody {
+    since: i64,
+}
+
+/// Holds a /wait until our data moves past `since` (or `WAIT_FOR` passes), so an open phone
+/// hears about edits made here within a moment instead of at its next sync.
+fn wait_for_change(db: &Mutex<Db>, state: &SyncState, body: &str, signed: &SignedRequest) -> (u16, String, Option<String>) {
+    let fail = |code: u16, e: &str| (code, serde_json::json!({ "error": e }).to_string(), None);
+    let tok = match authorise(&db.lock().unwrap(), state, body, signed) {
+        Ok(t) => t,
+        Err(e) if e.to_string() == "unauthorised" => return fail(401, "unauthorised"),
+        Err(e) => return fail(400, &e.to_string()),
+    };
+    let Ok(req) = serde_json::from_str::<WaitBody>(body) else { return fail(400, "bad body") };
+    let deadline = Instant::now() + WAIT_FOR;
+    let rev = loop {
+        let rev = db.lock().unwrap().max_rev().unwrap_or(req.since);
+        if rev > req.since || Instant::now() >= deadline {
+            break rev;
+        }
+        std::thread::sleep(Duration::from_millis(300));
+    };
+    let out = serde_json::to_string(&WaitBody { since: rev }).unwrap();
+    let sig = sign(&tok, &["res", &signed.nonce, &out]);
+    (200, out, Some(sig))
+}
+
 // ---------------- client side ----------------
+
+/// Paired hosts (devices we sync to), by id.
+pub fn host_ids(db: &Db) -> Vec<String> {
+    db.conn
+        .prepare("SELECT id FROM peers WHERE is_client=0")
+        .and_then(|mut s| s.query_map([], |r| r.get(0))?.collect())
+        .unwrap_or_default()
+}
+
+/// Asks a paired host to tell us when it has something new. Returns true when it does,
+/// false when the wait ran out with nothing new.
+pub fn wait_for_host(db: &Mutex<Db>, id: &str) -> Result<bool> {
+    let (host, port, tok, since, device) = {
+        let db = db.lock().unwrap();
+        let (host, port, tok, since): (String, i64, String, i64) = db.conn.query_row(
+            "SELECT host,port,token,pull_rev FROM peers WHERE id=?1 AND is_client=0",
+            [id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+        )?;
+        (host, port, tok, since, db.device.clone())
+    };
+    let body = serde_json::to_string(&WaitBody { since })?;
+    let time = now_ms().to_string();
+    let nonce = nonce();
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_connect(Some(Duration::from_secs(4)))
+        .timeout_global(Some(WAIT_FOR + Duration::from_secs(10)))
+        .http_status_as_error(false)
+        .build()
+        .into();
+    let mut res = agent
+        .post(&format!("http://{host}:{port}/wait"))
+        .header("Content-Type", "application/json")
+        .header("X-Tend-Device", &device)
+        .header("X-Tend-Time", &time)
+        .header("X-Tend-Nonce", &nonce)
+        .header("X-Tend-Sig", &sign(&tok, &["req", &time, &nonce, &body]))
+        .send(&body)
+        .map_err(|e| anyhow!("unreachable ({e})"))?;
+    match res.status().as_u16() {
+        200 => {}
+        400 => return Err(anyhow!("host too old")),
+        s => return Err(anyhow!("host error {s}")),
+    }
+    let sig = res.headers().get("X-Tend-Sig").and_then(|v| v.to_str().ok()).unwrap_or_default().to_string();
+    let text = res.body_mut().with_config().limit(MAX_SMALL_BODY).read_to_string()?;
+    if !verify(&tok, &["res", &nonce, &text], &sig) {
+        return Err(anyhow!("the reply wasn't signed by the paired computer"));
+    }
+    Ok(serde_json::from_str::<WaitBody>(&text)?.since > since)
+}
 
 fn agent() -> ureq::Agent {
     ureq::Agent::config_builder()
@@ -715,6 +835,22 @@ mod tests {
         drop(p);
         // Steady state: nothing more to move.
         assert_eq!(sync_all(&phone).changed, 0);
+
+        // Live: a held wait answers as soon as the host changes, and a sync then brings it over.
+        let host_id = host_ids(&phone.lock().unwrap()).remove(0);
+        let waiting = {
+            let phone = phone.clone();
+            let id = host_id.clone();
+            std::thread::spawn(move || {
+                let started = Instant::now();
+                (wait_for_host(&phone, &id).unwrap(), started.elapsed())
+            })
+        };
+        std::thread::sleep(Duration::from_millis(500));
+        actions::delete(&host.lock().unwrap(), &r.id).unwrap();
+        let (changed, took) = waiting.join().unwrap();
+        assert!(changed && took < Duration::from_secs(5), "{took:?}");
+        assert!(sync_all(&phone).changed > 0);
 
         // QR pairing: an unreachable address in the list must not block the reachable one.
         let tablet = db();

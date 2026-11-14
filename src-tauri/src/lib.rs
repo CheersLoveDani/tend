@@ -10,6 +10,7 @@ mod suggest;
 mod sync;
 mod update;
 
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use serde::Serialize;
@@ -543,6 +544,54 @@ async fn run_sync(app: AppHandle) -> Res<sync::SyncOutcome> {
     Ok(out)
 }
 
+/// Bumped whenever live sync starts or stops; a watcher stops once it no longer matches.
+static LIVE_GEN: AtomicU64 = AtomicU64::new(0);
+static LIVE_ON: AtomicBool = AtomicBool::new(false);
+
+/// While the app is on screen, keep a wait open on each paired host and sync the moment it
+/// changes, so edits made on the computer show up here straight away.
+#[tauri::command]
+fn set_live_sync(app: AppHandle, on: bool) {
+    if !on {
+        LIVE_ON.store(false, Ordering::SeqCst);
+        LIVE_GEN.fetch_add(1, Ordering::SeqCst);
+        return;
+    }
+    if LIVE_ON.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let generation = LIVE_GEN.fetch_add(1, Ordering::SeqCst) + 1;
+    std::thread::spawn(move || {
+        let live = || LIVE_GEN.load(Ordering::SeqCst) == generation;
+        let rest = |secs: u64| {
+            for _ in 0..secs {
+                if !live() {
+                    return;
+                }
+                std::thread::sleep(std::time::Duration::from_secs(1));
+            }
+        };
+        let db = app.state::<AppState>().db.clone();
+        while live() {
+            // Usually there's one computer; with more, the first one is watched live.
+            let Some(id) = sync::host_ids(&db.lock().unwrap()).into_iter().next() else {
+                rest(15);
+                continue;
+            };
+            match sync::wait_for_host(&db, &id) {
+                Ok(true) if live() => {
+                    let _ = tauri::async_runtime::block_on(run_sync(app.clone()));
+                }
+                Ok(_) => {}
+                // A computer on an older version can't hold a wait open: check back rarely.
+                Err(e) if e.to_string() == "host too old" => rest(120),
+                // Asleep, off the network or moved: the normal syncs find it again.
+                Err(_) => rest(15),
+            }
+        }
+    });
+}
+
 /// Pushes local edits to paired hosts shortly after they happen.
 fn after_local_change(app: &AppHandle) {
     #[cfg(desktop)]
@@ -632,6 +681,7 @@ pub fn run() {
             pair_any,
             forget_peer,
             sync_now,
+            set_live_sync,
             save_med,
             delete_med,
             add_med_stock,

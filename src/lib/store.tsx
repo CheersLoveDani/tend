@@ -213,13 +213,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     });
     const pendingSub = native.onPendingActions(() => void applyPending());
     const onVisible = () => {
-      if (document.visibilityState === "visible") {
+      const visible = document.visibilityState === "visible";
+      void api.setLiveSync(visible).catch(() => null);
+      if (visible) {
         void applyPending();
         void syncFit();
         void api.syncNow().then(() => refresh()).catch(() => null);
         void autoBackup();
       }
     };
+    void api.setLiveSync(document.visibilityState === "visible").catch(() => null);
     document.addEventListener("visibilitychange", onVisible);
     // Re-render once a minute so "this afternoon" labels stay true.
     const tick = window.setInterval(() => {
@@ -234,6 +237,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       void actionSub.then((s) => s?.unregister());
       void pendingSub.then((s) => s?.unregister());
       document.removeEventListener("visibilitychange", onVisible);
+      void api.setLiveSync(false).catch(() => null);
       window.clearInterval(tick);
       mq.removeEventListener("change", onMq);
     };
