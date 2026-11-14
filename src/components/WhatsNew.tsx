@@ -7,6 +7,14 @@ import { Leaf } from "./Icons";
 /** What each release changed, newest first. Shown once after updating; new installs never see it. */
 export const CHANGES: { version: string; title: string; items: string[] }[] = [
   {
+    version: "0.6.0-4",
+    title: "Live sync with your computer",
+    items: [
+      "While Tend is open on your phone, changes made on your computer show up within a moment. No need to switch away and back.",
+      "Both need this version for it to work. Until then, syncing carries on as before.",
+    ],
+  },
+  {
     version: "0.6.0-3",
     title: "Time to write why",
     items: [
