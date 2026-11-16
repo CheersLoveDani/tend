@@ -54,6 +54,8 @@ export function Glance() {
     if (s.theme === "system") document.documentElement.removeAttribute("data-theme");
     else document.documentElement.setAttribute("data-theme", s.theme);
     const next = await api.snapshot().catch(() => null);
+    // A hidden glance that can't load would block every later one.
+    if (!next) return close();
     setSettings(s);
     setSnap(next);
     setDone([]);

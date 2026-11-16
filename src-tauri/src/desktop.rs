@@ -472,8 +472,15 @@ fn tick(app: &AppHandle) {
             }
         }
     }
+    // Once after Tend starts (or the computer logs in), say what's already waiting: those were
+    // announced before, so nothing above counts them as new.
+    if overlay && !GREETED.swap(true, Ordering::SeqCst) && (!waiting.is_empty() || !doses.is_empty()) {
+        again = true;
+    }
     deliver(app, overlay, &fresh, mood_due || again);
 }
+
+static GREETED: AtomicBool = AtomicBool::new(false);
 
 /// Shows what's new: the glance, or a single Windows notification however many things are due.
 fn deliver(app: &AppHandle, overlay: bool, fresh: &[(String, String)], also: bool) {

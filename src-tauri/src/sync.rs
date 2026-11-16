@@ -29,6 +29,12 @@ pub const HTTP_PORT: u16 = 47821;
 #[cfg(test)]
 pub const HTTP_PORT: u16 = 47831;
 pub const UDP_PORT: u16 = 47822;
+/// Tests listen on loopback only: each test build is a new .exe, and listening on the network
+/// makes Windows Firewall ask about every one of them.
+#[cfg(not(test))]
+const BIND: &str = "0.0.0.0";
+#[cfg(test)]
+const BIND: &str = "127.0.0.1";
 const DISCOVER: &[u8] = b"TEND_DISCOVER";
 /// Wrong pairing codes one address may send before it is paused, and how many wrong
 /// codes the current code survives (from anyone) before it is replaced.
@@ -306,7 +312,7 @@ pub fn serve(db: Arc<Mutex<Db>>, state: Arc<SyncState>, on_change: impl Fn() + S
         let db = db.clone();
         let state = state.clone();
         std::thread::spawn(move || {
-            let server = match tiny_http::Server::http(("0.0.0.0", HTTP_PORT)) {
+            let server = match tiny_http::Server::http((BIND, HTTP_PORT)) {
                 Ok(s) => s,
                 Err(e) => {
                     log::warn!("sync server could not start: {e}");
@@ -378,7 +384,7 @@ pub fn serve(db: Arc<Mutex<Db>>, state: Arc<SyncState>, on_change: impl Fn() + S
         });
     }
     std::thread::spawn(move || {
-        let Ok(sock) = UdpSocket::bind(("0.0.0.0", UDP_PORT)) else { return };
+        let Ok(sock) = UdpSocket::bind((BIND, UDP_PORT)) else { return };
         let mut buf = [0u8; 64];
         while let Ok((n, from)) = sock.recv_from(&mut buf) {
             if &buf[..n] == DISCOVER {
@@ -581,7 +587,7 @@ fn agent() -> ureq::Agent {
 /// Broadcasts on the LAN and collects Tend hosts that answer within ~1.2s.
 pub fn discover(own_id: &str) -> Vec<Hello> {
     let mut found: Vec<Hello> = vec![];
-    let Ok(sock) = UdpSocket::bind(("0.0.0.0", 0)) else { return found };
+    let Ok(sock) = UdpSocket::bind((BIND, 0)) else { return found };
     let _ = sock.set_broadcast(true);
     let _ = sock.set_read_timeout(Some(Duration::from_millis(300)));
     let mut targets = vec!["255.255.255.255".to_string()];
