@@ -362,7 +362,16 @@ export function installMock() {
       case "sync_now":
         return { peers: 0, ok: 0, changed: 0, errors: [] };
       case "set_live_sync":
+      case "glance_fit":
+      case "glance_close":
+      case "glance_open_main":
+      case "glance_preview":
         return null;
+      case "list_monitors":
+        return [
+          { name: "DISPLAY1", width: 2560, height: 1440, primary: true },
+          { name: "DISPLAY2", width: 1920, height: 1080, primary: false },
+        ];
       case "discover_hosts":
         return [];
       case "plugin:tend-native|health_status":

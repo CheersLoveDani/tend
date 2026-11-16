@@ -897,6 +897,7 @@ function NudgeSettings({ autostart, setAutostart }: { autostart: boolean | null;
         checked={paused}
         onChange={(v) => set({ pausedUntil: v ? endOfToday() : null })}
       />
+      {isAndroid && (
       <Choice
         label="Gentle chime"
         hint="A sound and buzz while something's time has passed. Things without a time wait quietly."
@@ -909,6 +910,7 @@ function NudgeSettings({ autostart, setAutostart }: { autostart: boolean | null;
           { value: "60", label: "Hourly" },
         ]}
       />
+      )}
       {isAndroid && (
         <>
           <Toggle
@@ -1036,6 +1038,82 @@ function NudgeSettings({ autostart, setAutostart }: { autostart: boolean | null;
             </div>
           )}
         </>
+      )}
+    </>
+  );
+}
+
+type MonitorInfo = Awaited<ReturnType<typeof api.listMonitors>>[number];
+
+/** Desktop: how reminders appear on the computer (the corner glance, or Windows notifications). */
+function DesktopNudgeSettings() {
+  const { settings: s, updateSettings: set, toast } = useStore();
+  const [monitors, setMonitors] = useState<MonitorInfo[]>([]);
+  useEffect(() => {
+    void api.listMonitors().then(setMonitors).catch(() => null);
+  }, []);
+  const others = monitors.filter((m) => !m.primary);
+  const screen = (m: MonitorInfo) => `Screen ${monitors.indexOf(m) + 1}`;
+
+  return (
+    <>
+      <Choice
+        label="How reminders appear"
+        hint={
+          s.desktopNudge === "overlay"
+            ? "One calm see-through card in the corner, listing what's waiting. Tick things off right there."
+            : "A Windows notification. Several things due at once arrive as one."
+        }
+        value={s.desktopNudge}
+        onChange={(v) => set({ desktopNudge: v })}
+        options={[
+          { value: "overlay", label: "Corner card" },
+          { value: "notifications", label: "Notifications" },
+        ]}
+      />
+      {s.desktopNudge === "overlay" && (
+        <>
+          <Choice
+            label="Show on"
+            hint={others.length ? undefined : "Follow mouse puts it on whichever screen you're using."}
+            value={s.overlayMonitor === "primary" || s.overlayMonitor === "cursor" || others.some((m) => m.name === s.overlayMonitor) ? s.overlayMonitor : "primary"}
+            onChange={(v) => set({ overlayMonitor: v })}
+            options={[
+              { value: "primary", label: "Main screen" },
+              { value: "cursor", label: "Follow mouse" },
+              ...others.map((m) => ({ value: m.name, label: screen(m) })),
+            ]}
+          />
+          <Choice
+            label="Tuck away after"
+            hint="Resting the mouse on it keeps it there."
+            value={String(s.overlayHideAfter)}
+            onChange={(v) => set({ overlayHideAfter: Number(v) })}
+            options={[
+              { value: "30", label: "30 sec" },
+              { value: "60", label: "1 min" },
+              { value: "300", label: "5 min" },
+              { value: "0", label: "Stays" },
+            ]}
+          />
+        </>
+      )}
+      <Choice
+        label="Come back while things wait"
+        hint="It always shows when something new is due. It waits while a game or anything fullscreen is open, then shows once that's closed."
+        value={String(s.desktopEvery)}
+        onChange={(v) => set({ desktopEvery: Number(v) })}
+        options={[
+          { value: "0", label: "Only new" },
+          { value: "30", label: "30 min" },
+          { value: "60", label: "Hourly" },
+          { value: "120", label: "2 hours" },
+        ]}
+      />
+      {s.desktopNudge === "overlay" && (
+        <button className="btn btn-quiet btn-small" onClick={() => void api.glancePreview().catch(() => toast("Couldn't show it just now."))}>
+          Show it now
+        </button>
       )}
     </>
   );
@@ -1777,6 +1855,17 @@ export function SettingsView() {
       >
         <NudgeSettings autostart={autostart} setAutostart={setAutostart} />
       </Group>
+
+      {!isAndroid && (
+        <Group
+          title="On this computer"
+          id="desktop-nudges"
+          tab="tasks"
+          keywords="desktop computer windows overlay corner card glance popup notifications monitor screen display fullscreen games tuck away how often"
+        >
+          <DesktopNudgeSettings />
+        </Group>
+      )}
 
       <Group title="Calendar" id="calendar" tab="tasks" keywords="calendar events google today">
         <CalendarSettings />

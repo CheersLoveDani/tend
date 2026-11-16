@@ -78,6 +78,14 @@ export interface Settings {
   moodReasonOptions: MoodReason[];
   /** Stable releases only, or unstable pre-releases too (updater.ts). */
   updateChannel: "stable" | "unstable";
+  /** Desktop: a calm see-through card in the corner (the glance), or one Windows notification. */
+  desktopNudge: "overlay" | "notifications";
+  /** Desktop: which screen the glance appears on: "primary", "cursor", or a monitor's name. */
+  overlayMonitor: string;
+  /** Desktop: bring the glance back every N minutes while things wait (0 = only when something new is due). */
+  desktopEvery: number;
+  /** Desktop: the glance tucks itself away after this many seconds (0 = stays until closed). Hovering keeps it. */
+  overlayHideAfter: number;
   /** The channel question (ChannelChoice) has been answered. New installs start on stable without asking. */
   channelAsked: boolean;
   /** Wildlife in the garden (wildlife.ts): a wren that lives in the tree, and visitors through the seasons. */
@@ -155,6 +163,10 @@ export const defaultSettings: Settings = {
   wildlifeSouth: null,
   updateChannel: "stable",
   channelAsked: false,
+  desktopNudge: "overlay",
+  overlayMonitor: "primary",
+  desktopEvery: 60,
+  overlayHideAfter: 60,
 };
 
 /** Quiet / Gentle / Persistent: what onboarding and Settings offer as one-tap starting points. */

@@ -7,6 +7,7 @@ import { Upcoming } from "./views/Upcoming";
 import { Garden } from "./views/Garden";
 import { SettingsView } from "./views/SettingsView";
 import { Nag } from "./views/Nag";
+import { Glance } from "./views/Glance";
 import { Meds } from "./views/Meds";
 import { Food } from "./views/Food";
 import { FoodSheet, type FoodStart } from "./components/FoodSheet";
@@ -509,10 +510,13 @@ function ToastItem({ t }: { t: Toast }) {
 const QUICK = new URLSearchParams(location.search).has("quick");
 /** The desktop's daily weather check-in window loads it with ?mood=1. */
 const MOOD = new URLSearchParams(location.search).has("mood");
+/** The desktop's corner glance (what's waiting) loads it with ?glance=1. */
+const GLANCE = new URLSearchParams(location.search).has("glance");
 
 export default function App() {
   if (QUICK) return <QuickAdd />;
   if (MOOD) return <MoodPop />;
+  if (GLANCE) return <Glance />;
   return (
     <StoreProvider>
       <Shell />

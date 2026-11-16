@@ -604,6 +604,8 @@ fn after_local_change(app: &AppHandle) {
 
 #[cfg(desktop)]
 mod desktop;
+#[cfg(desktop)]
+mod glance;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -710,6 +712,16 @@ pub fn run() {
             update::update_check,
             update::update_download,
             update::update_install,
+            #[cfg(desktop)]
+            glance::glance_fit,
+            #[cfg(desktop)]
+            glance::glance_close,
+            #[cfg(desktop)]
+            glance::glance_open_main,
+            #[cfg(desktop)]
+            glance::list_monitors,
+            #[cfg(desktop)]
+            glance::glance_preview,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Tend")

@@ -3852,3 +3852,169 @@ html[data-mood] body {
 .settings-group[hidden] {
   display: none !important;
 }
+
+/* Desktop corner glance (index.html?glance=1): what's waiting, on a soft see-through card.
+   The window is transparent; the wrapper's padding leaves room for the card's shadow. */
+html[data-glance],
+html[data-glance] body {
+  background: transparent;
+  overflow: hidden;
+}
+.glance-wrap {
+  box-sizing: border-box;
+  padding: 14px;
+}
+.glance {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px 10px;
+  border-radius: 20px;
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  background: color-mix(in srgb, var(--paper) 74%, transparent);
+  box-shadow: 0 10px 30px -12px rgba(20, 30, 25, 0.35);
+  color: var(--bark);
+  animation: glance-in 0.35s ease-out;
+  transition: background 0.2s ease;
+}
+.glance-wrap:hover .glance {
+  background: color-mix(in srgb, var(--paper) 94%, transparent);
+}
+@keyframes glance-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .glance {
+    animation: none;
+  }
+}
+.glance-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+}
+.glance-head svg {
+  color: var(--moss);
+}
+.glance-head span {
+  flex: 1;
+}
+.glance-x {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--bark-3);
+  cursor: pointer;
+}
+.glance-x:hover {
+  background: color-mix(in srgb, var(--bark) 8%, transparent);
+  color: var(--bark);
+}
+.glance-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.glance-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--paper-2) 70%, transparent);
+}
+.glance-row.is-dose {
+  background: color-mix(in srgb, var(--moss-soft) 80%, transparent);
+}
+.glance-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.glance-text small {
+  display: block;
+  color: var(--bark-3);
+  font-size: 12px;
+}
+.glance-tick {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1.5px solid var(--moss-2);
+  border-radius: 50%;
+  background: transparent;
+  color: transparent;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.glance-tick:hover {
+  background: var(--moss-soft);
+  color: var(--moss);
+}
+.glance-do {
+  flex: none;
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--moss);
+  color: var(--paper);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.glance-more {
+  padding: 2px 8px;
+  color: var(--bark-3);
+  font-size: 12px;
+}
+.glance-mood p {
+  margin: 0 0 6px;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+}
+.glance-mood small {
+  display: block;
+  color: var(--bark-3);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 400;
+}
+.glance-mood .weather-pick {
+  box-shadow: none;
+  background: color-mix(in srgb, var(--paper-2) 70%, transparent);
+}
+.glance-foot {
+  display: flex;
+  justify-content: flex-end;
+}
+.glance-link {
+  padding: 2px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--moss);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.glance-link:hover {
+  text-decoration: underline;
+}

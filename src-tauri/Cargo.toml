@@ -48,6 +48,10 @@ tauri-plugin-process = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-global-shortcut = "2"
 
+[target.'cfg(windows)'.dependencies]
+# Already in the tree via Tauri; used to notice fullscreen games and videos.
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+
 [profile.release]
 codegen-units = 1
 lto = true

@@ -379,6 +379,13 @@ fn tick(app: &AppHandle) {
         .filter(|s| s.status == "due" && !s.extra)
         .collect();
 
+    // "overlay" (the corner glance, default) or "notifications" (one batched Windows notification).
+    let overlay = ui.get("desktopNudge").and_then(|v| v.as_str()) != Some("notifications");
+    crate::glance::on_tick(app);
+    // Everything that became due since the last tick, delivered together: after a sleep or a
+    // late start, a morning's worth of reminders arrives as one glance, never a pile.
+    let mut fresh: Vec<(String, String)> = Vec::new();
+
     // Medication first. Critical meds still remind during quiet hours; "Quiet for today"
     // never silences doses.
     for s in doses.iter().filter(|s| !quiet || s.critical) {
@@ -388,18 +395,18 @@ fn tick(app: &AppHandle) {
         }
         let _ = db.mark_notified(&key);
         let amount = if s.amount.fract() == 0.0 { format!("{}", s.amount as i64) } else { s.amount.to_string() };
-        let _ = app
-            .notification()
-            .builder()
-            .title(format!("Time for {}", s.name))
-            .body(format!("{amount} {} at {}. Mark it in Tend once it's taken.", s.form, s.time))
-            .show();
+        fresh.push((
+            format!("Time for {}", s.name),
+            format!("{amount} {} at {}. Mark it in Tend once it's taken.", s.form, s.time),
+        ));
     }
     if quiet || paused(&ui) {
+        deliver(app, overlay, &fresh, false);
         return;
     }
 
     // The daily weather check-in: once a day, within a few hours of its time, unless already logged.
+    let mut mood_due = false;
     if let Some(at) = ui.get("moodCheckIn").and_then(|v| v.as_str()) {
         let late = minutes_of(&hm).zip(minutes_of(at)).map(|(n, a)| n - a);
         if late.is_some_and(|m| (0..180).contains(&m)) {
@@ -409,7 +416,12 @@ fn tick(app: &AppHandle) {
                 // Entries since today are today's.
                 let logged = crate::meds::entries(&db, &today).unwrap_or_default().iter().any(|e| e.kind == "mood");
                 if !logged {
-                    show_mood(app);
+                    if overlay {
+                        // The glance shows the faces itself.
+                        mood_due = true;
+                    } else {
+                        show_mood(app);
+                    }
                 }
             }
         }
@@ -432,26 +444,52 @@ fn tick(app: &AppHandle) {
             let next = r.steps.iter().find(|s| !s.done).map(|s| s.title.as_str()).unwrap_or("");
             format!("{done}/{} steps. Next tiny step: {next}", r.steps.len())
         };
-        let _ = app.notification().builder().title(&r.title).body(body).show();
+        fresh.push((r.title.clone(), body));
     }
 
-    // Gentle periodic chime while things are waiting (off when 0).
-    let every_min = ui.get("chimeMinutes").and_then(|v| v.as_f64()).unwrap_or(60.0);
+    // Come back now and then while things are waiting (0 = only when something new is due).
+    let every_min = ui.get("desktopEvery").and_then(|v| v.as_f64()).unwrap_or(60.0);
+    let mut again = false;
     if every_min > 0.0 && (!waiting.is_empty() || !doses.is_empty()) {
         let last: i64 = db.setting("lastNudge").ok().flatten().and_then(|s| s.parse().ok()).unwrap_or(0);
+        // A glance shown for new things counts, so it doesn't come straight back.
+        let last = last.max(crate::glance::last_shown());
         if now_ms() - last > (every_min * 60_000.0) as i64 {
             let _ = db.set_setting("lastNudge", &now_ms().to_string());
-            if last != 0 {
-                let title = match (doses.len(), waiting.len()) {
-                    (0, 1) => "One thing is still waiting".to_string(),
-                    (0, n) => format!("{n} things are still waiting"),
-                    (1, _) => format!("{} hasn't been taken yet", doses[0].name),
-                    (n, _) => format!("{n} doses haven't been taken yet"),
-                };
-                let names: Vec<&str> =
-                    doses.iter().map(|s| s.name.as_str()).chain(waiting.iter().map(|r| r.title.as_str())).take(3).collect();
-                let _ = app.notification().builder().title(title).body(names.join(" · ")).show();
+            if last != 0 && fresh.is_empty() {
+                again = true;
+                if !overlay {
+                    let title = match (doses.len(), waiting.len()) {
+                        (0, 1) => "One thing is still waiting".to_string(),
+                        (0, n) => format!("{n} things are still waiting"),
+                        (1, _) => format!("{} hasn't been taken yet", doses[0].name),
+                        (n, _) => format!("{n} doses haven't been taken yet"),
+                    };
+                    let names: Vec<&str> =
+                        doses.iter().map(|s| s.name.as_str()).chain(waiting.iter().map(|r| r.title.as_str())).take(3).collect();
+                    fresh.push((title, names.join(" · ")));
+                }
             }
         }
     }
+    deliver(app, overlay, &fresh, mood_due || again);
+}
+
+/// Shows what's new: the glance, or a single Windows notification however many things are due.
+fn deliver(app: &AppHandle, overlay: bool, fresh: &[(String, String)], also: bool) {
+    if overlay {
+        if also || !fresh.is_empty() {
+            crate::glance::request(app);
+        }
+        return;
+    }
+    let (title, body) = match fresh {
+        [] => return,
+        [(t, b)] => (t.clone(), b.clone()),
+        many => (
+            format!("{} things need you", many.len()),
+            many.iter().map(|(t, _)| t.as_str()).take(4).collect::<Vec<_>>().join(" · "),
+        ),
+    };
+    let _ = app.notification().builder().title(title).body(body).show();
 }
