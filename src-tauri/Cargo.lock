@@ -5375,7 +5375,7 @@ dependencies = [
 
 [[package]]
 name = "tend"
-version = "0.6.0-4"
+version = "0.6.0-5"
 dependencies = [
  "anyhow",
  "argon2",

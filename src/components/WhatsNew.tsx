@@ -7,6 +7,15 @@ import { Leaf } from "./Icons";
 /** What each release changed, newest first. Shown once after updating; new installs never see it. */
 export const CHANGES: { version: string; title: string; items: string[] }[] = [
   {
+    version: "0.6.0-5",
+    title: "One calm card on your computer",
+    items: [
+      "On the computer, what's due now arrives as one see-through card in the corner, not a pile of notifications. Tick things off or take a dose right there.",
+      "It waits while a game or anything fullscreen is open, and shows once that's closed.",
+      "Choose which screen it's on, how often it comes back and when it tucks away in Settings → Tasks → On this computer.",
+    ],
+  },
+  {
     version: "0.6.0-4",
     title: "Live sync with your computer",
     items: [
