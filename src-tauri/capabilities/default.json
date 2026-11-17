@@ -8,6 +8,7 @@
     "opener:default",
     "notification:default",
     "tend-native:default",
+    "deep-link:default",
     "core:window:allow-show",
     "core:window:allow-hide",
     "core:window:allow-set-size"

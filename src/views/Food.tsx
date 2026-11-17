@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { format, isToday, isYesterday } from "date-fns";
 import type { Food as FoodItem, SavedFood } from "../lib/api";
 import { useStore } from "../lib/store";
-import { canUseCamera, dayTotal, goalProgress, isWater, kcalText, mealFor, MEALS, waterGlass, type GoalProgress } from "../lib/food";
+import { canUseCamera, dayMacros, dayTotal, goalProgress, macrosText, isWater, kcalText, mealFor, MEALS, waterGlass, type GoalProgress } from "../lib/food";
 import { cheer } from "../lib/cheer";
 import type { FoodGoals } from "../lib/settings";
 import { sounds } from "../lib/sound";
@@ -46,6 +46,7 @@ export function Food({ onAdd, onEdit }: Props) {
   }, [snap.foods, todayKey]);
 
   const total = dayTotal(todays);
+  const macros = dayMacros(todays);
   const eaten = todays.filter((f) => !isWater(f));
   const guide = showKcal ? settings.foodGuide : null;
   const again = snap.foodLib.slice(0, 8);
@@ -80,6 +81,12 @@ export function Food({ onAdd, onEdit }: Props) {
               ? `About ${kcalText(total.kcal)} so far${total.missing ? `, plus ${total.missing} without a number` : ""}.`
               : "Every meal and snack you note grows your garden."}
         </p>
+        {showKcal && macros.counted > 0 && (
+          <p className="view-sub food-macros" title="From foods that came with these numbers, such as recipes from Simmer">
+            {macrosText(macros)}
+            {macros.counted < eaten.length ? ` from ${macros.counted} of ${eaten.length}` : ""}
+          </p>
+        )}
       </header>
 
       <TodaysGoals

@@ -55,6 +55,21 @@ pub struct Food {
     /// Counts toward the fruit & veg goal; `None` = guessed from the name on the device.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fruit_veg: Option<bool>,
+    /// Grams of each, when known (a Simmer recipe gives them; most foods won't).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub protein: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub carbs: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fat: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fibre: Option<f64>,
+    /// How many portions of a recipe, when it came from one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub portions: Option<f64>,
+    /// The other app's id for what was eaten, e.g. a Simmer recipe id.
+    #[serde(default, rename = "ref", skip_serializing_if = "String::is_empty")]
+    pub reference: String,
 }
 
 /// What's known about a food product (Open Food Facts, a label, or a past log).
@@ -147,6 +162,11 @@ pub fn save_food(db: &Db, mut f: Food, info: Option<FoodInfo>) -> Result<RewardE
     }
     f.kcal = clean_kcal(f.kcal);
     f.grams = f.grams.filter(|g| g.is_finite() && *g > 0.0);
+    for macro_grams in [&mut f.protein, &mut f.carbs, &mut f.fat, &mut f.fibre] {
+        *macro_grams = macro_grams.filter(|g| g.is_finite() && *g >= 0.0).map(|g| (g * 10.0).round() / 10.0);
+    }
+    f.portions = f.portions.filter(|p| p.is_finite() && *p > 0.0);
+    f.reference = f.reference.trim().chars().take(120).collect();
     if f.id.is_empty() {
         f.id = uuid::Uuid::new_v4().to_string();
     }
@@ -504,7 +524,28 @@ mod tests {
     }
 
     fn food(name: &str) -> Food {
-        Food { id: String::new(), name: name.into(), emoji: "🍎".into(), meal: "snack".into(), kcal: Some(95.0), amount: "1".into(), grams: None, source: "estimate".into(), barcode: String::new(), note: String::new(), at: 0, fruit_veg: None }
+        Food { id: String::new(), name: name.into(), emoji: "🍎".into(), meal: "snack".into(), kcal: Some(95.0), amount: "1".into(), grams: None, source: "estimate".into(), barcode: String::new(), note: String::new(), at: 0, fruit_veg: None, protein: None, carbs: None, fat: None, fibre: None, portions: None, reference: String::new() }
+    }
+
+    #[test]
+    fn keeps_a_recipe_from_simmer_with_its_macros() {
+        let db = db();
+        let sent: Food = serde_json::from_value(serde_json::json!({
+            "name": "Pasta bake", "meal": "dinner", "kcal": 1660.0, "source": "simmer",
+            "protein": 100.04, "carbs": 164.0, "fat": -2.0, "portions": 2.0, "ref": "cheesy-frankfurter-pasta"
+        }))
+        .unwrap();
+        save_food(&db, sent, None).unwrap();
+        let saved = &foods(&db, "").unwrap()[0];
+        assert_eq!(saved.protein, Some(100.0));
+        assert_eq!(saved.fat, None, "a negative amount is dropped");
+        assert_eq!(saved.portions, Some(2.0));
+        assert_eq!(saved.reference, "cheesy-frankfurter-pasta");
+        let json = serde_json::to_value(saved).unwrap();
+        assert_eq!(json["ref"], "cheesy-frankfurter-pasta");
+        // Entries from before macros existed still read.
+        let old: Food = serde_json::from_value(serde_json::json!({ "name": "Toast", "at": 1 })).unwrap();
+        assert_eq!(old.protein, None);
     }
 
     #[test]

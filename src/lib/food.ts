@@ -215,6 +215,27 @@ export function dayTotal(foods: Food[]): { kcal: number; missing: number } {
   return { kcal, missing };
 }
 
+export const MACROS = ["protein", "carbs", "fat"] as const;
+export type Macro = (typeof MACROS)[number];
+
+/** Grams of each macro across the day, counting only foods that came with them. */
+export function dayMacros(foods: Food[]): { protein: number; carbs: number; fat: number; counted: number } {
+  const out = { protein: 0, carbs: 0, fat: 0, counted: 0 };
+  for (const f of foods) {
+    if (f.protein == null && f.carbs == null && f.fat == null) continue;
+    out.counted++;
+    for (const m of MACROS) out[m] += f[m] ?? 0;
+  }
+  return out;
+}
+
+/** "Protein 50 g · carbs 82 g · fat 33 g", leaving out what isn't known. */
+export function macrosText(m: Partial<Record<Macro, number | null | undefined>>): string {
+  return MACROS.filter((k) => m[k] != null)
+    .map((k, i) => `${i === 0 ? k.charAt(0).toUpperCase() + k.slice(1) : k} ${Math.round(m[k]!)} g`)
+    .join(" · ");
+}
+
 export function infoTitle(i: Pick<FoodInfo, "name" | "brand">): string {
   return i.brand && !i.name.toLowerCase().includes(i.brand.toLowerCase()) ? `${i.name} · ${i.brand}` : i.name;
 }

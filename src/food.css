@@ -283,3 +283,9 @@
 .food-fv {
   justify-self: start;
 }
+
+/* Protein, carbs and fat, for foods that came with them (recipes from Simmer). */
+.food-macros {
+  margin-top: 4px;
+  font-size: 0.9em;
+}

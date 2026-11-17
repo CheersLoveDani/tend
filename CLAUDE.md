@@ -9,7 +9,8 @@ Windows and Android.
 - `plugins/tauri-plugin-tend-native/` — the Android side in Kotlin: notifications, alarms, the
   unlock screen, widget, Health Connect and the phone's step counter.
 - Browser preview: `npm run dev` runs on a mock backend (`src/lib/mock.ts`). Add `?moods` for
-  sample mood history, `?welcome` for onboarding, `?whatsnew` for the release note.
+  sample mood history, `?welcome` for onboarding, `?whatsnew` for the release note, and
+  `?link=` plus an encoded `tend://food/add?...` link to open a meal as if Simmer had sent it.
 
 Tone matters: calm, kind, never guilt-tripping (no streaks, no red, low moods aren't "bad").
 

@@ -37,6 +37,7 @@ import { MoodPop } from "./views/MoodPop";
 import { StormyDay } from "./components/StormyDay";
 import { WeatherCheckIn } from "./components/WeatherCheckIn";
 import { closeTopOverlay } from "./lib/backStack";
+import { listenForFoodLinks, type IncomingFood } from "./lib/links";
 
 type Tab = "today" | "meds" | "food" | "upcoming" | "garden" | "settings";
 
@@ -160,7 +161,31 @@ function Shell() {
   const [medEditing, setMedEditing] = useState<{ med: Med | null } | null>(null);
   const [medOpen, setMedOpen] = useState<string | null>(null);
   const [entry, setEntry] = useState<{ kind: EntryKind; initial?: Entry } | null>(null);
-  const [food, setFood] = useState<{ initial?: FoodItem; start?: FoodStart } | null>(null);
+  const [food, setFood] = useState<{ initial?: FoodItem; start?: FoodStart; incoming?: IncomingFood } | null>(null);
+  // A meal sent from Simmer opens the food sheet filled in, ready to check and save. A link
+  // that launched the app waits until settings and data have loaded, so turning the food log
+  // on can't overwrite settings that haven't arrived yet.
+  const [pendingFood, setPendingFood] = useState<IncomingFood | null>(null);
+  useEffect(() => {
+    let stop = () => {};
+    let gone = false;
+    void listenForFoodLinks(setPendingFood).then((s) => (gone ? s() : (stop = s)));
+    return () => {
+      gone = true;
+      stop();
+    };
+  }, []);
+  useEffect(() => {
+    if (!pendingFood || !snap) return;
+    if (!settings.foodTracking) {
+      store.updateSettings({ foodTracking: true });
+      store.toast("Food log turned on for meals from Simmer");
+    }
+    setTab("food");
+    setFood({ incoming: pendingFood });
+    setPendingFood(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingFood, snap]);
   const sheetOpen = !!(editing || medEditing || medOpen || entry || food);
   // The Food tab only shows when the food log is switched on.
   const tabs = TABS.filter((t) => t.id !== "food" || settings.foodTracking);
@@ -375,7 +400,7 @@ function Shell() {
           />
         )}
       </AnimatePresence>
-      <AnimatePresence>{food && <FoodSheet key="food" initial={food.initial} start={food.start} onClose={() => setFood(null)} />}</AnimatePresence>
+      <AnimatePresence>{food && <FoodSheet key={food.incoming ? `food-${food.incoming.at}-${food.incoming.ref}` : "food"} initial={food.initial} start={food.start} incoming={food.incoming} onClose={() => setFood(null)} />}</AnimatePresence>
       <AnimatePresence>{entry && <EntrySheet key="entry" kind={entry.kind} initial={entry.initial} onClose={() => setEntry(null)} />}</AnimatePresence>
       <AnimatePresence>{insights && <MoodInsights key="insights" onClose={() => setInsights(false)} />}</AnimatePresence>
       <AnimatePresence>{moodWhy && <MoodWhySheet key="mood-why" onClose={() => setMoodWhy(false)} />}</AnimatePresence>

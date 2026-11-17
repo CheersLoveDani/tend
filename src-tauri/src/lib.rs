@@ -629,10 +629,22 @@ pub fn run() {
         builder = builder.plugin(tauri_plugin_barcode_scanner::init());
     }
     builder
+        // Links such as tend://food/add from Simmer. On desktop a second launch
+        // hands its link to the running app through the single-instance plugin.
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_tend_native::init())
         .setup(|app| {
+            // The installer registers tend:// on Windows; registering again here
+            // covers portable and development builds, and Linux.
+            #[cfg(any(windows, target_os = "linux"))]
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                if let Err(e) = app.deep_link().register_all() {
+                    log::warn!("could not register tend:// links: {e}");
+                }
+            }
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
             let db = Db::open(&data_dir.join("tend.db"))?;

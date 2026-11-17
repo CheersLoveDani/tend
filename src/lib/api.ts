@@ -103,12 +103,21 @@ export interface Food {
   /** How much, in words ("1 bowl", "150 g"). */
   amount: string;
   grams: number | null;
-  source: "barcode" | "label" | "search" | "estimate" | "manual" | "";
+  source: "barcode" | "label" | "search" | "estimate" | "manual" | "simmer" | "";
   barcode: string;
   note: string;
   at: number;
   /** Counts toward the fruit & veg goal; null/missing = guessed from the name. */
   fruitVeg?: boolean | null;
+  /** Grams, when known: a recipe from Simmer brings them; most foods won't have them. */
+  protein?: number | null;
+  carbs?: number | null;
+  fat?: number | null;
+  fibre?: number | null;
+  /** Portions of a recipe, when it came from one. */
+  portions?: number | null;
+  /** The sending app's id for it, such as a Simmer recipe id. */
+  ref?: string;
 }
 
 /** What's known about a product (Open Food Facts, a label photo, or a past log). */

@@ -92,6 +92,12 @@ see [docs/AUDHD_RESEARCH.md](docs/AUDHD_RESEARCH.md).
 - Counts what's left and warns before you run out, and keeps a health diary of
   mood, symptoms and readings like blood pressure.
 
+### 🍲 Meals from Simmer
+- **Log a recipe in one tap.** The [Simmer](https://github.com/CheersLoveDani/simmer)
+  cookbook can send what you ate to the food log through a `tend://food/add`
+  link. Tend opens it filled in, with calories, protein, carbs and fat for the
+  portions you had, and nothing is saved until you check it.
+
 ### 🚶 Movement grows the tree too <sub>(Android)</sub>
 - Reads steps and workouts from **Health Connect**, where Google Fit, Samsung
   Health, Fitbit and most fitness apps keep them.

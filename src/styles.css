@@ -777,6 +777,9 @@ h3 {
   overflow-y: auto;
   padding: 6px 24px 16px;
   display: grid;
+  /* Rows keep their content's height and the body scrolls; otherwise children with
+     overflow set (segmented controls, notes) collapse when the sheet is short. */
+  grid-auto-rows: max-content;
   gap: 18px;
 }
 .sheet-foot {

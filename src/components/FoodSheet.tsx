@@ -3,7 +3,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
 import { api, isAndroid, type Food, type FoodInfo, type Meal, type SavedFood } from "../lib/api";
 import { friendlyError, useStore } from "../lib/store";
-import { canUseCamera, COMMON, estimate, forGrams, infoTitle, kcalText, MEALS, mealFor, readLabel, scanFoodBarcode, splitCount, type Common, guessFruitVeg } from "../lib/food";
+import { canUseCamera, COMMON, estimate, forGrams, infoTitle, kcalText, macrosText, MEALS, mealFor, readLabel, scanFoodBarcode, splitCount, type Common, guessFruitVeg } from "../lib/food";
+import type { IncomingFood } from "../lib/links";
 import { sounds } from "../lib/sound";
 import { Close, Seed } from "./Icons";
 import "../food.css";
@@ -14,6 +15,8 @@ interface Props {
   initial?: Food | null;
   /** Open straight into the barcode scanner or the label camera. */
   start?: FoodStart;
+  /** A meal sent from another app (Simmer), filled in for the person to check. */
+  incoming?: IncomingFood | null;
   onClose: () => void;
 }
 
@@ -31,8 +34,27 @@ const SOURCE_TEXT: Record<Source, string> = {
   label: "Read from the label. Check it looks right.",
   estimate: "A rough estimate for a typical portion.",
   manual: "",
+  simmer: "From a Simmer recipe: an estimate worked out from its ingredients.",
   "": "",
 };
+
+/** A recipe from Simmer as product info, so changing the portions changes the calories. */
+const recipeInfo = (f: IncomingFood): FoodInfo | null =>
+  f.kcal == null
+    ? null
+    : {
+        name: f.name,
+        brand: "",
+        barcode: "",
+        kcal100: null,
+        kcalServing: Math.round(f.kcal / f.portions),
+        servingG: null,
+        servingText: "portion",
+        packG: null,
+        unit: "g",
+      };
+
+const round1 = (n: number) => Math.round(n * 10) / 10;
 
 /** An everyday food as product info, so portions and grams work the same way for both. */
 const commonInfo = (c: Common): FoodInfo => ({
@@ -49,7 +71,7 @@ const commonInfo = (c: Common): FoodInfo => ({
 
 const perPortion = (i: FoodInfo) => i.kcalServing ?? (i.kcal100 != null && i.servingG ? (i.kcal100 * i.servingG) / 100 : null);
 
-export function FoodSheet({ initial, start = null, onClose }: Props) {
+export function FoodSheet({ initial, start = null, incoming = null, onClose }: Props) {
   const store = useStore();
   const { settings, snap } = store;
   const showKcal = settings.foodShowCalories;
@@ -57,17 +79,17 @@ export function FoodSheet({ initial, start = null, onClose }: Props) {
   const savedFor = (f: Pick<Food, "barcode" | "name">) =>
     lib.find((s) => (f.barcode ? s.id === f.barcode : s.id === `n:${f.name.trim().toLowerCase().replace(/\s+/g, " ")}`));
 
-  const [name, setName] = useState(initial?.name ?? "");
-  const [emoji, setEmoji] = useState(initial?.emoji ?? "");
-  const [meal, setMeal] = useState<Meal>(initial?.meal ?? mealFor(Date.now()));
-  const [when, setWhen] = useState(localInput(initial?.at ?? Date.now()));
+  const [name, setName] = useState(initial?.name ?? incoming?.name ?? "");
+  const [emoji, setEmoji] = useState(initial?.emoji ?? (incoming ? "🍲" : ""));
+  const [meal, setMeal] = useState<Meal>(initial?.meal ?? (incoming ? incoming.meal || mealFor(incoming.at) : mealFor(Date.now())));
+  const [when, setWhen] = useState(localInput(initial?.at ?? incoming?.at ?? Date.now()));
   const [note, setNote] = useState(initial?.note ?? "");
   const [fruitVeg, setFruitVeg] = useState<boolean | null>(initial?.fruitVeg ?? null);
   const [barcode, setBarcode] = useState(initial?.barcode ?? "");
-  const [source, setSource] = useState<Source>(initial?.source ?? "");
-  const [info, setInfo] = useState<FoodInfo | null>(() => (initial ? (savedFor(initial)?.info ?? null) : null));
+  const [source, setSource] = useState<Source>(initial?.source ?? (incoming ? "simmer" : ""));
+  const [info, setInfo] = useState<FoodInfo | null>(() => (initial ? (savedFor(initial)?.info ?? null) : incoming ? recipeInfo(incoming) : null));
   const [mode, setMode] = useState<Mode>("portion");
-  const [count, setCount] = useState(1);
+  const [count, setCount] = useState(incoming?.portions ?? 1);
   const [grams, setGrams] = useState(initial?.grams ? String(initial.grams) : "");
   // Typed calories win over worked-out ones until the amount is changed again.
   const [kcalInput, setKcalInput] = useState(initial?.kcal != null ? String(initial.kcal) : "");
@@ -107,6 +129,17 @@ export function FoodSheet({ initial, start = null, onClose }: Props) {
   }, [info, mode, grams, count, unit, amountText]);
 
   const kcal = kcalTyped ? num(kcalInput) : worked.kcal;
+
+  // Protein, carbs and fat follow the calories, so changing the portions keeps them in step.
+  const base = initial ?? incoming;
+  const macroScale = base?.kcal && kcal != null ? kcal / base.kcal : 1;
+  const macros = {
+    protein: base?.protein != null ? round1(base.protein * macroScale) : null,
+    carbs: base?.carbs != null ? round1(base.carbs * macroScale) : null,
+    fat: base?.fat != null ? round1(base.fat * macroScale) : null,
+    fibre: base?.fibre != null ? round1(base.fibre * macroScale) : null,
+  };
+  const keepsMacros = source === "simmer" || !!initial?.protein || !!initial?.carbs || !!initial?.fat;
 
   /** Use what's known about a product: name, emoji, how to measure it. */
   function applyInfo(i: FoodInfo, from: Source, opts: { emoji?: string; count?: number; keepName?: boolean } = {}) {
@@ -279,6 +312,9 @@ export function FoodSheet({ initial, start = null, onClose }: Props) {
         note: note.trim(),
         at,
         fruitVeg,
+        ...(keepsMacros ? macros : {}),
+        portions: incoming ? count : (initial?.portions ?? null),
+        ref: incoming?.ref ?? initial?.ref ?? "",
       },
       info ? { ...info, name: info.name || name.trim(), barcode: barcode || info.barcode } : null,
     );
@@ -303,7 +339,7 @@ export function FoodSheet({ initial, start = null, onClose }: Props) {
         onKeyDown={(e) => e.key === "Escape" && onClose()}
       >
         <div className="sheet-head">
-          <h2 id="food-title">{initial ? "Edit food" : "What did you have?"}</h2>
+          <h2 id="food-title">{initial ? "Edit food" : incoming ? "From Simmer" : "What did you have?"}</h2>
           <button className="btn btn-quiet btn-icon" onClick={onClose} aria-label="Close">
             <Close size={18} />
           </button>
@@ -330,7 +366,7 @@ export function FoodSheet({ initial, start = null, onClose }: Props) {
                   setResults(null);
                 }}
                 onKeyDown={(e) => e.key === "Enter" && suggestions.common[0] && !picked && applyCommon(suggestions.common[0])}
-                autoFocus={!initial && !start}
+                autoFocus={!initial && !start && !incoming}
                 aria-label="What you had"
               />
             </div>
@@ -518,6 +554,7 @@ export function FoodSheet({ initial, start = null, onClose }: Props) {
                 </div>
               )}
               {SOURCE_TEXT[kcalTyped && source !== "label" ? "manual" : source] && <p className="hint">{SOURCE_TEXT[kcalTyped && source !== "label" ? "manual" : source]}</p>}
+              {showKcal && keepsMacros && macrosText(macros) && <p className="hint food-macros">{macrosText(macros)}</p>}
             </section>
           )}
 
