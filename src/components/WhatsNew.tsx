@@ -7,6 +7,15 @@ import { Leaf } from "./Icons";
 /** What each release changed, newest first. Shown once after updating; new installs never see it. */
 export const CHANGES: { version: string; title: string; items: string[] }[] = [
   {
+    version: "0.6.0-6",
+    title: "Meals from Simmer",
+    items: [
+      "The Simmer cookbook can now send what you ate to your food log. Tend opens it filled in, and nothing is saved until you check it.",
+      "Recipes from Simmer bring protein, carbs and fat as well as calories. Change the portions and they follow along.",
+      "Turn it on in Simmer under Settings → Calories.",
+    ],
+  },
+  {
     version: "0.6.0-5",
     title: "One calm card on your computer",
     items: [
