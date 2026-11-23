@@ -23,7 +23,7 @@ export function LowStockLine({ onOpenMed }: Props) {
   const text = low.length === 1 ? runsOut(first) : `${runsOut(first)}, and ${low.length - 1} more ${low.length === 2 ? "is" : "are"} low`;
   return (
     <button className="low-stock" onClick={() => onOpenMed(first.id)}>
-      <MedIcon icon={first.icon} color={first.color} size={24} />
+      <MedIcon icon={first.icon} color={first.color} look={first.look} size={24} />
       <span className="low-stock-text">{text}</span>
       <span className="low-stock-action">Add stock</span>
     </button>

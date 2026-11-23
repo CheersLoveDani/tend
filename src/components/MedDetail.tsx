@@ -57,7 +57,7 @@ export function MedDetail({ med, onEdit, onClose }: Props) {
       >
         <div className="sheet-head">
           <div className="med-title">
-            <MedIcon icon={med.icon} color={med.color} size={48} />
+            <MedIcon icon={med.icon} color={med.color} look={med.look} size={48} />
             <div>
               <h2>{displayName(med)}</h2>
               <p className="row-hint">

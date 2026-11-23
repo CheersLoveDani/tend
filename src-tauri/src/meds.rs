@@ -75,6 +75,10 @@ pub struct Med {
     /// Shape shown in the app: `round`, `oval`, `capsule`, `drop`, `bottle`, `syringe`…
     pub icon: String,
     pub color: String,
+    /// The full look from the look studio (kind, shape, colours, score, imprint…).
+    /// `icon` and `color` stay filled in as a simple fallback for older versions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub look: Option<serde_json::Value>,
     /// Intake advice, e.g. "with food".
     #[serde(default)]
     pub notes: String,
@@ -214,6 +218,8 @@ pub struct MedInput {
     pub form: String,
     pub icon: String,
     pub color: String,
+    #[serde(default)]
+    pub look: Option<serde_json::Value>,
     #[serde(default)]
     pub notes: String,
     pub schedule: Schedule,
@@ -544,6 +550,7 @@ pub fn upsert_med(db: &Db, input: MedInput) -> Result<Med> {
         form: String::new(),
         icon: String::new(),
         color: String::new(),
+        look: None,
         notes: String::new(),
         schedule: schedule.clone(),
         start_date: String::new(),
@@ -571,6 +578,7 @@ pub fn upsert_med(db: &Db, input: MedInput) -> Result<Med> {
     m.form = input.form;
     m.icon = input.icon;
     m.color = input.color;
+    m.look = clean_look(input.look);
     m.notes = input.notes;
     m.schedule = schedule;
     m.start_date = input.start_date;
@@ -581,6 +589,12 @@ pub fn upsert_med(db: &Db, input: MedInput) -> Result<Med> {
     m.reward = input.reward.clamp(1, 50);
     save_med(db, &m)?;
     Ok(m)
+}
+
+/// Keeps a look only if it's a small JSON object; anything else falls back to icon + colour.
+fn clean_look(look: Option<serde_json::Value>) -> Option<serde_json::Value> {
+    let look = look.filter(|l| l.is_object())?;
+    (serde_json::to_string(&look).map(|s| s.len()).unwrap_or(usize::MAX) <= 4096).then_some(look)
 }
 
 pub fn delete_med(db: &Db, id: &str) -> Result<()> {
@@ -854,6 +868,7 @@ mod tests {
             form: "capsule".into(),
             icon: "capsule".into(),
             color: "sage".into(),
+            look: None,
             notes: String::new(),
             schedule: Schedule {
                 kind: kind.into(),
@@ -875,6 +890,24 @@ mod tests {
 
     fn d(s: &str) -> NaiveDate {
         date(s).unwrap()
+    }
+
+    #[test]
+    fn look_is_kept_and_oversized_or_odd_looks_are_dropped() {
+        let db = db();
+        let mut i = input("daily");
+        i.look = Some(serde_json::json!({ "v": 1, "kind": "tablet", "shape": "heart", "colors": ["#f4a3b4"], "opts": { "score": "line" } }));
+        let m = upsert_med(&db, i.clone()).unwrap();
+        assert_eq!(m.look.as_ref().unwrap()["shape"], "heart");
+        // Reading it back keeps it.
+        assert_eq!(get_med(&db, &m.id).unwrap().look.unwrap()["kind"], "tablet");
+        // Saving without a look clears it, a non-object or huge look is ignored.
+        let mut again = i.clone();
+        again.id = Some(m.id.clone());
+        again.look = Some(serde_json::json!("capsule"));
+        assert!(upsert_med(&db, again.clone()).unwrap().look.is_none());
+        again.look = Some(serde_json::json!({ "imprint": "x".repeat(5000) }));
+        assert!(upsert_med(&db, again).unwrap().look.is_none());
     }
 
     #[test]

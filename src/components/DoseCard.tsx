@@ -45,7 +45,7 @@ export function DoseCard({ d, onOpen }: Props) {
     >
       <div className="dose-row">
         <button className="dose-icon" onClick={() => onOpen?.(d.medId)} aria-label={`Open ${d.name}`} tabIndex={onOpen ? 0 : -1}>
-          <MedIcon icon={med?.icon ?? "round"} color={med?.color ?? "white"} size={42} />
+          <MedIcon icon={med?.icon ?? "round"} color={med?.color ?? "white"} look={med?.look} size={42} />
           {d.status === "taken" && (
             <motion.span className="dose-tick" initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 500, damping: 18 }}>
               <Check size={12} />

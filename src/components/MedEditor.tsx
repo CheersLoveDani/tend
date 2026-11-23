@@ -3,9 +3,11 @@ import { useEffect, useRef, useState } from "react";
 import type { DoseTime, Med, Schedule, ScheduleKind } from "../lib/api";
 import { useStore } from "../lib/store";
 import { today } from "../lib/dates";
-import { COLORS, FORMS, ICONS, formOf, num } from "../lib/meds";
+import { FORMS, formOf, num } from "../lib/meds";
+import { describeLook, legacyOf, lookForForm, lookOf, type MedLook } from "../lib/medLook";
 import { sounds } from "../lib/sound";
-import { MedIcon } from "./MedIcon";
+import { LookStudio } from "./LookStudio";
+import { MedArt } from "./MedArt";
 import { Chevron, Close, Minus, Plus, Seed } from "./Icons";
 
 interface Props {
@@ -65,8 +67,8 @@ export function MedEditor({ initial, onClose }: Props) {
   const [name, setName] = useState(initial?.name ?? "");
   const [strength, setStrength] = useState(initial?.strength ?? "");
   const [form, setForm] = useState(initial?.form ?? "pill");
-  const [icon, setIcon] = useState(initial?.icon ?? "round");
-  const [color, setColor] = useState(initial?.color ?? "white");
+  const [look, setLook] = useState<MedLook>(() => (initial ? lookOf(initial) : lookForForm("pill")));
+  const [studio, setStudio] = useState(false);
   const [schedule, setSchedule] = useState<Schedule>(initial?.schedule ?? blankSchedule);
   const [startDate, setStartDate] = useState(initial?.startDate ?? today());
   const [endDate, setEndDate] = useState<string | null>(initial?.endDate ?? null);
@@ -78,7 +80,8 @@ export function MedEditor({ initial, onClose }: Props) {
   const [reward, setReward] = useState(initial?.reward ?? 5);
   const [saving, setSaving] = useState(false);
   const [more, setMore] = useState(false);
-  const iconTouched = useRef(!!initial);
+  // A new med's look follows what it's measured in, until someone picks a look themselves.
+  const lookTouched = useRef(!!initial);
   const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -89,7 +92,7 @@ export function MedEditor({ initial, onClose }: Props) {
   const setTime = (i: number, patch: Partial<DoseTime>) => sched({ times: schedule.times.map((t, j) => (j === i ? { ...t, ...patch } : t)) });
   const unit = formOf(form);
   const summary = [
-    `${color[0].toUpperCase() + color.slice(1)} ${icon === "round" ? "pill" : icon === "split" ? "split pill" : icon}`,
+    describeLook(look),
     track ? "counting supply" : "not counting supply",
     notes.trim() && "advice",
     critical && "important",
@@ -116,8 +119,8 @@ export function MedEditor({ initial, onClose }: Props) {
       name: name.trim(),
       strength,
       form,
-      icon,
-      color,
+      ...legacyOf(look),
+      look,
       notes,
       schedule,
       startDate,
@@ -136,6 +139,7 @@ export function MedEditor({ initial, onClose }: Props) {
   }
 
   return (
+    <>
     <motion.div className="sheet-scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
       <motion.div
         className="sheet"
@@ -157,7 +161,30 @@ export function MedEditor({ initial, onClose }: Props) {
 
         <div className="sheet-body">
           <div className="med-head">
-            <MedIcon icon={icon} color={color} size={56} />
+            <motion.button
+              type="button"
+              className="med-head-look"
+              onClick={() => (sounds.tap(), setStudio(true))}
+              aria-label={`How it looks: ${describeLook(look)}. Change`}
+              whileTap={{ scale: 0.92 }}
+            >
+              <AnimatePresence mode="popLayout" initial={false}>
+                <motion.span
+                  key={look.kind + look.shape}
+                  className="med-icon"
+                  style={{ width: 60, height: 60, ["--med-tint" as string]: look.kind === "drops" ? look.colors[2] : look.colors[0] }}
+                  initial={{ scale: 0.5, opacity: 0, rotate: -20 }}
+                  animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                  exit={{ scale: 0.5, opacity: 0 }}
+                  transition={{ type: "spring", stiffness: 380, damping: 22 }}
+                >
+                  <MedArt look={look} size={52} />
+                </motion.span>
+              </AnimatePresence>
+              <span className="med-head-look-badge" aria-hidden>
+                <BrushIcon />
+              </span>
+            </motion.button>
             <div className="med-head-fields">
               <input
                 ref={nameRef}
@@ -180,7 +207,7 @@ export function MedEditor({ initial, onClose }: Props) {
                   value={form}
                   onChange={(e) => {
                     setForm(e.target.value);
-                    if (!iconTouched.current) setIcon(formOf(e.target.value).icon);
+                    if (!lookTouched.current) setLook(lookForForm(e.target.value));
                   }}
                   aria-label="Each dose is measured in"
                 >
@@ -296,33 +323,16 @@ export function MedEditor({ initial, onClose }: Props) {
               >
                 <section className="group">
                   <h3>What it looks like</h3>
-                  <div className="icon-grid" role="radiogroup" aria-label="Shape">
-                    {ICONS.map((i) => (
-                      <button
-                        key={i}
-                        role="radio"
-                        aria-checked={icon === i}
-                        aria-label={i}
-                        className={`icon-pick ${icon === i ? "is-on" : ""}`}
-                        onClick={() => ((iconTouched.current = true), setIcon(i))}
-                      >
-                        <MedIcon icon={i} color={color} size={30} bare />
-                      </button>
-                    ))}
-                  </div>
-                  <div className="swatches" role="radiogroup" aria-label="Colour">
-                    {Object.entries(COLORS).map(([key, [a, b]]) => (
-                      <button
-                        key={key}
-                        role="radio"
-                        aria-checked={color === key}
-                        aria-label={key}
-                        className={`swatch ${color === key ? "is-on" : ""}`}
-                        style={{ background: `linear-gradient(135deg, ${a} 50%, ${b} 50%)` }}
-                        onClick={() => setColor(key)}
-                      />
-                    ))}
-                  </div>
+                  <button type="button" className="look-row" onClick={() => (sounds.tap(), setStudio(true))}>
+                    <span className="med-icon" style={{ width: 52, height: 52, ["--med-tint" as string]: look.kind === "drops" ? look.colors[2] : look.colors[0] }}>
+                      <MedArt look={look} size={44} />
+                    </span>
+                    <span className="look-row-text">
+                      {describeLook(look)}
+                      <span className="row-hint">Shape, colours, score lines, imprint… so it's easy to tell apart.</span>
+                    </span>
+                    <span className="btn btn-soft look-row-btn">Change</span>
+                  </button>
                 </section>
 
                 <section className="group">
@@ -388,5 +398,26 @@ export function MedEditor({ initial, onClose }: Props) {
         </div>
       </motion.div>
     </motion.div>
+    <AnimatePresence>
+      {studio && (
+        <LookStudio
+          initial={look}
+          name={name}
+          onClose={() => setStudio(false)}
+          onDone={(l) => {
+            lookTouched.current = true;
+            setLook(l);
+            setStudio(false);
+          }}
+        />
+      )}
+    </AnimatePresence>
+    </>
   );
 }
+
+const BrushIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 4l6 6-9 9H5v-6z" />
+  </svg>
+);

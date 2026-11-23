@@ -1,3 +1,4 @@
+import type { MedLook } from "./medLook";
 import { invoke } from "@tauri-apps/api/core";
 
 export interface Step {
@@ -180,6 +181,8 @@ export interface Med {
   form: string;
   icon: string;
   color: string;
+  /** Full look from the look studio; older meds only have `icon` + `color`. */
+  look?: MedLook | null;
   notes: string;
   schedule: Schedule;
   startDate: string;

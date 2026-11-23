@@ -81,7 +81,7 @@ export function Meds({ onAddMed, onOpenMed, onEntry }: Props) {
         <div className="med-list">
           {snap.meds.map((m) => (
             <motion.button key={m.id} layout className={`med-card ${m.paused ? "is-paused" : ""}`} onClick={() => onOpenMed(m.id)} whileTap={{ scale: 0.98 }}>
-              <MedIcon icon={m.icon} color={m.color} size={44} />
+              <MedIcon icon={m.icon} color={m.color} look={m.look} size={44} />
               <span className="med-card-text">
                 <span className="card-title">{displayName(m)}</span>
                 <span className="card-meta">{m.paused ? "Paused" : scheduleText(m.schedule)}</span>
