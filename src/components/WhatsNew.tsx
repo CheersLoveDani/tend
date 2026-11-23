@@ -7,6 +7,15 @@ import { Leaf } from "./Icons";
 /** What each release changed, newest first. Shown once after updating; new installs never see it. */
 export const CHANGES: { version: string; title: string; items: string[] }[] = [
   {
+    version: "0.6.0-7",
+    title: "Your meds, as they really look",
+    items: [
+      "Tap the picture on a medication to design how it looks: tablets, capsules, softgels, gummies, drops, pens, inhalers, patches, rings and lots more.",
+      "Pick the shape, colours for every part, score lines, imprints, see-through shells, how full a bottle is… then drag to turn it.",
+      "Quick starts get you close in one tap, and Tend gently says if two meds would look the same.",
+    ],
+  },
+  {
     version: "0.6.0-6",
     title: "Meals from Simmer",
     items: [
