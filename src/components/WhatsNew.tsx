@@ -7,6 +7,14 @@ import { Leaf } from "./Icons";
 /** What each release changed, newest first. Shown once after updating; new installs never see it. */
 export const CHANGES: { version: string; title: string; items: string[] }[] = [
   {
+    version: "0.6.0-8",
+    title: "Every kind of medicine",
+    items: [
+      "The look studio now covers every dosage form on the official FDA list: dressings, swabs, tape, oxygen, pill organisers, contact lenses, mouthwash, nail lacquer, soap and more.",
+      "Search by the name on the box, like troche, liniment or tincture, and it finds the right shape.",
+    ],
+  },
+  {
     version: "0.6.0-7",
     title: "Your meds, as they really look",
     items: [
