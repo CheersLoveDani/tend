@@ -4,7 +4,7 @@ import { gradientDefs, edgeColor, type Draw, type Paint } from "./medart/kit";
 import { blister, capsule, chewable, effervescent, film, globules, gummy, lozenge, softgel, tablet } from "./medart/solids";
 import { ampoule, bottle, drops, implant, infusion, measure, pen, pump, syringe, vial } from "./medart/fluids";
 import { dispenser, inhaler, jar, nebuliser, patch, ring, sachet, spray, suppository, tea, tube } from "./medart/devices";
-import { dressing, extraShapes, gas, kit, living } from "./medart/extras";
+import { dressing, extraShapes, gas, kit } from "./medart/extras";
 
 const DRAW: Record<string, Draw> = {
   tablet,
@@ -41,7 +41,6 @@ const DRAW: Record<string, Draw> = {
   dressing,
   gas,
   kit,
-  living,
 };
 
 const SHINE: Record<string, number> = { matte: 0, satin: 0.28, glossy: 0.6, pearl: 0.45 };

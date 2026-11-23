@@ -169,15 +169,6 @@ export const kit: Draw = (p) => {
 
 /** Extra shapes for existing kinds: drawn here so the main files stay readable. */
 export const extraShapes: Record<string, Draw> = {
-  "dressing/tissue": (p) => (
-    <g>
-      <ellipse cx={32} cy={38} rx={24} ry={10} fill={p.c[1]} opacity={0.35} {...outline(p, 1)} />
-      <ellipse cx={32} cy={38} rx={24} ry={10} fill={p.glass} />
-      <path d="M16 37C18 31 28 30 32 32C38 29 46 31 48 36C46 41 36 43 30 42C22 43 16 41 16 37Z" fill={p.fill(0)} {...outline(p, 0, p.sw * 0.8)} />
-      <Dots seed="tissue" x={18} y={32} w={28} h={9} n={24} color={shade(p.c[0], -0.2)} rMin={0.4} rMax={0.8} />
-      <path d="M8 38V34C8 30 18 26 32 26C46 26 56 30 56 34V38" fill="none" stroke={p.ink(1)} strokeWidth={p.sw * 0.8} opacity={0.6} />
-    </g>
-  ),
   "capsule/cachet": (p) => (
     <g>
       <ellipse cx={32} cy={36} rx={20} ry={9} fill={shade(p.c[0], -0.15)} {...outline(p, 0)} />
@@ -192,25 +183,6 @@ export const extraShapes: Record<string, Draw> = {
       <path d={rrect(12, 22, 40, 20, 8)} fill={p.fill(0)} {...outline(p, 0)} />
       <path d={rrect(15, 25, 34, 14, 6)} fill="none" stroke={shade(p.c[0], -0.2)} strokeWidth={0.7} strokeDasharray="1.4 1.4" />
       <Dots seed="pouch" x={16} y={26} w={32} h={12} n={30} color={shade(p.c[0], -0.15)} rMin={0.4} rMax={0.8} />
-    </g>
-  ),
-  "implant/chain": (p) => (
-    <g>
-      <path d="M8 40C20 22 44 42 56 24" fill="none" stroke="#9aa5ad" strokeWidth={1} />
-      {[0, 1, 2, 3, 4, 5, 6].map((i) => {
-        const t = i / 6;
-        const x = 8 + 48 * t;
-        const y = 40 - 18 * t + Math.sin(t * Math.PI) * 4;
-        return <circle key={i} cx={x} cy={y} r={3.6} fill={p.dome(0)} {...outline(p, 0, p.sw * 0.8)} />;
-      })}
-    </g>
-  ),
-  "implant/applicator": (p) => (
-    <g>
-      <path d="M50 32H60" stroke="#9aa5ad" strokeWidth={1.2} strokeLinecap="round" />
-      <path d={rrect(8, 26, 42, 12, 6)} fill="#e9eef1" stroke="#7d8d85" strokeWidth={p.sw} />
-      <path d={rrect(20, 22, 10, 4, 2)} fill="#c4ccd2" stroke="#7d8d85" strokeWidth={0.8} />
-      <path d={rrect(34, 30.5, 14, 3, 1.5)} fill={p.fill(0)} {...outline(p, 0, p.sw * 0.7)} />
     </g>
   ),
   "syringe/needlefree": (p) => (
@@ -409,38 +381,3 @@ export const extraShapes: Record<string, Draw> = {
 };
 
 
-/** Medicinal leeches and larvae: yes, these are real, licensed dose forms. */
-export const living: Draw = (p) => {
-  if (p.look.shape === "larvae") {
-    return (
-      <g>
-        <path d={rrect(12, 18, 40, 30, 4)} fill={p.c[1]} opacity={0.35} {...outline(p, 1)} />
-        <path d={rrect(12, 18, 40, 30, 4)} fill={p.glass} />
-        {[
-          [22, 28, 20],
-          [34, 34, -30],
-          [42, 26, 60],
-          [26, 40, -10],
-          [40, 42, 30],
-        ].map(([x, y, a], i) => (
-          <g key={i} transform={`rotate(${a} ${x} ${y})`}>
-            <path d={rrect(x - 5, y - 1.8, 10, 3.6, 1.8)} fill={p.fill(0)} stroke={p.ink(0)} strokeWidth={0.6} />
-            {[x - 2.5, x, x + 2.5].map((v) => (
-              <path key={v} d={`M${v} ${y - 1.6}V${y + 1.6}`} stroke={shade(p.c[0], -0.25)} strokeWidth={0.4} />
-            ))}
-          </g>
-        ))}
-      </g>
-    );
-  }
-  return (
-    <g>
-      <path d="M10 36C10 26 22 22 32 24C42 26 50 22 54 28C58 34 50 42 40 42C28 42 22 46 16 44C12 43 10 40 10 36Z" fill={p.dome(0)} {...outline(p, 0)} />
-      {[18, 24, 30, 36, 42, 48].map((x) => (
-        <path key={x} d={`M${x} 27Q${x + 1} 35 ${x} 43`} fill="none" stroke={shade(p.c[0], -0.25)} strokeWidth={0.6} opacity={0.7} />
-      ))}
-      <path d="M14 32C24 28 40 30 50 28" fill="none" stroke={p.c[1]} strokeWidth={1.4} opacity={0.7} strokeLinecap="round" />
-      <ellipse cx={13} cy={37} rx={3} ry={3.5} fill={shade(p.c[0], -0.15)} {...outline(p, 0, p.sw * 0.8)} />
-    </g>
-  );
-};
