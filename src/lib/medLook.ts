@@ -1054,3 +1054,27 @@ export function surprise(look: MedLook, rand = Math.random): MedLook {
 }
 
 export const sameLook = (a: MedLook, b: MedLook) => JSON.stringify(a) === JSON.stringify(b);
+
+/** Quick starting points that look like common medicines. */
+export const PRESETS: { label: string; make: () => MedLook }[] = [
+  { label: "White, scored", make: () => tweak(newLook("tablet", "round"), {}, { score: "line" }) },
+  { label: "Blue & white capsule", make: () => newLook("capsule", "standard") },
+  { label: "Yellow oval", make: () => tweak(newLook("tablet", "oval"), { 0: "#f0cd4a" }, { score: "line" }) },
+  { label: "Pink heart", make: () => tweak(newLook("tablet", "heart"), { 0: "#eda7b4" }) },
+  { label: "Fish oil", make: () => newLook("softgel", "oblong") },
+  { label: "Vitamin gummy", make: () => tweak(newLook("gummy", "bear"), { 0: "#ef8d3c" }, { sugar: true }) },
+  { label: "Insulin pen", make: () => newLook("pen", "insulin") },
+  { label: "Reliever inhaler", make: () => newLook("inhaler", "mdi") },
+  { label: "Brown inhaler", make: () => tweak(newLook("inhaler", "mdi"), { 0: "#b88d5e", 1: "#7a5236" }) },
+  { label: "Eye drops", make: () => newLook("drops", "squeeze") },
+  { label: "Liquid medicine", make: () => tweak(newLook("bottle", "syrup"), {}, { cup: true }) },
+  { label: "Pill pack", make: () => tweak(newLook("blister", "b28"), {}, { days: true, popped: 5 }) },
+  { label: "HRT patch", make: () => tweak(newLook("patch", "round"), { 0: "#efe6d2" }) },
+  { label: "Weekly pen", make: () => tweak(newLook("pen", "dial"), { 1: "#4f86c6", 2: "#4f86c6" }) },
+];
+
+function tweak(look: MedLook, colors: Record<number, string>, opts: Record<string, OptValue> = {}): MedLook {
+  const c = [...look.colors];
+  for (const [i, hex] of Object.entries(colors)) c[Number(i)] = hex;
+  return { ...look, colors: c, opts: { ...look.opts, ...opts } };
+}

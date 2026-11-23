@@ -403,6 +403,7 @@ export function MedEditor({ initial, onClose }: Props) {
         <LookStudio
           initial={look}
           name={name}
+          others={(store.snap?.meds ?? []).filter((m) => m.id !== initial?.id).map((m) => ({ name: m.name, look: lookOf(m) }))}
           onClose={() => setStudio(false)}
           onDone={(l) => {
             lookTouched.current = true;

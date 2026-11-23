@@ -4085,12 +4085,18 @@ html[data-glance] body {
   z-index: 45;
 }
 .look-studio {
-  max-height: min(96vh, 980px);
+  height: min(94vh, 900px);
+  max-height: min(94vh, 900px);
+}
+.look-studio .ls-body {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
 }
 .ls-stage {
   position: relative;
   margin: 0 16px;
-  height: 214px;
+  height: 224px;
   flex: none;
   border-radius: var(--radius-l);
   display: grid;
@@ -4307,23 +4313,67 @@ html[data-glance] body {
 }
 .ls-custom-chip {
   position: relative;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   flex: none;
-  box-shadow: 0 0 0 3px var(--paper), 0 0 0 5px transparent;
-  background-clip: padding-box;
-  outline: 3px solid transparent;
-  border: 3px solid transparent;
-  background-origin: border-box;
-}
-.ls-custom-chip::before {
-  content: "";
-  position: absolute;
-  inset: -4px;
-  border-radius: 50%;
+  padding: 3px;
   background: conic-gradient(#ef8d3c, #f0cd4a, #86ad74, #3f9a9c, #4f86c6, #8a74c2, #d9738b, #ef8d3c);
-  z-index: -1;
+}
+.ls-custom-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2.5px var(--paper);
+}
+.ls-presets {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 2px 0 6px;
+  scroll-snap-type: x proximity;
+  mask-image: linear-gradient(90deg, #000 88%, transparent);
+}
+.ls-preset {
+  flex: none;
+  width: 84px;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 10px 4px 8px;
+  border-radius: var(--radius-m);
+  border: 0;
+  background: var(--paper-2);
+  color: var(--bark-2);
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 1.15;
+  scroll-snap-align: start;
+  cursor: pointer;
+}
+.ls-preset svg {
+  overflow: visible;
+}
+.ls-inuse {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+}
+.ls-inuse-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ls-swatch.ls-swatch-small {
+  width: 30px;
+  height: 30px;
+  flex: none;
+}
+.ls-stage:focus-visible {
+  outline: 3px solid var(--moss);
+  outline-offset: 2px;
 }
 .ls-custom-chip input {
   position: absolute;

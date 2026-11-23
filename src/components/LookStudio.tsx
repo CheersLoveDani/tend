@@ -1,9 +1,10 @@
 import { AnimatePresence, motion, useAnimationControls } from "motion/react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   GROUPS,
   KINDS,
   PALETTE,
+  PRESETS,
   colorName,
   describeLook,
   kindOf,
@@ -24,6 +25,8 @@ import { Close } from "./Icons";
 interface Props {
   initial: MedLook;
   name: string;
+  /** The person's other meds, for their colours and to spot look-alikes. */
+  others?: { name: string; look: MedLook }[];
   onDone: (look: MedLook) => void;
   onClose: () => void;
 }
@@ -31,7 +34,7 @@ interface Props {
 const TABS = ["Type", "Shape", "Colours", "Details"] as const;
 type Tab = (typeof TABS)[number];
 
-export function LookStudio({ initial, name, onDone, onClose }: Props) {
+export function LookStudio({ initial, name, others = [], onDone, onClose }: Props) {
   const [look, setLook] = useState<MedLook>(initial);
   const [tab, setTab] = useState<Tab>("Type");
   const [dir, setDir] = useState(1);
@@ -39,6 +42,12 @@ export function LookStudio({ initial, name, onDone, onClose }: Props) {
   const [face, setFace] = useState<"front" | "back">("front");
   const [query, setQuery] = useState("");
   const stage = useAnimationControls();
+  const body = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    body.current?.scrollTo({ top: 0 });
+  }, [tab]);
+  // Colours already used on other meds, so related things can match (or stay apart).
+  const inUse = useMemo(() => [...new Set(others.flatMap((o) => o.look.colors.slice(0, 2)).map((c) => c.toLowerCase()))].slice(0, 12), [others]);
   const kind = kindOf(look.kind);
   const main = look.kind === "drops" ? look.colors[2] : look.colors[0];
   const flippable = look.kind === "tablet";
@@ -138,6 +147,14 @@ export function LookStudio({ initial, name, onDone, onClose }: Props) {
           onPointerUp={onUp}
           onPointerCancel={onUp}
           onDoubleClick={() => setLook((l) => ({ ...l, tilt: tiltFor(l.kind, l.shape) }))}
+          tabIndex={0}
+          role="group"
+          aria-label={`Preview. ${description}. Left and right arrows turn it.`}
+          onKeyDown={(e) => {
+            if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+            e.preventDefault();
+            setLook((l) => ({ ...l, tilt: Math.max(-180, Math.min(180, l.tilt + (e.key === "ArrowLeft" ? -15 : 15))) }));
+          }}
         >
           <motion.div className="ls-float" animate={{ y: [0, -5, 0] }} transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}>
             <motion.div animate={stage}>
@@ -149,7 +166,7 @@ export function LookStudio({ initial, name, onDone, onClose }: Props) {
                   exit={{ scale: 0.4, rotate: 25, opacity: 0 }}
                   transition={{ type: "spring", stiffness: 360, damping: 20 }}
                 >
-                  <MedArt look={look} face={face} size={176} shadow title={description} />
+                  <MedArt look={look} face={face} size={196} shadow title={description} />
                 </motion.div>
               </AnimatePresence>
             </motion.div>
@@ -193,7 +210,7 @@ export function LookStudio({ initial, name, onDone, onClose }: Props) {
           ))}
         </div>
 
-        <div className="sheet-body ls-body">
+        <div className="sheet-body ls-body" ref={body}>
           <AnimatePresence mode="wait" initial={false} custom={dir}>
             <motion.div
               key={tab}
@@ -213,6 +230,35 @@ export function LookStudio({ initial, name, onDone, onClose }: Props) {
                     onChange={(e) => setQuery(e.target.value)}
                     aria-label="Search kinds of medication"
                   />
+                  {!found && (
+                    <section className="ls-group">
+                      <h4>Quick starts</h4>
+                      <div className="ls-presets">
+                        {PRESETS.map((pr, i) => {
+                          const l = pr.make();
+                          return (
+                            <motion.button
+                              key={pr.label}
+                              className="ls-preset"
+                              onClick={() => {
+                                sounds.tap();
+                                setSlot(0);
+                                setFace("front");
+                                update(l);
+                              }}
+                              initial={{ opacity: 0, scale: 0.9 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              transition={{ delay: Math.min(i * 0.03, 0.3) }}
+                              whileTap={{ scale: 0.92 }}
+                            >
+                              <MedArt look={l} size={40} />
+                              <span>{pr.label}</span>
+                            </motion.button>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  )}
                   {found ? (
                     found.length ? (
                       <KindGrid kinds={found.map((k) => k.id)} current={look.kind} onPick={pickKind} />
@@ -304,8 +350,27 @@ export function LookStudio({ initial, name, onDone, onClose }: Props) {
                       </div>
                     ))}
                   </div>
+                  {inUse.length > 0 && (
+                    <div className="ls-inuse">
+                      <span className="row-hint">On your other meds</span>
+                      <div className="ls-inuse-row">
+                        {inUse.map((hex) => (
+                          <motion.button
+                            key={hex}
+                            className="ls-swatch ls-swatch-small"
+                            style={{ background: hex }}
+                            aria-label={colorName(hex)}
+                            title={colorName(hex)}
+                            onClick={() => (sounds.tap(), setColor(hex))}
+                            whileTap={{ scale: 0.85 }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <label className="ls-custom">
-                    <span className="ls-custom-chip" style={{ background: look.colors[slot] }}>
+                    <span className="ls-custom-chip">
+                      <span className="ls-custom-fill" style={{ background: look.colors[slot] }} />
                       <input type="color" value={look.colors[slot]} onChange={(e) => setColor(e.target.value)} aria-label="Any colour" />
                     </span>
                     <span>
@@ -455,7 +520,7 @@ function OptRow({ opt, look, face, onChange }: { opt: Opt; look: MedLook; face: 
               onClick={() => (sounds.tap(), onChange(opt.key, c.value))}
               whileTap={{ scale: 0.92 }}
             >
-              {showArt && <MedArt look={{ ...look, opts: { ...look.opts, [opt.key]: c.value } }} face={opt.key === "imprintBack" ? "back" : face} size={34} />}
+              {showArt && <MedArt look={{ ...look, opts: { ...look.opts, [opt.key]: c.value } }} face={opt.key === "imprintBack" ? "back" : face} size={38} />}
               <span>{c.label}</span>
             </motion.button>
           );

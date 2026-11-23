@@ -65,8 +65,8 @@ export const TABLET: Record<string, { d: string; w: number; h: number; cy?: numb
 function groove(d: string, base: string, k: string) {
   return (
     <g key={k} fill="none" strokeLinecap="round">
-      <path d={d} stroke={shade(base, -0.45)} strokeWidth={1.6} opacity={0.55} />
-      <path d={d} stroke="#fff" strokeWidth={0.8} opacity={0.5} transform="translate(0.8 0.8)" />
+      <path d={d} stroke={shade(base, -0.5)} strokeWidth={1.9} opacity={0.7} />
+      <path d={d} stroke="#fff" strokeWidth={0.9} opacity={0.55} transform="translate(0.9 0.9)" />
     </g>
   );
 }
@@ -143,7 +143,10 @@ export const tablet: Draw = (p) => {
           {score === "cross" && [groove("M32 0V64", main, "a"), groove(`M0 ${cy}H64`, main, "b")]}
           {score === "long" && groove(`M0 ${cy}H64`, main, "a")}
           {pattern === "speckled" && null}
-          <ScreenShine p={p} dx={-s.w * 0.35} dy={-s.h * 0.5} rx={s.w * 0.42} ry={Math.max(2, s.h * 0.2)} o={p.shine + (domed ? 0.12 : 0)} />
+          {/* Mirrored twice on the back, so the light still comes from the top left. */}
+          <g transform={mirror}>
+            <ScreenShine p={p} dx={-s.w * 0.35} dy={-s.h * 0.5} rx={s.w * 0.42} ry={Math.max(2, s.h * 0.2)} o={p.shine + (domed ? 0.12 : 0)} />
+          </g>
         </Clip>
         <path d={s.d} fill="none" {...outline(p, 0)} />
       </g>
@@ -352,10 +355,10 @@ export const capsule: Draw = (p) => {
     <g transform={scaleAt(sizeOf(p))}>
       <path d={whole} transform={`translate(${dx} ${dy})`} fill="#000" opacity={0.08} />
       {(capClear || bodyClear) && contents}
-      <path d={body} fill={bodyClear ? p.c[1] : p.fill(1)} opacity={bodyClear ? 0.38 : 1} {...outline(p, 1)} />
+      <path d={body} fill={bodyClear ? p.c[1] : p.fill(1)} opacity={bodyClear ? 0.5 : 1} {...outline(p, 1)} />
       {bodyClear && <path d={body} fill={p.glass} />}
       {on(o.stripe) && <rect x={x0 + L * 0.22} y={32 - R} width={2.2} height={R * 2} fill={p.c[2]} opacity={0.9} />}
-      <path d={cap} fill={capClear ? p.c[0] : p.fill(0)} opacity={capClear ? 0.38 : 1} {...outline(p, 0)} />
+      <path d={cap} fill={capClear ? p.c[0] : p.fill(0)} opacity={capClear ? 0.5 : 1} {...outline(p, 0)} />
       {capClear && <path d={cap} fill={p.glass} />}
       {on(o.band) && <path d={rrect(cx - 1.4, 32 - rc - 0.5, 4.4, rc * 2 + 1, 1.6)} fill={p.fill(2)} {...outline(p, 2, p.sw * 0.8)} />}
       <Clip id={p.uid("csh")} d={whole}>
