@@ -7,6 +7,13 @@ import { Leaf } from "./Icons";
 /** What each release changed, newest first. Shown once after updating; new installs never see it. */
 export const CHANGES: { version: string; title: string; items: string[] }[] = [
   {
+    version: "0.6.0-10",
+    title: "The last few kinds",
+    items: [
+      "Checked against the full European list of medicine forms: living tissue, dental cement, sealants and periodontal inserts can now be drawn and found by name too.",
+    ],
+  },
+  {
     version: "0.6.0-9",
     title: "Even more kinds of medicine",
     items: [
