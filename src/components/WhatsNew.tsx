@@ -7,6 +7,13 @@ import { Leaf } from "./Icons";
 /** What each release changed, newest first. Shown once after updating; new installs never see it. */
 export const CHANGES: { version: string; title: string; items: string[] }[] = [
   {
+    version: "0.6.0-11",
+    title: "Just what you use at home",
+    items: [
+      "The look studio now keeps to medicines you take or use at home, so the clinic-only things (living tissue, leeches, eye-clinic implants) are gone.",
+    ],
+  },
+  {
     version: "0.6.0-10",
     title: "The last few kinds",
     items: [
