@@ -169,6 +169,15 @@ export const kit: Draw = (p) => {
 
 /** Extra shapes for existing kinds: drawn here so the main files stay readable. */
 export const extraShapes: Record<string, Draw> = {
+  "dressing/tissue": (p) => (
+    <g>
+      <ellipse cx={32} cy={38} rx={24} ry={10} fill={p.c[1]} opacity={0.35} {...outline(p, 1)} />
+      <ellipse cx={32} cy={38} rx={24} ry={10} fill={p.glass} />
+      <path d="M16 37C18 31 28 30 32 32C38 29 46 31 48 36C46 41 36 43 30 42C22 43 16 41 16 37Z" fill={p.fill(0)} {...outline(p, 0, p.sw * 0.8)} />
+      <Dots seed="tissue" x={18} y={32} w={28} h={9} n={24} color={shade(p.c[0], -0.2)} rMin={0.4} rMax={0.8} />
+      <path d="M8 38V34C8 30 18 26 32 26C46 26 56 30 56 34V38" fill="none" stroke={p.ink(1)} strokeWidth={p.sw * 0.8} opacity={0.6} />
+    </g>
+  ),
   "capsule/cachet": (p) => (
     <g>
       <ellipse cx={32} cy={36} rx={20} ry={9} fill={shade(p.c[0], -0.15)} {...outline(p, 0)} />
