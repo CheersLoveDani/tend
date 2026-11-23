@@ -4,6 +4,7 @@ import { gradientDefs, edgeColor, type Draw, type Paint } from "./medart/kit";
 import { blister, capsule, chewable, effervescent, film, globules, gummy, lozenge, softgel, tablet } from "./medart/solids";
 import { ampoule, bottle, drops, implant, infusion, measure, pen, pump, syringe, vial } from "./medart/fluids";
 import { dispenser, inhaler, jar, nebuliser, patch, ring, sachet, spray, suppository, tea, tube } from "./medart/devices";
+import { dressing, extraShapes, gas, kit } from "./medart/extras";
 
 const DRAW: Record<string, Draw> = {
   tablet,
@@ -37,6 +38,9 @@ const DRAW: Record<string, Draw> = {
   ring,
   sachet,
   tea,
+  dressing,
+  gas,
+  kit,
 };
 
 const SHINE: Record<string, number> = { matte: 0, satin: 0.28, glossy: 0.6, pearl: 0.45 };
@@ -69,7 +73,7 @@ export function MedArt({ look, size = 48, face = "front", shadow, className, tit
     sw: 1.5,
     face,
   };
-  const draw = DRAW[look.kind] ?? tablet;
+  const draw = extraShapes[`${look.kind}/${look.shape}`] ?? DRAW[look.kind] ?? tablet;
   return (
     <svg viewBox="0 0 64 64" width={size} height={size} className={className} role={title ? "img" : undefined} aria-hidden={title ? undefined : true} aria-label={title}>
       <defs>{gradientDefs(p.uid, look.colors, finish)}</defs>

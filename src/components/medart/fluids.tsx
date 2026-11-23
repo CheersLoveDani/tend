@@ -69,6 +69,11 @@ export const bottle: Draw = (p) => {
   return (
     <g>
       <Liquid p={p} id="bl" d={b.body} top={b.top + 2} bottom={59} level={level(p)} color={p.c[1]} />
+      {on(o.cloudy) && level(p) > 0 && (
+        <Clip id={p.uid("cl")} d={b.body}>
+          <Dots seed="cloud" x={14} y={59 - 40 * level(p)} w={36} h={40 * level(p)} n={70} color="#fff" rMin={0.4} rMax={1} o={0.55} />
+        </Clip>
+      )}
       <Glass p={p} d={b.body} i={0} tint={lum(p.c[0]) > 0.75 ? 0.25 : 0.55} />
       <path d={rrect(nx, ny, nw, nh, 1)} fill={p.c[0]} opacity={0.6} {...outline(p, 0)} />
       <BottleLabel p={p} i={3} x={lx} y={ly} w={lw} h={lh} />
