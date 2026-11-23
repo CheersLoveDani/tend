@@ -169,6 +169,83 @@ export const kit: Draw = (p) => {
 
 /** Extra shapes for existing kinds: drawn here so the main files stay readable. */
 export const extraShapes: Record<string, Draw> = {
+  "capsule/cachet": (p) => (
+    <g>
+      <ellipse cx={32} cy={36} rx={20} ry={9} fill={shade(p.c[0], -0.15)} {...outline(p, 0)} />
+      <ellipse cx={32} cy={32} rx={20} ry={9} fill={p.fill(0)} {...outline(p, 0)} />
+      <ellipse cx={32} cy={32} rx={13} ry={5.5} fill="none" stroke={shade(p.c[0], -0.2)} strokeWidth={0.8} />
+      <ellipse cx={27} cy={29} rx={7} ry={2} fill="#fff" opacity={0.4} />
+    </g>
+  ),
+  "lozenge/pouch": (p) => (
+    <g>
+      <path d={rrect(12, 22, 40, 20, 8)} transform="translate(0 1.5)" fill="#000" opacity={0.08} />
+      <path d={rrect(12, 22, 40, 20, 8)} fill={p.fill(0)} {...outline(p, 0)} />
+      <path d={rrect(15, 25, 34, 14, 6)} fill="none" stroke={shade(p.c[0], -0.2)} strokeWidth={0.7} strokeDasharray="1.4 1.4" />
+      <Dots seed="pouch" x={16} y={26} w={32} h={12} n={30} color={shade(p.c[0], -0.15)} rMin={0.4} rMax={0.8} />
+    </g>
+  ),
+  "implant/chain": (p) => (
+    <g>
+      <path d="M8 40C20 22 44 42 56 24" fill="none" stroke="#9aa5ad" strokeWidth={1} />
+      {[0, 1, 2, 3, 4, 5, 6].map((i) => {
+        const t = i / 6;
+        const x = 8 + 48 * t;
+        const y = 40 - 18 * t + Math.sin(t * Math.PI) * 4;
+        return <circle key={i} cx={x} cy={y} r={3.6} fill={p.dome(0)} {...outline(p, 0, p.sw * 0.8)} />;
+      })}
+    </g>
+  ),
+  "implant/applicator": (p) => (
+    <g>
+      <path d="M50 32H60" stroke="#9aa5ad" strokeWidth={1.2} strokeLinecap="round" />
+      <path d={rrect(8, 26, 42, 12, 6)} fill="#e9eef1" stroke="#7d8d85" strokeWidth={p.sw} />
+      <path d={rrect(20, 22, 10, 4, 2)} fill="#c4ccd2" stroke="#7d8d85" strokeWidth={0.8} />
+      <path d={rrect(34, 30.5, 14, 3, 1.5)} fill={p.fill(0)} {...outline(p, 0, p.sw * 0.7)} />
+    </g>
+  ),
+  "syringe/needlefree": (p) => (
+    <g>
+      <path d={rrect(20, 6, 24, 44, 10)} fill={p.fill(1)} {...outline(p, 1)} />
+      <path d={rrect(26, 48, 12, 10, 3)} fill={p.c[0]} opacity={0.5} {...outline(p, 1)} />
+      <path d={rrect(28, 56, 8, 4, 2)} fill={p.fill(2)} {...outline(p, 2, p.sw * 0.8)} />
+      <path d={rrect(26, 14, 12, 14, 3)} fill="#d8eef6" stroke={shade(p.c[1], -0.4)} strokeWidth={0.7} />
+      <Glint x={23} y={10} h={34} o={0.4} w={1.6} />
+    </g>
+  ),
+  "vial/cartridge": (p) => {
+    const body = rrect(26, 10, 12, 46, 2);
+    const level = Math.min(1, (typeof p.o.fill === "number" ? p.o.fill : 60) / 100);
+    return (
+      <g>
+        <Clip id={p.uid("ct")} d={body}>
+          <rect x={26} y={56 - 42 * level} width={12} height={42 * level} fill={p.c[1]} />
+          <rect x={26} y={52} width={12} height={4} fill="#3a4248" />
+        </Clip>
+        <Glass p={p} d={body} i={0} tint={0.25} />
+        <path d={rrect(25, 6, 14, 6, 1.5)} fill={p.fill(2)} {...outline(p, 2)} />
+      </g>
+    );
+  },
+  "drops/rinse": (p) => (
+    <g>
+      <path d="M12 34C12 26 20 22 30 22H40C46 22 50 26 50 32C50 44 42 52 30 52C20 52 12 46 12 34Z" fill={p.fill(0)} {...outline(p, 0)} />
+      <path d="M48 28L58 20" stroke={p.ink(0)} strokeWidth={5} strokeLinecap="round" />
+      <path d="M48 28L58 20" stroke={p.c[0]} strokeWidth={3} strokeLinecap="round" />
+      <path d="M18 30C18 26 24 25 30 25H38" fill="none" stroke="#fff" strokeWidth={1.4} opacity={0.5} strokeLinecap="round" />
+      <path d={rrect(26, 16, 12, 7, 2)} fill={p.fill(1)} {...outline(p, 1)} />
+    </g>
+  ),
+  "dispenser/bath": (p) => (
+    <g>
+      <path d="M18 24C18 18 22 14 28 14H36C42 14 46 18 46 24V54C46 57 43 59 40 59H24C21 59 18 57 18 54Z" fill={p.fill(0)} {...outline(p, 0)} />
+      <path d={rrect(26, 6, 12, 9, 2.5)} fill={p.fill(1)} {...outline(p, 1)} />
+      <rect x={18} y={30} width={28} height={16} fill={p.c[2]} />
+      <circle cx={52} cy={20} r={3} fill="none" stroke="#a9cde9" strokeWidth={0.9} />
+      <circle cx={56} cy={28} r={2} fill="none" stroke="#a9cde9" strokeWidth={0.9} />
+      <Glint x={21} y={18} h={36} o={0.4} />
+    </g>
+  ),
   "chewable/bar": (p) => {
     const d = rrect(8, 20, 48, 24, 5);
     return (
@@ -322,3 +399,39 @@ export const extraShapes: Record<string, Draw> = {
   ),
 };
 
+
+/** Medicinal leeches and larvae: yes, these are real, licensed dose forms. */
+export const living: Draw = (p) => {
+  if (p.look.shape === "larvae") {
+    return (
+      <g>
+        <path d={rrect(12, 18, 40, 30, 4)} fill={p.c[1]} opacity={0.35} {...outline(p, 1)} />
+        <path d={rrect(12, 18, 40, 30, 4)} fill={p.glass} />
+        {[
+          [22, 28, 20],
+          [34, 34, -30],
+          [42, 26, 60],
+          [26, 40, -10],
+          [40, 42, 30],
+        ].map(([x, y, a], i) => (
+          <g key={i} transform={`rotate(${a} ${x} ${y})`}>
+            <path d={rrect(x - 5, y - 1.8, 10, 3.6, 1.8)} fill={p.fill(0)} stroke={p.ink(0)} strokeWidth={0.6} />
+            {[x - 2.5, x, x + 2.5].map((v) => (
+              <path key={v} d={`M${v} ${y - 1.6}V${y + 1.6}`} stroke={shade(p.c[0], -0.25)} strokeWidth={0.4} />
+            ))}
+          </g>
+        ))}
+      </g>
+    );
+  }
+  return (
+    <g>
+      <path d="M10 36C10 26 22 22 32 24C42 26 50 22 54 28C58 34 50 42 40 42C28 42 22 46 16 44C12 43 10 40 10 36Z" fill={p.dome(0)} {...outline(p, 0)} />
+      {[18, 24, 30, 36, 42, 48].map((x) => (
+        <path key={x} d={`M${x} 27Q${x + 1} 35 ${x} 43`} fill="none" stroke={shade(p.c[0], -0.25)} strokeWidth={0.6} opacity={0.7} />
+      ))}
+      <path d="M14 32C24 28 40 30 50 28" fill="none" stroke={p.c[1]} strokeWidth={1.4} opacity={0.7} strokeLinecap="round" />
+      <ellipse cx={13} cy={37} rx={3} ry={3.5} fill={shade(p.c[0], -0.15)} {...outline(p, 0, p.sw * 0.8)} />
+    </g>
+  );
+};

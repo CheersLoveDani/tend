@@ -6,6 +6,7 @@ import {
   PALETTE,
   PRESETS,
   DOSAGE_FORMS,
+  EDQM_EXTRA,
   colorName,
   describeLook,
   lookAlike,
@@ -130,7 +131,7 @@ export function LookStudio({ initial, name, others = [], onDone, onClose }: Prop
     const q = query.trim().toLowerCase();
     if (!q) return null;
     // Official dosage form names (e.g. "troche", "liniment") lead to the kind that draws them.
-    const official = new Set(Object.entries(DOSAGE_FORMS).filter(([f]) => f.includes(q)).map(([, [k]]) => k));
+    const official = new Set(Object.entries({ ...DOSAGE_FORMS, ...EDQM_EXTRA }).filter(([f]) => f.includes(q)).map(([, [k]]) => k));
     return KINDS.filter((k) => official.has(k.id) || `${k.label} ${k.words} ${k.shapes.map((s) => s.label).join(" ")}`.toLowerCase().includes(q));
   }, [query]);
 
