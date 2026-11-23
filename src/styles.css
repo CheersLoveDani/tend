@@ -4462,3 +4462,29 @@ html[data-glance] body {
     transition: none;
   }
 }
+
+.ls-sparks {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.ls-spark {
+  grid-area: 1 / 1;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--paper) 70%, transparent);
+}
+.ls-twin {
+  display: block;
+  overflow: hidden;
+  margin-top: 4px;
+  padding: 6px 10px;
+  border-radius: var(--radius-s);
+  background: var(--pollen-soft);
+  color: var(--bark);
+  font-size: 13px;
+  font-weight: 700;
+}

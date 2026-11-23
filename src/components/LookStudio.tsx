@@ -1,4 +1,4 @@
-import { AnimatePresence, motion, useAnimationControls } from "motion/react";
+import { AnimatePresence, MotionConfig, motion, useAnimationControls } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   GROUPS,
@@ -7,6 +7,7 @@ import {
   PRESETS,
   colorName,
   describeLook,
+  lookAlike,
   kindOf,
   newLook,
   optsFor,
@@ -95,20 +96,34 @@ export function LookStudio({ initial, name, others = [], onDone, onClose }: Prop
   }
 
   // Drag across the stage to turn it.
-  const drag = useRef<{ x: number; tilt: number } | null>(null);
+  const drag = useRef<{ x: number; tilt: number; moved: boolean; snap?: number } | null>(null);
+  const [sparks, setSparks] = useState(0);
   const onDown = (e: React.PointerEvent) => {
-    drag.current = { x: e.clientX, tilt: look.tilt };
+    drag.current = { x: e.clientX, tilt: look.tilt, moved: false };
     (e.target as Element).setPointerCapture?.(e.pointerId);
   };
   const onMove = (e: React.PointerEvent) => {
-    if (!drag.current) return;
-    let t = Math.round(drag.current.tilt + (e.clientX - drag.current.x) * 0.9);
+    const d = drag.current;
+    if (!d) return;
+    if (Math.abs(e.clientX - d.x) > 4) d.moved = true;
+    if (!d.moved) return;
+    let t = Math.round(d.tilt + (e.clientX - d.x) * 0.9);
     t = ((((t + 180) % 360) + 360) % 360) - 180;
-    // Settle onto neat angles when close.
+    // Settle onto neat angles when close, with a soft tick.
     const snap = [-90, -45, 0, 45, 90].find((a) => Math.abs(a - t) < 4);
+    if (snap !== undefined && snap !== d.snap) sounds.tap();
+    d.snap = snap;
     setLook((l) => ({ ...l, tilt: snap ?? t }));
   };
-  const onUp = () => (drag.current = null);
+  const onUp = () => {
+    // A tap (no drag) gives it a happy little wiggle.
+    if (drag.current && !drag.current.moved) {
+      setSparks((n) => n + 1);
+      sounds.bit();
+      void stage.start({ rotate: [0, -10, 9, -5, 0], scale: [1, 1.08, 1], transition: { duration: 0.55 } });
+    }
+    drag.current = null;
+  };
 
   const found = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -118,8 +133,10 @@ export function LookStudio({ initial, name, others = [], onDone, onClose }: Prop
 
   const changed = !sameLook(look, initial);
   const description = describeLook(look);
+  const twin = others.find((o) => lookAlike(o.look, look));
 
   return (
+    <MotionConfig reducedMotion="user">
     <motion.div className="sheet-scrim look-scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
       <motion.div
         className="sheet look-studio"
@@ -190,6 +207,25 @@ export function LookStudio({ initial, name, others = [], onDone, onClose }: Prop
             </button>
           </div>
           <span className="ls-hint">Drag to turn</span>
+          <AnimatePresence>
+            {sparks > 0 && (
+              <motion.div key={sparks} className="ls-sparks" initial={{ opacity: 1 }} animate={{ opacity: 0 }} transition={{ duration: 0.9, delay: 0.25 }} aria-hidden>
+                {Array.from({ length: 8 }, (_, i) => {
+                  const a = (i / 8) * Math.PI * 2;
+                  return (
+                    <motion.span
+                      key={i}
+                      className="ls-spark"
+                      style={{ background: i % 2 ? "var(--pollen)" : look.colors[0] }}
+                      initial={{ x: 0, y: 0, scale: 0.4 }}
+                      animate={{ x: Math.cos(a) * 92, y: Math.sin(a) * 70, scale: 1 }}
+                      transition={{ type: "spring", stiffness: 160, damping: 14 }}
+                    />
+                  );
+                })}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
 
         <div className="ls-caption" aria-live="polite">
@@ -198,6 +234,13 @@ export function LookStudio({ initial, name, others = [], onDone, onClose }: Prop
             <motion.span key={description} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.15 }}>
               {description}
             </motion.span>
+          </AnimatePresence>
+          <AnimatePresence>
+            {twin && (
+              <motion.span className="ls-twin" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
+                Looks just like {twin.name}. A different colour or imprint makes them easier to tell apart.
+              </motion.span>
+            )}
           </AnimatePresence>
         </div>
 
@@ -421,6 +464,7 @@ export function LookStudio({ initial, name, others = [], onDone, onClose }: Prop
         </div>
       </motion.div>
     </motion.div>
+    </MotionConfig>
   );
 }
 

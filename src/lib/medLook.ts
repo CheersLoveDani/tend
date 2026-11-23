@@ -1078,3 +1078,61 @@ function tweak(look: MedLook, colors: Record<number, string>, opts: Record<strin
   for (const [i, hex] of Object.entries(colors)) c[Number(i)] = hex;
   return { ...look, colors: c, opts: { ...look.opts, ...opts } };
 }
+
+/** What a dose of this look is usually counted in, for new meds. */
+export function formForLook(look: MedLook): string {
+  const byShape: Record<string, string> = {
+    "measure/spoon": "teaspoon",
+    "measure/dosespoon": "teaspoon",
+    "pen/dial": "click",
+    "pen/auto": "injection",
+    "suppository/pessary": "pessary",
+    "suppository/enema": "application",
+    "suppository/applicator": "pessary",
+    "sachet/scoop": "scoop",
+    "sachet/tub": "scoop",
+    "sachet/pile": "g",
+    "tablet/tiny": "pill",
+    "tablet/round": "pill",
+  };
+  const byKind: Record<string, string> = {
+    tablet: "tablet",
+    effervescent: "tablet",
+    film: "strip",
+    blister: "tablet",
+    capsule: "capsule",
+    softgel: "softgel",
+    gummy: "gummy",
+    chewable: "chewable",
+    lozenge: "lozenge",
+    globules: "globule",
+    bottle: "ml",
+    drops: "drop",
+    measure: "ml",
+    syringe: "injection",
+    pen: "unit",
+    vial: "vial",
+    ampoule: "ampoule",
+    infusion: "ml",
+    pump: "unit",
+    implant: "implant",
+    inhaler: "puff",
+    nebuliser: "nebule",
+    spray: "spray",
+    patch: "patch",
+    tube: "application",
+    jar: "application",
+    dispenser: "application",
+    suppository: "suppository",
+    ring: "ring",
+    sachet: "sachet",
+    tea: "cup",
+  };
+  return byShape[`${look.kind}/${look.shape}`] ?? byKind[look.kind] ?? "pill";
+}
+
+/** Two looks that would be hard to tell apart at a glance. */
+export function lookAlike(a: MedLook, b: MedLook) {
+  const same = (x: string[], y: string[]) => x.slice(0, 2).every((c, i) => c.toLowerCase() === (y[i] ?? "").toLowerCase());
+  return a.kind === b.kind && a.shape === b.shape && same(a.colors, b.colors) && (a.opts.imprint ?? "") === (b.opts.imprint ?? "") && (a.opts.labelText ?? "") === (b.opts.labelText ?? "");
+}

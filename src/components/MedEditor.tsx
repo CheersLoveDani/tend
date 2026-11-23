@@ -4,7 +4,7 @@ import type { DoseTime, Med, Schedule, ScheduleKind } from "../lib/api";
 import { useStore } from "../lib/store";
 import { today } from "../lib/dates";
 import { FORMS, formOf, num } from "../lib/meds";
-import { describeLook, legacyOf, lookForForm, lookOf, type MedLook } from "../lib/medLook";
+import { describeLook, formForLook, legacyOf, lookForForm, lookOf, type MedLook } from "../lib/medLook";
 import { sounds } from "../lib/sound";
 import { LookStudio } from "./LookStudio";
 import { MedArt } from "./MedArt";
@@ -82,6 +82,8 @@ export function MedEditor({ initial, onClose }: Props) {
   const [more, setMore] = useState(false);
   // A new med's look follows what it's measured in, until someone picks a look themselves.
   const lookTouched = useRef(!!initial);
+  // …and what a new med is counted in follows its look, until the unit is picked by hand.
+  const formTouched = useRef(!!initial);
   const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -207,6 +209,7 @@ export function MedEditor({ initial, onClose }: Props) {
                   value={form}
                   onChange={(e) => {
                     setForm(e.target.value);
+                    formTouched.current = true;
                     if (!lookTouched.current) setLook(lookForForm(e.target.value));
                   }}
                   aria-label="Each dose is measured in"
@@ -408,6 +411,7 @@ export function MedEditor({ initial, onClose }: Props) {
           onDone={(l) => {
             lookTouched.current = true;
             setLook(l);
+            if (!formTouched.current) setForm(formForLook(l));
             setStudio(false);
           }}
         />
